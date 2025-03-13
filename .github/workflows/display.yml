@@ -13,29 +13,21 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
-        with:
-          path: cargofran  # Ensures the repo is cloned into this subdirectory
 
       - name: Setup Node
         uses: actions/setup-node@v3
-        with:
-          node-version: 18  # Specify Node.js version if needed
-          cache: 'npm'
-          cache-dependency-path: cargofran/package-lock.json
 
       - name: Install dependencies
-        run: npm install
-        working-directory: cargofran
+        uses: bahmutov/npm-install@v1
 
       - name: Build project
         run: npm run build
-        working-directory: cargofran
 
       - name: Upload production-ready build files
         uses: actions/upload-artifact@v4
         with:
           name: production-files
-          path: cargofran/dist  # Ensure correct path to built files
+          path: ./dist
 
   deploy:
     name: Deploy
