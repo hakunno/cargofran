@@ -1,0 +1,155 @@
+/* Navbar Customization */
+.custom-navbar {
+    background-color: #ffffff;
+}
+
+.nav-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.hamburger {
+    margin-left: 10px;
+    order: 2;
+}
+
+.logo-container {
+    order: 1;
+}
+
+.logo {
+    height: 70px;
+}
+
+/* Page Links Styling */
+.page-links {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    justify-content: flex-end;
+    margin-left: auto;
+}
+
+/* Remove Underline Completely */
+.nav-item {
+    text-decoration: none; /* Completely remove the underline */
+}
+
+/* Style the Text Inside the Links */
+.nav-item p {
+    margin: 0;
+    color: #000000;
+    font-weight: bold;
+    font-size: 16px;
+    transition: transform 0.3s ease-in-out, color 0.3s ease-in-out;
+}
+
+/* Add Smooth Hover Effects */
+.nav-item p:hover {
+    color: #007bff;
+    transform: scale(1.1);
+    text-decoration: none; /* Ensures underline never appears */
+}
+
+/* Login Section */
+.login-section {
+    margin-left: auto;
+    font-weight: bold;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Mobile View */
+@media (max-width: 767px) {
+    .navbar-collapse {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .offcanvas-fullscreen {
+        width: 100vw; /* Fullscreen width */
+        height: 100vh; /* Fullscreen height */
+        background-color: #ffffff; /* White background */
+        display: flex;
+        flex-direction: column; /* Stacks items vertically */
+        justify-content: flex-start; /* Ensures content starts from the top */
+        align-items: center; /* Centers the menu items */
+        padding: 20px;
+    }
+
+    .offcanvas-logo {
+        display: flex;
+        justify-content: center; /* Centers logo horizontally */
+        align-items: center; /* Centers logo vertically */
+        width: 100%; /* Makes container span full width */
+        height: auto; /* Adjusts to the content */
+    }
+
+    .page-links {
+        flex-direction: column;
+        gap: 30px;
+        align-items: center;
+    }
+
+    .nav-item p {
+        font-size: 24px;
+        font-weight: bold;
+        color: #000000;
+        transition: transform 0.3s ease-in-out, color 0.3s ease-in-out;
+    }
+
+    .nav-item p:hover {
+        color: hsl(177, 67%, 49%);
+        transform: scale(1.1);
+    }
+
+
+    .nav-top {
+        flex-direction: row;
+        justify-content: space-between;
+        width: 100%;
+    }
+    
+    .nav-itemlogin:hover p {
+        color: rgb(204, 54, 54) !important;
+        transform: scale(1.1);
+        cursor: pointer;
+    }
+}
+
+/* Completely Remove Any Hyperlink Underline */
+.nav-item a {
+    text-decoration: none;
+}
+
+.nav-item a:hover {
+    text-decoration: none;
+}
+
+/* Special Effect on Hover */
+.nav-item:hover p {
+    color: hsl(177, 67%, 49%);
+    transform: scale(1.1);
+}
+
+/* Extra Smooth Hover Effect */
+.nav-item p:hover {
+    text-decoration: none;
+    transform: scale(1.1);
+}
+
+    @media (min-width: 769px) {
+    /* Margin Adjustment for Login */
+    .loginmargin {
+        margin-left: 100px;
+    }
+    .nav-itemlogin:hover p {
+        color: rgb(204, 54, 54) !important;
+        transform: scale(1.1);
+        cursor: pointer;
+    }
+}
+
