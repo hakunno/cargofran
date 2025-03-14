@@ -1,4 +1,6 @@
 import React from 'react'
+import { Routes } from 'react-router-dom'
+import { Route } from 'react-router-dom'
 import Home from './pages/Home'
 import About from './pages/About'
 import Services from './pages/Services'
@@ -6,8 +8,7 @@ import Contact from './pages/Contact'
 import Navbar from './component/Navbar'
 import LoginModal from './pages/Login'
 import FirebaseTest from './pages/FirebaseTest'
-import { Routes } from 'react-router-dom'
-import { Route } from 'react-router-dom'
+import TrackPackage from './pages/TrackPackage'
 
 const App = () => { 
   return (
@@ -20,6 +21,7 @@ const App = () => {
         <Route path='/Contact' element={<Contact />}/>
         <Route path='/Login' element={<LoginModal />}/>
         <Route path='/FirebaseTest' element={<FirebaseTest />}/>
+        <Route path='/TrackPackage' element={<TrackPackage />}/>
       </Routes>
     </div>
   )
