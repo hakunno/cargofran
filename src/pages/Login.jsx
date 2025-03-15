@@ -36,10 +36,10 @@ function LoginModal() {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
-      // Create a user document in Firestore
-      await setDoc(doc(db, 'User', userCredential.user.uid), {
+      // Create a Users document in Firestore
+      await setDoc(doc(db, 'Users', userCredential.Users.uid), {
         email: email,
-        uid: userCredential.user.uid,
+        uid: userCredential.Users.uid,
         createdAt: new Date()
       });
   
