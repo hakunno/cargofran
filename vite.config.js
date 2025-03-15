@@ -1,8 +1,10 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: "/cargofran/",
+  base: "/cargofran/", // ✅ If deploying in a subdirectory, set this correctly
+  server: {
+    historyApiFallback: true, // ✅ Fixes React Router 404 issue on refresh
+  },
 });

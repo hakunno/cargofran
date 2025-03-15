@@ -47,13 +47,14 @@ function BasicExample() {
               <NavLink to="/About" className="nav-item"><p>About</p></NavLink>
               <NavLink to="/Contact" className="nav-item"><p>Contact</p></NavLink>
               <NavLink to="/Services" className="nav-item"><p>Services</p></NavLink>
+              <NavLink to="/AdminDashboard" className="nav-item"><p>admin</p></NavLink>
 
               {/* Trigger Login Modal */}
               <div
                 className="nav-item nav-itemlogin loginmargin"
                 onClick={() => setModalShow(true)} // Show modal on click
               >
-                <p><LoginModal show={modalShow} onHide={() => setModalShow(false)} /></p>
+                <LoginModal show={modalShow} onHide={() => setModalShow(false)} />
               </div>
             </div>
           </Offcanvas.Body>
