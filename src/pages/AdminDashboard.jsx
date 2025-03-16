@@ -10,7 +10,7 @@ function AdminDashboard() {
       setUser(currentUser);
     });
 
-    return () => unsubscribe(); // Cleanup listener when unmounted
+    return () => unsubscribe(); 
   }, []);
 
   return (

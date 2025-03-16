@@ -24,3 +24,58 @@
     border-radius: 10px;
     box-shadow: 0 0 300px rgba(0, 0, 0, 1); /* Enhances the contrast */
   }
+
+/* Make the table scrollable on small screens */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto; /* Enables horizontal scrolling */
+}
+
+/* Ensure table cells don't wrap content */
+.table th,
+.table td {
+  white-space: nowrap;
+}
+
+/* Buttons layout fix */
+.action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: center;
+}
+
+/* Improve button sizing on smaller screens */
+@media (max-width: 575px) {
+  /* Reduce table padding and font size */
+  .table th,
+  .table td {
+    font-size: 12px;
+    padding: 5px;
+  }
+
+  /* Stack buttons properly */
+  .action-buttons {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* Adjust button size */
+  .btn {
+    font-size: 12px;
+    padding: 5px;
+    width: 100%; /* Make buttons full width */
+    text-align: center;
+  }
+}
+
+table {
+  width: 100%;
+  text-align: center; /* Centers text inside table cells */
+}
+
+th, td {
+  text-align: center; /* Ensures text in table cells is centered */
+  vertical-align: middle; /* Centers text vertically */
+}
+

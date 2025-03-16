@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { getDocs, updateDoc, collection, doc, addDoc } from "firebase/firestore";
+import { getDocs, updateDoc, collection, doc, addDoc, deleteDoc } from "firebase/firestore";
 import { getAuth, sendPasswordResetEmail, createUserWithEmailAndPassword } from "firebase/auth";
 import { db } from "../jsfile/firebase"; // Adjust path as needed
 import Modal from "react-bootstrap/Modal";
@@ -83,43 +83,59 @@ function ManageUsers({ show, onHide }) {
     }
   };
 
-  const handleAddUser = async () => {
-    if (!newUserEmail || !newUserPassword) {
-      alert("Please enter an email and password.");
-      return;
-    }
-  
-    if (newUserPassword.length < 6) {
-      alert("Password must be at least 6 characters long.");
-      return;
-    }
-  
+  const handleDeleteUser = async (userId, email, role) => {
+    if (role === "admin") return; // Prevent deletion of admin
+
+    const confirmDelete = window.confirm(`Are you sure you want to delete ${email}?`);
+    if (!confirmDelete) return;
+
     try {
-      // Create user in Firebase Authentication
-      const userCredential = await createUserWithEmailAndPassword(auth, newUserEmail, newUserPassword);
-      const userId = userCredential.user.uid;
-  
-      // Add user to Firestore
-      const docRef = await addDoc(usersCollection, {
-        email: newUserEmail,
-        role: newUserRole,
-        uid: userId, // Store auth UID, but Firestore generates its own doc ID
-      });
-  
-      // Use Firestore's generated document ID instead of UID
-      setUsers([...users, { id: docRef.id, email: newUserEmail, role: newUserRole }]);
-      
-      alert("User added successfully!");
-      setShowAddUserModal(false);
-      setNewUserEmail("");
-      setNewUserPassword("");
-      setNewUserRole("user");
+      await deleteDoc(doc(db, "Users", userId));
+      setUsers(users.filter((user) => user.id !== userId));
+      alert("User removed successfully.");
     } catch (error) {
-      console.error("Error adding user:", error.message);
-      alert("Failed to add user. The email might already be in use or invalid.");
+      console.error("Error removing user:", error.message);
+      alert("Failed to remove user. Please try again.");
     }
   };
-  
+
+  const handleAddUser = async () => {
+  if (!newUserEmail || !newUserPassword) {
+    alert("Please enter an email and password.");
+    return;
+  }
+
+  if (newUserPassword.length < 6) {
+    alert("Password must be at least 6 characters long.");
+    return;
+  }
+
+  try {
+    // Create user in Firebase Authentication
+    const userCredential = await createUserWithEmailAndPassword(auth, newUserEmail, newUserPassword);
+    const userId = userCredential.user.uid;
+
+    // Add user to Firestore
+    const docRef = await addDoc(usersCollection, {
+      email: newUserEmail,
+      role: newUserRole,
+      uid: userId, // Store auth UID, but Firestore generates its own doc ID
+    });
+
+    // Use Firestore's generated document ID instead of UID
+    setUsers([...users, { id: docRef.id, email: newUserEmail, role: newUserRole }]);
+
+    alert("User added successfully!");
+    setShowAddUserModal(false);
+    setNewUserEmail("");
+    setNewUserPassword("");
+    setNewUserRole("user");
+  } catch (error) {
+    console.error("Error adding user:", error.message);
+    alert("Failed to add user. The email might already be in use or invalid.");
+  }
+};
+
 
   return (
     <>
@@ -128,7 +144,7 @@ function ManageUsers({ show, onHide }) {
         <Modal.Header closeButton>
           <Modal.Title>Manage Users</Modal.Title>
         </Modal.Header>
-        <Modal.Body>
+        <Modal.Body style={{ maxHeight: "70vh", overflowY: "auto" }}> {/* Scrollable Modal */}
           <Form.Control
             type="text"
             placeholder="Search by email..."
@@ -136,53 +152,71 @@ function ManageUsers({ show, onHide }) {
             onChange={(e) => setSearch(e.target.value)}
             className="mb-3"
           />
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Action</th>
-                <th>Reset Password</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users
-                .filter((user) =>
-                  user.email.toLowerCase().includes(search.toLowerCase())
-                )
-                .map((user) => (
-                  <tr key={user.id}>
-                    <td>{user.email}</td>
-                    <td>{user.role}</td>
-                    <td>
-                      {user.role === "admin" ? (
-                        <Button variant="secondary" disabled className="w-100">
-                          Admin
-                        </Button>
-                      ) : (
+          <div className="table-responsive"> {/* Make Table Scrollable on Mobile */}
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Action</th>
+                  <th>Reset Password</th>
+                  <th>Remove</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users
+                  .filter((user) =>
+                    user.email.toLowerCase().includes(search.toLowerCase())
+                  )
+                  .map((user) => (
+                    <tr key={user.id}>
+                      <td>{user.email}</td>
+                      <td>{user.role}</td>
+                      <td>
+                        {user.role === "admin" ? (
+                          <Button variant="secondary" disabled className="w-100">
+                            Admin
+                          </Button>
+                        ) : (
+                          <Button
+                            variant={user.role === "staff" ? "danger" : "success"}
+                            onClick={() => handleRoleChange(user.id, user.role)}
+                            className="w-100"
+                          >
+                            Change to {user.role === "staff" ? "User" : "Staff"}
+                          </Button>
+                        )}
+                      </td>
+                      <td>
                         <Button
-                          variant={user.role === "staff" ? "danger" : "success"}
-                          onClick={() => handleRoleChange(user.id, user.role)}
+                          variant="warning"
+                          onClick={() => handleResetPassword(user.email)}
+                          disabled={!!resetCooldown[user.email]}
                           className="w-100"
                         >
-                          Change to {user.role === "staff" ? "User" : "Staff"}
+                          {resetCooldown[user.email] ? `Wait (${resetCooldown[user.email]}s)` : "Send Reset Email"}
                         </Button>
-                      )}
-                    </td>
-                    <td>
-                      <Button
-                        variant="warning"
-                        onClick={() => handleResetPassword(user.email)}
-                        disabled={!!resetCooldown[user.email]}
-                        className="w-100"
-                      >
-                        {resetCooldown[user.email] ? `Wait (${resetCooldown[user.email]}s)` : "Send Reset Email"}
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
+                      </td>
+                      <td>
+                        {user.role === "admin" ? (
+                          <Button variant="secondary" disabled className="w-100">
+                            Can't Remove
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="danger"
+                            onClick={() => handleDeleteUser(user.id, user.email, user.role)}
+                            className="w-100"
+                          >
+                            Remove
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
         </Modal.Body>
         <Modal.Footer className="d-flex justify-content-end">
           <Button variant="primary" onClick={() => setShowAddUserModal(true)}>

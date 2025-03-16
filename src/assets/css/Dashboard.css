@@ -1,0 +1,22 @@
+.dashboard-container {
+    padding: 20px;
+    background-color: #f9f9f9;
+    min-height: 100vh;
+  }
+  
+  h2 {
+    margin-bottom: 20px;
+  }
+  
+  .table {
+    background-color: white;
+  }
+  
+  th, td {
+    text-align: center;
+  }
+  
+  button {
+    margin: 5px;
+  }
+  
