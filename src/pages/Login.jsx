@@ -101,7 +101,7 @@ function LoginModal() {
 
   return (
     <>
-      <p className="texthovering" onClick={handleShow}>
+      <p onClick={handleShow}>
         Log In / Sign Up
       </p>
 

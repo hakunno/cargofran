@@ -6,7 +6,7 @@ import Navbar from 'react-bootstrap/Navbar';
 import Offcanvas from 'react-bootstrap/Offcanvas';
 import Logo from '../assets/logo.png';
 import LoginModal from '../pages/Login';
-import '../css/Navbar.css';
+import '../assets/css/Navbar.css';
 
 function BasicExample() {
   const [modalShow, setModalShow] = useState(false); // State for the modal
