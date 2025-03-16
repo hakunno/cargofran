@@ -34,6 +34,7 @@
 /* Remove Underline Completely */
 .nav-item {
     text-decoration: none; /* Completely remove the underline */
+    cursor: pointer;
 }
 
 /* Style the Text Inside the Links */

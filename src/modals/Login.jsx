@@ -4,7 +4,10 @@ import { Modal, Button, Form } from "react-bootstrap";
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
-  sendPasswordResetEmail 
+  sendPasswordResetEmail,
+  setPersistence,
+  browserLocalPersistence
+  
 } from "firebase/auth";
 import { auth, db } from "../jsfile/firebase"; 
 import { doc, setDoc, getDoc } from "firebase/firestore";
@@ -15,6 +18,7 @@ function LoginModal() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [role, setRole] = useState("user"); // Default role
   const [error, setError] = useState("");
   
   const navigate = useNavigate();
@@ -29,32 +33,39 @@ function LoginModal() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
-
+  
     try {
+      // ✅ Set Firebase auth persistence before login
+      await setPersistence(auth, browserLocalPersistence);
+  
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-
+  
       // ✅ Get user role from Firestore
       const userDoc = await getDoc(doc(db, "Users", user.uid));
-
+  
       if (userDoc.exists()) {
         const userData = userDoc.data();
-        console.log("User Role:", userData.role); 
-
+        console.log("User Role:", userData.role);
+  
+        // 🔹 Redirect Based on Role
         if (userData.role === "admin") {
-          navigate("/AdminDashboard"); 
+          navigate("/AdminDashboard");
+        } else if (userData.role === "staff") {
+          navigate("/StaffDashboard");
         } else {
-          navigate("/UserDashboard"); 
+          navigate("/UserDashboard");
         }
       } else {
         setError("User role not found in database.");
       }
-
+  
       handleClose();
     } catch (error) {
       setError(error.message);
     }
   };
+  
 
   // 🔹 Handle Signup Function
   const handleSignup = async (e) => {
@@ -70,15 +81,23 @@ function LoginModal() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // ✅ Store new user in Firestore with role "user"
+      // ✅ Store new user in Firestore with selected role
       await setDoc(doc(db, "Users", user.uid), {
         email: email,
         uid: user.uid,
-        role: "user", // Default role for new users
+        role: role, // Role selection
         createdAt: new Date(),
       });
 
-      navigate("/UserDashboard"); // Redirect to user dashboard
+      // Redirect based on role
+      if (role === "admin") {
+        navigate("/AdminDashboard");
+      } else if (role === "staff") {
+        navigate("/StaffDashboard");
+      } else {
+        navigate("/UserDashboard");
+      }
+
       handleClose();
     } catch (error) {
       setError(error.message);
@@ -182,35 +201,23 @@ function LoginModal() {
                   onChange={(e) => setConfirmPassword(e.target.value)} 
                 />
               </Form.Group>
+
+              {/* 🔹 Role Selection */}
+              <Form.Group className="mb-3">
+                <Form.Label>Role</Form.Label>
+                <Form.Select value={role} onChange={(e) => setRole(e.target.value)}>
+                  <option value="user">User</option>
+                  <option value="staff">Staff</option>
+                  <option value="admin">Admin</option>
+                </Form.Select>
+              </Form.Group>
+
               <Button variant="primary" type="submit" className="w-100">
                 Sign Up
               </Button>
               <div className="mt-3 text-center">
                 <a href="#" onClick={(e) => { e.preventDefault(); setView("login"); }}>
                   Already have an account? Log In
-                </a>
-              </div>
-            </Form>
-          )}
-
-          {/* 🔹 Forgot Password Form */}
-          {view === "forgotPassword" && (
-            <Form onSubmit={handleForgotPassword}>
-              <Form.Group className="mb-3">
-                <Form.Label>Email</Form.Label>
-                <Form.Control 
-                  type="email" 
-                  placeholder="Enter email to reset password" 
-                  value={email} 
-                  onChange={(e) => setEmail(e.target.value)} 
-                />
-              </Form.Group>
-              <Button variant="primary" type="submit" className="w-100">
-                Send Reset Link
-              </Button>
-              <div className="mt-3 text-center">
-                <a href="#" onClick={(e) => { e.preventDefault(); setView("login"); }}>
-                  Back to Log In
                 </a>
               </div>
             </Form>

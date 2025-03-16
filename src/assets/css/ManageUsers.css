@@ -1,0 +1,26 @@
+/* Ensure table stays within modal */
+.table {
+    table-layout: fixed;
+    width: 100%;
+  }
+  
+  /* Prevent text and buttons from overflowing */
+  .table th,
+  .table td {
+    white-space: nowrap; /* Prevents text from wrapping */
+    overflow: hidden; /* Hides overflow */
+    text-overflow: ellipsis; /* Adds "..." if text is too long */
+  }
+  
+  /* Adjust button size to fit properly */
+  .table .btn {
+    width: 100%; /* Makes all buttons fit within the column */
+    min-width: 120px; /* Ensures a minimum width */
+    text-align: center;
+  }
+
+  .modal-content {
+    background-color: #f8f9fa; /* Light gray or adjust to your preference */
+    border-radius: 10px;
+    box-shadow: 0 0 300px rgba(0, 0, 0, 1); /* Enhances the contrast */
+  }
