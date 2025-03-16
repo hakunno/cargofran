@@ -7,7 +7,6 @@ import {
   sendPasswordResetEmail,
   setPersistence,
   browserLocalPersistence
-  
 } from "firebase/auth";
 import { auth, db } from "../jsfile/firebase"; 
 import { doc, setDoc, getDoc } from "firebase/firestore";
@@ -18,14 +17,16 @@ function LoginModal() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [role, setRole] = useState("user"); // Default role
   const [error, setError] = useState("");
-  
+  const [successMessage, setSuccessMessage] = useState(""); // For reset password success message
+
   const navigate = useNavigate();
 
   const handleClose = () => {
     setShow(false);
     setView("login"); // Reset view to login when closing
+    setError(""); 
+    setSuccessMessage(""); 
   };
   const handleShow = () => setShow(true);
 
@@ -33,21 +34,21 @@ function LoginModal() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
-  
+
     try {
       // ✅ Set Firebase auth persistence before login
       await setPersistence(auth, browserLocalPersistence);
-  
+
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-  
+
       // ✅ Get user role from Firestore
       const userDoc = await getDoc(doc(db, "Users", user.uid));
-  
+
       if (userDoc.exists()) {
         const userData = userDoc.data();
         console.log("User Role:", userData.role);
-  
+
         // 🔹 Redirect Based on Role
         if (userData.role === "admin") {
           navigate("/AdminDashboard");
@@ -59,13 +60,12 @@ function LoginModal() {
       } else {
         setError("User role not found in database.");
       }
-  
+
       handleClose();
     } catch (error) {
       setError(error.message);
     }
   };
-  
 
   // 🔹 Handle Signup Function
   const handleSignup = async (e) => {
@@ -81,22 +81,16 @@ function LoginModal() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // ✅ Store new user in Firestore with selected role
+      // ✅ Store new user in Firestore with default role ("user")
       await setDoc(doc(db, "Users", user.uid), {
         email: email,
         uid: user.uid,
-        role: role, // Role selection
+        role: "user", // Default role is "user"
         createdAt: new Date(),
       });
 
-      // Redirect based on role
-      if (role === "admin") {
-        navigate("/AdminDashboard");
-      } else if (role === "staff") {
-        navigate("/StaffDashboard");
-      } else {
-        navigate("/UserDashboard");
-      }
+      // Redirect to User Dashboard after signup
+      navigate("/UserDashboard");
 
       handleClose();
     } catch (error) {
@@ -108,11 +102,16 @@ function LoginModal() {
   const handleForgotPassword = async (e) => {
     e.preventDefault();
     setError("");
+    setSuccessMessage("");
+
+    if (!email) {
+      setError("Please enter your email address.");
+      return;
+    }
 
     try {
       await sendPasswordResetEmail(auth, email);
-      alert("Password reset link sent to your email");
-      setView("login"); // Return to login after sending email
+      setSuccessMessage("Password reset link sent to your email.");
     } catch (error) {
       setError(error.message);
     }
@@ -120,9 +119,7 @@ function LoginModal() {
 
   return (
     <>
-      <p onClick={handleShow}>
-        Log In / Sign Up
-      </p>
+      <p onClick={handleShow}>Log In / Sign Up</p>
 
       <Modal show={show} onHide={handleClose} centered>
         <Modal.Header closeButton>
@@ -134,6 +131,7 @@ function LoginModal() {
         </Modal.Header>
         <Modal.Body>
           {error && <p className="text-danger">{error}</p>}
+          {successMessage && <p className="text-success">{successMessage}</p>}
 
           {/* 🔹 Login Form */}
           {view === "login" && (
@@ -201,17 +199,6 @@ function LoginModal() {
                   onChange={(e) => setConfirmPassword(e.target.value)} 
                 />
               </Form.Group>
-
-              {/* 🔹 Role Selection */}
-              <Form.Group className="mb-3">
-                <Form.Label>Role</Form.Label>
-                <Form.Select value={role} onChange={(e) => setRole(e.target.value)}>
-                  <option value="user">User</option>
-                  <option value="staff">Staff</option>
-                  <option value="admin">Admin</option>
-                </Form.Select>
-              </Form.Group>
-
               <Button variant="primary" type="submit" className="w-100">
                 Sign Up
               </Button>
@@ -222,6 +209,30 @@ function LoginModal() {
               </div>
             </Form>
           )}
+
+          {/* 🔹 Forgot Password Form */}
+          {view === "forgotPassword" && (
+            <Form onSubmit={handleForgotPassword}>
+              <Form.Group className="mb-3">
+                <Form.Label>Enter Your Email</Form.Label>
+                <Form.Control 
+                  type="email" 
+                  placeholder="Enter email" 
+                  value={email} 
+                  onChange={(e) => setEmail(e.target.value)} 
+                />
+              </Form.Group>
+              <Button variant="primary" type="submit" className="w-100">
+                Send Reset Link
+              </Button>
+              <div className="mt-3 text-center">
+                <a href="#" onClick={(e) => { e.preventDefault(); setView("login"); }}>
+                  Back to Login
+                </a>
+              </div>
+            </Form>
+          )}
+
         </Modal.Body>
       </Modal>
     </>

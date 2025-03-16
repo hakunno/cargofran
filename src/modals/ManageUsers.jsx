@@ -88,25 +88,27 @@ function ManageUsers({ show, onHide }) {
       alert("Please enter an email and password.");
       return;
     }
-
+  
     if (newUserPassword.length < 6) {
       alert("Password must be at least 6 characters long.");
       return;
     }
-
+  
     try {
-      // Create a user in Firebase Authentication
+      // Create user in Firebase Authentication
       const userCredential = await createUserWithEmailAndPassword(auth, newUserEmail, newUserPassword);
       const userId = userCredential.user.uid;
-
+  
       // Add user to Firestore
-      await addDoc(usersCollection, {
+      const docRef = await addDoc(usersCollection, {
         email: newUserEmail,
         role: newUserRole,
-        uid: userId,
+        uid: userId, // Store auth UID, but Firestore generates its own doc ID
       });
-
-      setUsers([...users, { id: userId, email: newUserEmail, role: newUserRole }]);
+  
+      // Use Firestore's generated document ID instead of UID
+      setUsers([...users, { id: docRef.id, email: newUserEmail, role: newUserRole }]);
+      
       alert("User added successfully!");
       setShowAddUserModal(false);
       setNewUserEmail("");
@@ -117,6 +119,7 @@ function ManageUsers({ show, onHide }) {
       alert("Failed to add user. The email might already be in use or invalid.");
     }
   };
+  
 
   return (
     <>
