@@ -63,9 +63,7 @@ function BasicExample() {
               <img src={Logo} alt="CargoFran" className="logo" />
             </Link>
           </div>
-          <Navbar.Toggle aria-controls="offcanvasNavbar" className="hamburger" />
         </div>
-
         <Navbar.Offcanvas
           id="offcanvasNavbar"
           aria-labelledby="offcanvasNavbarLabel"
@@ -79,7 +77,7 @@ function BasicExample() {
               </Link>
             </div>
           </Offcanvas.Header>
-
+          
           <Offcanvas.Body>
             <div className="page-links">
               {/* Show these pages ONLY if NOT Admin/Staff */}
@@ -97,6 +95,7 @@ function BasicExample() {
                   <NavLink to="/Services" className="nav-item">
                     <p>Services</p>
                   </NavLink>
+                  <Navbar.Toggle aria-controls="offcanvasNavbar" className="hamburger d-block" />
                 </>
               )}
 

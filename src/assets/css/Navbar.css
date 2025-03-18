@@ -61,7 +61,6 @@
     justify-content: center;
     align-items: center;
 }
-
 /* Mobile View */
 @media (max-width: 767px) {
     .navbar-collapse {
@@ -143,10 +142,6 @@
 }
 
     @media (min-width: 769px) {
-    /* Margin Adjustment for Login */
-    .loginmargin {
-        margin-left: 100px;
-    }
     .nav-itemlogin:hover p {
         color: rgb(204, 54, 54) !important;
         transform: scale(1.1);

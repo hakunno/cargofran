@@ -4,6 +4,7 @@ import About from "./pages/About";
 import Services from "./pages/Services";
 import Contact from "./pages/Contact";
 import Navbar from "./component/Navbar";
+import Navbartesting from "./component/Navbartesting"
 import LoginModal from "./modals/Login";
 import FirebaseTest from "./pages/FirebaseTest";
 import TrackPackage from "./pages/TrackPackage";
@@ -18,7 +19,7 @@ import ManageUsers from "./modals/ManageUsers";
 const App = () => {
   return (
     <>
-      <Navbar />
+      <Navbartesting />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/About" element={<About />} />

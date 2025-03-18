@@ -119,7 +119,7 @@ function LoginModal() {
 
   return (
     <>
-      <p onClick={handleShow}>Log In / Sign Up</p>
+      <div onClick={handleShow}>Log In / Sign Up</div>
 
       <Modal show={show} onHide={handleClose} centered>
         <Modal.Header closeButton>
