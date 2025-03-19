@@ -16,6 +16,7 @@
     "@tailwindcss/vite": "^4.0.14",
     "bootstrap": "^5.3.3",
     "firebase": "^11.4.0",
+    "firebase-admin": "^13.2.0",
     "framer-motion": "^12.4.12",
     "lucide-react": "^0.483.0",
     "react": "^19.0.0",

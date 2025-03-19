@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Modal, Button, Form } from "react-bootstrap";
 import { 
   signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
+  createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   setPersistence,
   browserLocalPersistence
@@ -13,49 +13,52 @@ import { doc, setDoc, getDoc } from "firebase/firestore";
 
 function LoginModal() {
   const [show, setShow] = useState(false);
-  const [view, setView] = useState("login"); // "login", "signup", "forgotPassword"
+  const [view, setView] = useState("login");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
-  const [successMessage, setSuccessMessage] = useState(""); // For reset password success message
+  const [successMessage, setSuccessMessage] = useState("");
 
   const navigate = useNavigate();
 
   const handleClose = () => {
     setShow(false);
-    setView("login"); // Reset view to login when closing
+    setView("login");
     setError(""); 
     setSuccessMessage(""); 
   };
+
   const handleShow = () => setShow(true);
 
-  // 🔹 Handle Login Function
+  // Handle Login
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
 
     try {
-      // ✅ Set Firebase auth persistence before login
       await setPersistence(auth, browserLocalPersistence);
 
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // ✅ Get user role from Firestore
       const userDoc = await getDoc(doc(db, "Users", user.uid));
-
       if (userDoc.exists()) {
         const userData = userDoc.data();
-        console.log("User Role:", userData.role);
 
-        // 🔹 Redirect Based on Role
         if (userData.role === "admin") {
           navigate("/AdminDashboard");
         } else if (userData.role === "staff") {
           navigate("/StaffDashboard");
         } else {
           navigate("/UserDashboard");
+        }
+
+        // ✅ Check verification status
+        if (!userData.verified) {
+          setSuccessMessage("Your account is not verified yet. Some features may be restricted.");
         }
       } else {
         setError("User role not found in database.");
@@ -67,10 +70,11 @@ function LoginModal() {
     }
   };
 
-  // 🔹 Handle Signup Function
+  // Handle Signup (No Verification Required)
   const handleSignup = async (e) => {
     e.preventDefault();
     setError("");
+    setSuccessMessage("");
 
     if (password !== confirmPassword) {
       setError("Passwords do not match");
@@ -78,27 +82,33 @@ function LoginModal() {
     }
 
     try {
+      // Create User in Firebase Authentication
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
+      const uid = user.uid; // ✅ Get the UID
 
-      // ✅ Store new user in Firestore with default role ("user")
-      await setDoc(doc(db, "Users", user.uid), {
-        email: email,
-        uid: user.uid,
-        role: "user", // Default role is "user"
+      // Store User Data in Firestore with UID
+      const userDocRef = doc(db, "Users", uid);
+      await setDoc(userDocRef, {
+        uid, // ✅ Save UID in Firestore
+        firstName,
+        lastName,
+        email,
+        role: "user", // Default role
+        verified: false, // ✅ Newly registered users are NOT verified
         createdAt: new Date(),
       });
 
-      // Redirect to User Dashboard after signup
-      navigate("/UserDashboard");
+      setSuccessMessage("Account created! You can now log in.");
+      setView("login"); // Redirect to login page
 
-      handleClose();
     } catch (error) {
       setError(error.message);
     }
   };
 
-  // 🔹 Handle Forgot Password Function
+
+  //  Handle Forgot Password
   const handleForgotPassword = async (e) => {
     e.preventDefault();
     setError("");
@@ -112,6 +122,7 @@ function LoginModal() {
     try {
       await sendPasswordResetEmail(auth, email);
       setSuccessMessage("Password reset link sent to your email.");
+      setEmail(""); // ✅ Clear email input after successful request
     } catch (error) {
       setError(error.message);
     }
@@ -119,7 +130,9 @@ function LoginModal() {
 
   return (
     <>
-      <div className="cursor-pointer block w-full py-3 px-3 text-black no-underline rounded transition-all duration-200 hover:bg-gray-100 active:bg-gray-200" onClick={handleShow}>Log In / Sign Up</div>
+      <div className="cursor-pointer block w-full py-3 px-3 text-black no-underline rounded transition-all duration-200 hover:bg-blue-200 active:bg-gray-200" onClick={handleShow}>
+        Log In / Sign Up
+      </div>
 
       <Modal show={show} onHide={handleClose} centered>
         <Modal.Header closeButton>
@@ -133,7 +146,31 @@ function LoginModal() {
           {error && <p className="text-danger">{error}</p>}
           {successMessage && <p className="text-success">{successMessage}</p>}
 
-          {/* 🔹 Login Form */}
+          {/* Forgot Password Form */}
+          {view === "forgotPassword" && (
+            <Form onSubmit={handleForgotPassword}>
+              <Form.Group className="mb-3">
+                <Form.Label>Email Address</Form.Label>
+                <Form.Control 
+                  type="email" 
+                  placeholder="Enter your email" 
+                  value={email} 
+                  onChange={(e) => setEmail(e.target.value)} 
+                  required
+                />
+              </Form.Group>
+              <Button variant="primary" type="submit" className="w-100">
+                Send Reset Link
+              </Button>
+              <div className="mt-3 text-center">
+                <a href="#" onClick={(e) => { e.preventDefault(); setView("login"); }}>
+                  Back to Login
+                </a>
+              </div>
+            </Form>
+          )}
+
+          {/* Login Form */}
           {view === "login" && (
             <Form onSubmit={handleLogin}>
               <Form.Group className="mb-3">
@@ -153,25 +190,44 @@ function LoginModal() {
                   value={password} 
                   onChange={(e) => setPassword(e.target.value)} 
                 />
+                <a href="#" onClick={(e) => { e.preventDefault(); setView("forgotPassword"); }}>
+                  Forgot Password?
+                </a>
               </Form.Group>
               <Button variant="primary" type="submit" className="w-100">
                 Log In
               </Button>
               <div className="mt-3 text-center">
-                <a href="#" onClick={(e) => { e.preventDefault(); setView("forgotPassword"); }}>
-                  Forgot Password?
-                </a>
-                <br />
                 <a href="#" onClick={(e) => { e.preventDefault(); setView("signup"); }}>
-                  First time creating an account? Sign up
+                  First time? Sign up
                 </a>
               </div>
             </Form>
           )}
 
-          {/* 🔹 Signup Form */}
+          {/* Signup Form */}
           {view === "signup" && (
             <Form onSubmit={handleSignup}>
+              <Form.Group className="mb-3">
+                <Form.Label>First Name</Form.Label>
+                <Form.Control 
+                  type="text" 
+                  placeholder="Enter first name" 
+                  value={firstName} 
+                  onChange={(e) => setFirstName(e.target.value)} 
+                  required
+                />
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label>Last Name</Form.Label>
+                <Form.Control 
+                  type="text" 
+                  placeholder="Enter last name" 
+                  value={lastName} 
+                  onChange={(e) => setLastName(e.target.value)} 
+                  required
+                />
+              </Form.Group>
               <Form.Group className="mb-3">
                 <Form.Label>Email</Form.Label>
                 <Form.Control 
@@ -179,6 +235,7 @@ function LoginModal() {
                   placeholder="Enter email" 
                   value={email} 
                   onChange={(e) => setEmail(e.target.value)} 
+                  required
                 />
               </Form.Group>
               <Form.Group className="mb-3">
@@ -188,6 +245,7 @@ function LoginModal() {
                   placeholder="Password" 
                   value={password} 
                   onChange={(e) => setPassword(e.target.value)} 
+                  required
                 />
               </Form.Group>
               <Form.Group className="mb-3">
@@ -197,42 +255,14 @@ function LoginModal() {
                   placeholder="Confirm Password" 
                   value={confirmPassword} 
                   onChange={(e) => setConfirmPassword(e.target.value)} 
+                  required
                 />
               </Form.Group>
               <Button variant="primary" type="submit" className="w-100">
                 Sign Up
               </Button>
-              <div className="mt-3 text-center">
-                <a href="#" onClick={(e) => { e.preventDefault(); setView("login"); }}>
-                  Already have an account? Log In
-                </a>
-              </div>
             </Form>
           )}
-
-          {/* 🔹 Forgot Password Form */}
-          {view === "forgotPassword" && (
-            <Form onSubmit={handleForgotPassword}>
-              <Form.Group className="mb-3">
-                <Form.Label>Enter Your Email</Form.Label>
-                <Form.Control 
-                  type="email" 
-                  placeholder="Enter email" 
-                  value={email} 
-                  onChange={(e) => setEmail(e.target.value)} 
-                />
-              </Form.Group>
-              <Button variant="primary" type="submit" className="w-100">
-                Send Reset Link
-              </Button>
-              <div className="mt-3 text-center">
-                <a href="#" onClick={(e) => { e.preventDefault(); setView("login"); }}>
-                  Back to Login
-                </a>
-              </div>
-            </Form>
-          )}
-
         </Modal.Body>
       </Modal>
     </>

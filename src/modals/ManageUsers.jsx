@@ -1,7 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { getDocs, updateDoc, collection, doc, addDoc, deleteDoc } from "firebase/firestore";
-import { getAuth, sendPasswordResetEmail, createUserWithEmailAndPassword } from "firebase/auth";
-import { db } from "../jsfile/firebase"; // Adjust path as needed
+import {
+  getDocs,
+  updateDoc,
+  collection,
+  doc,
+  setDoc,
+} from "firebase/firestore";
+import {
+  getAuth,
+  sendPasswordResetEmail,
+  createUserWithEmailAndPassword,
+} from "firebase/auth";
+import { db } from "../jsfile/firebase";
 import Modal from "react-bootstrap/Modal";
 import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
@@ -11,10 +21,12 @@ function ManageUsers({ show, onHide }) {
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState("");
   const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [newUserFirstName, setNewUserFirstName] = useState("");
+  const [newUserLastName, setNewUserLastName] = useState("");
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserPassword, setNewUserPassword] = useState("");
   const [newUserRole, setNewUserRole] = useState("user");
-  const [resetCooldown, setResetCooldown] = useState({}); // Cooldown state
+  const [resetCooldown, setResetCooldown] = useState({});
 
   const usersCollection = collection(db, "Users");
   const auth = getAuth();
@@ -26,14 +38,17 @@ function ManageUsers({ show, onHide }) {
         id: doc.id,
         ...doc.data(),
       }));
+  
+      // Sort users by createdAt (ascending)
+      userList.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  
       setUsers(userList);
     };
-
+  
     fetchUsers();
   }, []);
 
   useEffect(() => {
-    // Interval to decrease cooldown every second
     const interval = setInterval(() => {
       setResetCooldown((prevCooldown) => {
         const updatedCooldown = { ...prevCooldown };
@@ -42,7 +57,7 @@ function ManageUsers({ show, onHide }) {
           if (updatedCooldown[email] > 0) {
             updatedCooldown[email] -= 1;
           } else {
-            delete updatedCooldown[email]; // Remove from cooldown when it reaches 0
+            delete updatedCooldown[email];
           }
         });
 
@@ -73,78 +88,137 @@ function ManageUsers({ show, onHide }) {
     try {
       await sendPasswordResetEmail(auth, email);
       alert(`Password reset email sent to ${email}`);
-
-      // Set cooldown to 60 seconds
       setResetCooldown((prev) => ({ ...prev, [email]: 60 }));
-
     } catch (error) {
       console.error("Error sending reset email:", error.message);
       alert("Failed to send reset email. Please try again.");
     }
   };
 
-  const handleDeleteUser = async (userId, email, role) => {
-    if (role === "admin") return; // Prevent deletion of admin
-
-    const confirmDelete = window.confirm(`Are you sure you want to delete ${email}?`);
-    if (!confirmDelete) return;
-
-    try {
-      await deleteDoc(doc(db, "Users", userId));
-      setUsers(users.filter((user) => user.id !== userId));
-      alert("User removed successfully.");
-    } catch (error) {
-      console.error("Error removing user:", error.message);
-      alert("Failed to remove user. Please try again.");
-    }
+  const handleOpenAddUserModal = () => {
+    setShowAddUserModal(true);
   };
 
   const handleAddUser = async () => {
-  if (!newUserEmail || !newUserPassword) {
-    alert("Please enter an email and password.");
-    return;
-  }
+    if (!newUserFirstName || !newUserLastName || !newUserEmail || !newUserPassword) {
+      alert("Please fill in all fields.");
+      return;
+    }
+  
+    if (newUserPassword.length < 6) {
+      alert("Password must be at least 6 characters long.");
+      return;
+    }
+  
+    const createdAt = new Date().toISOString(); // Capture the current timestamp
+  
+    try {
+      const response = await fetch("http://localhost:5000/createUser", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName: newUserFirstName,
+          lastName: newUserLastName,
+          email: newUserEmail,
+          password: newUserPassword,
+          role: newUserRole,
+          createdAt: new Date().toISOString(),
+        }),
+      });
+  
+      const data = await response.json();
+  
+      if (response.ok) {
+        setUsers((prevUsers) =>
+          [...prevUsers,
+            {
+              id: data.uid,
+              firstName: newUserFirstName,
+              lastName: newUserLastName,
+              email: newUserEmail,
+              role: newUserRole,
+              createdAt, // Store timestamp
+              verified: false,
+            },
+          ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)) // Sort by createdAt (newest first)
+        );
+  
+        alert("User created successfully!");
+        setShowAddUserModal(false);
+        setNewUserFirstName("");
+        setNewUserLastName("");
+        setNewUserEmail("");
+        setNewUserPassword("");
+        setNewUserRole("user");
+      } else {
+        alert("Failed to create user: " + data.error);
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      alert("Something went wrong.");
+    }
+  };
+  
+  const handleDeleteUser = async (userId) => {
+    const confirmDelete = window.confirm("Are you sure you want to delete this user? This action cannot be undone.");
+  
+    if (!confirmDelete) return;
+  
+    try {
+      const response = await fetch(`http://localhost:5000/deleteUser/${userId}`, {
+        method: "DELETE",
+      });
+  
+      const data = await response.json();
+  
+      if (response.ok) {
+        setUsers((prevUsers) => prevUsers.filter((user) => user.id !== userId));
+        alert("User deleted successfully!");
+      } else {
+        alert("Failed to delete user: " + data.error);
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      alert("Something went wrong while deleting the user.");
+    }
+  };  
 
-  if (newUserPassword.length < 6) {
-    alert("Password must be at least 6 characters long.");
-    return;
-  }
+  const handleToggleVerification = async (userId, currentStatus) => {
+    const newStatus = !currentStatus; // Toggle verification status
+  
+    try {
+      await updateDoc(doc(db, "Users", userId), { verified: newStatus });
+  
+      setUsers((prevUsers) =>
+        prevUsers.map((user) =>
+          user.id === userId ? { ...user, verified: newStatus } : user
+        )
+      );
+    } catch (error) {
+      console.error("Error updating verification status:", error);
+      alert("Failed to update verification status.");
+    }
+  };
+  
 
-  try {
-    // Create user in Firebase Authentication
-    const userCredential = await createUserWithEmailAndPassword(auth, newUserEmail, newUserPassword);
-    const userId = userCredential.user.uid;
-
-    // Add user to Firestore
-    const docRef = await addDoc(usersCollection, {
-      email: newUserEmail,
-      role: newUserRole,
-      uid: userId, // Store auth UID, but Firestore generates its own doc ID
-    });
-
-    // Use Firestore's generated document ID instead of UID
-    setUsers([...users, { id: docRef.id, email: newUserEmail, role: newUserRole }]);
-
-    alert("User added successfully!");
-    setShowAddUserModal(false);
-    setNewUserEmail("");
-    setNewUserPassword("");
-    setNewUserRole("user");
-  } catch (error) {
-    console.error("Error adding user:", error.message);
-    alert("Failed to add user. The email might already be in use or invalid.");
-  }
-};
-
+  const handleBackToManageUsers = () => {
+    setShowAddUserModal(false); // Hide Add User Modal
+  };
 
   return (
     <>
       {/* Main Manage Users Modal */}
-      <Modal show={show} onHide={onHide} centered size="xl">
+      <Modal
+      show={show}
+      onHide={onHide}
+      centered
+      size="xl"
+      className="sm:max-w-full sm:h-screen sm:modal-dialog"
+    >
         <Modal.Header closeButton>
           <Modal.Title>Manage Users</Modal.Title>
         </Modal.Header>
-        <Modal.Body style={{ maxHeight: "70vh", overflowY: "auto" }}> {/* Scrollable Modal */}
+        <Modal.Body style={{ maxHeight: "70vh", overflowY: "auto" }}>
           <Form.Control
             type="text"
             placeholder="Search by email..."
@@ -152,65 +226,71 @@ function ManageUsers({ show, onHide }) {
             onChange={(e) => setSearch(e.target.value)}
             className="mb-3"
           />
-          <div className="table-responsive"> {/* Make Table Scrollable on Mobile */}
-            <table className="table">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse border border-gray-300">
               <thead>
-                <tr>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Action</th>
-                  <th>Reset Password</th>
-                  <th>Remove</th>
+                <tr className="bg-gray-200">
+                  <th className="p-2 border">Email</th>
+                  <th className="p-2 border">Role</th>
+                  <th className="p-2 border"></th>
+                  <th className="p-2 border">Verified</th>
+                  <th className="p-2 border"></th>
+                  <th className="p-2 border">Reset Password</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="max-h-[300px] overflow-y-auto">
                 {users
                   .filter((user) =>
                     user.email.toLowerCase().includes(search.toLowerCase())
                   )
                   .map((user) => (
-                    <tr key={user.id}>
-                      <td>{user.email}</td>
-                      <td>{user.role}</td>
-                      <td>
-                        {user.role === "admin" ? (
-                          <Button variant="secondary" disabled className="w-100">
-                            Admin
-                          </Button>
-                        ) : (
-                          <Button
-                            variant={user.role === "staff" ? "danger" : "success"}
-                            onClick={() => handleRoleChange(user.id, user.role)}
-                            className="w-100"
-                          >
-                            Change to {user.role === "staff" ? "User" : "Staff"}
-                          </Button>
-                        )}
+                    <tr key={user.id} className="text-center">
+                      <td className="p-2 border">{user.email}</td>
+                      <td className="p-2 border">{user.role}</td>
+                      <td className="p-2 border">
+                        <Button
+                          variant={user.role === "staff" ? "danger" : "success"}
+                          onClick={() =>
+                            user.role !== "admin" && handleRoleChange(user.id, user.role)
+                          }
+                          disabled={user.role === "admin"}
+                          className={
+                            user.role === "admin"
+                              ? "bg-gray-400 text-gray-700 cursor-not-allowed"
+                              : ""
+                          }
+                        >
+                          {user.role === "admin"
+                            ? "Admin"
+                            : `Change to ${user.role === "staff" ? "User" : "Staff"}`}
+                        </Button>
                       </td>
-                      <td>
+                      <td className="p-2 border">
+                        {user.verified ? "Yes" : "No"}
+                      </td>
+                      <td className="p-2 border">
+                        <Button
+                          variant={user.verified ? "danger" : "success"} // Red if Verified, Green if Unverified
+                          onClick={() => handleToggleVerification(user.id, user.verified)}
+                        >
+                          {user.verified ? "Unverify" : "Verify"}
+                        </Button>
+                      </td>
+                      <td className="p-2 border">
                         <Button
                           variant="warning"
                           onClick={() => handleResetPassword(user.email)}
                           disabled={!!resetCooldown[user.email]}
-                          className="w-100"
                         >
-                          {resetCooldown[user.email] ? `Wait (${resetCooldown[user.email]}s)` : "Send Reset Email"}
+                          {resetCooldown[user.email]
+                            ? `Wait (${resetCooldown[user.email]}s)`
+                            : "Send Reset Email"}
                         </Button>
                       </td>
-                      <td>
-                        {user.role === "admin" ? (
-                          <Button variant="secondary" disabled className="w-100">
-                            Can't Remove
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="danger"
-                            onClick={() => handleDeleteUser(user.id, user.email, user.role)}
-                            className="w-100"
-                          >
-                            Remove
-                          </Button>
-                        )}
+                      <td className="p-2 border">
+                        <Button variant="danger" onClick={() => handleDeleteUser(user.id)}>
+                          Delete
+                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -218,54 +298,85 @@ function ManageUsers({ show, onHide }) {
             </table>
           </div>
         </Modal.Body>
-        <Modal.Footer className="d-flex justify-content-end">
-          <Button variant="primary" onClick={() => setShowAddUserModal(true)}>
-            + Add New User
+        <Modal.Footer className="flex justify-end">
+          <Button variant="primary" onClick={handleOpenAddUserModal}>
+            Add New User
           </Button>
         </Modal.Footer>
       </Modal>
 
       {/* Add User Modal */}
-      <Modal show={showAddUserModal} onHide={() => setShowAddUserModal(false)} centered>
+      <Modal 
+        show={showAddUserModal} 
+        onHide={() => setShowAddUserModal(false)} 
+        centered 
+        size="md"
+      >
         <Modal.Header closeButton>
-          <Modal.Title>Add New User</Modal.Title>
+          <Modal.Title className="text-center w-full">Add New User</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <Form.Group className="mb-3">
-            <Form.Label>Email</Form.Label>
-            <Form.Control
-              type="email"
-              placeholder="Enter email"
-              value={newUserEmail}
-              onChange={(e) => setNewUserEmail(e.target.value)}
-            />
-          </Form.Group>
-          <Form.Group className="mb-3">
-            <Form.Label>Password</Form.Label>
-            <Form.Control
-              type="password"
-              placeholder="Enter password"
-              value={newUserPassword}
-              onChange={(e) => setNewUserPassword(e.target.value)}
-            />
-          </Form.Group>
-          <Form.Group className="mb-3">
-            <Form.Label>Role</Form.Label>
-            <Form.Select value={newUserRole} onChange={(e) => setNewUserRole(e.target.value)}>
-              <option value="user">User</option>
-              <option value="staff">Staff</option>
-            </Form.Select>
-          </Form.Group>
+          <Form>
+            <Form.Group className="mb-3">
+              <Form.Label>First Name</Form.Label>
+              <Form.Control
+                type="text"
+                value={newUserFirstName}
+                onChange={(e) => {
+                  const formattedText = e.target.value
+                    .toLowerCase()
+                    .replace(/\b\w/g, (char) => char.toUpperCase());
+                  setNewUserFirstName(formattedText);
+                }}
+              />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Last Name</Form.Label>
+              <Form.Control
+                type="text"
+                value={newUserLastName}
+                onChange={(e) => {
+                  const formattedText = e.target.value
+                    .toLowerCase()
+                    .replace(/\b\w/g, (char) => char.toUpperCase());
+                  setNewUserLastName(formattedText);
+                }}
+              />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Email</Form.Label>
+              <Form.Control
+                type="email"
+                value={newUserEmail}
+                onChange={(e) => setNewUserEmail(e.target.value)}
+              />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Password</Form.Label>
+              <Form.Control
+                type="password"
+                value={newUserPassword}
+                onChange={(e) => setNewUserPassword(e.target.value)}
+              />
+            </Form.Group>
+          </Form>
         </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowAddUserModal(false)}>
-            Close
+        <Modal.Footer className="flex justify-between w-full">
+          <Button variant="secondary" onClick={handleBackToManageUsers}>
+            Back
           </Button>
-          <Button variant="success" onClick={handleAddUser}>
+
+          <Button
+            variant="success"
+            onClick={async () => {
+              await handleAddUser();
+            }}
+          >
             Add User
           </Button>
         </Modal.Footer>
       </Modal>
+
     </>
   );
 }
