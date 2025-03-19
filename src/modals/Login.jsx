@@ -119,7 +119,7 @@ function LoginModal() {
 
   return (
     <>
-      <div onClick={handleShow}>Log In / Sign Up</div>
+      <div className="cursor-pointer block w-full py-3 px-3 text-black no-underline rounded transition-all duration-200 hover:bg-gray-100 active:bg-gray-200" onClick={handleShow}>Log In / Sign Up</div>
 
       <Modal show={show} onHide={handleClose} centered>
         <Modal.Header closeButton>

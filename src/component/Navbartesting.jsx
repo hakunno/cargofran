@@ -1,6 +1,8 @@
 import { useState } from "react";   
+import "../assets/css/Navbartesting.css"
 import Logo from "../assets/logo2.png"
 import Loginmodal from "../modals/Login"
+import { NavLink } from "react-router-dom"
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -8,28 +10,39 @@ const Navbar = () => {
   
 
   return (
-    <nav className="border-b border-gray-300 bg-white dark:bg-gray-800 dark:border-gray-700">
+    <nav className="border-b border-gray-300 bg-white dark:bg-gray-800 dark:border-gray-700 font-semibold">
       <div className="max-w-screen-xl flex items-center justify-between mx-auto p-4">
         {/* Logo */}
-        <a href="#" className="flex items-center space-x-3">
+        <NavLink to="/" className="flex items-center space-x-3">
           <img
             src={Logo}
             className="h-12 w-auto"
             alt="FCL"
           />
-        </a>
+        </NavLink>
 
         {/* Navbar Links (Desktop Only) */}
         <div className="hidden md:flex items-center gap-4 ml-auto">
-            <a href="#" className="block py-2 px-3 text-black no-underline hover:bg-gray-100 rounded transition-all duration-200 transform hover:scale-105 active:scale-95">About Us</a>
-            <a href="#" className="block py-2 px-3 text-black no-underline hover:bg-gray-100 rounded transition-all duration-200 transform hover:scale-105 active:scale-95">Services</a>
-            <a href="#" className="block py-2 px-3 text-black no-underline hover:bg-gray-100 rounded transition-all duration-200 transform hover:scale-105 active:scale-95">Our Commitment</a>
+            <NavLink 
+            to="/About" className="block py-2 px-3 text-black no-underline hover:bg-gray-100 rounded transition-all duration-200 transform hover:scale-105 active:scale-95"
+            >
+              About Us
+            </NavLink>
+            <NavLink 
+            to="/Services" className="block py-2 px-3 text-black no-underline hover:bg-gray-100 rounded transition-all duration-200 transform hover:scale-105 active:scale-95"
+            >
+              Services
+            </NavLink>
+            <NavLink 
+            to="/OurCommitment" className="block py-2 px-3 text-black no-underline hover:bg-gray-100 rounded transition-all duration-200 transform hover:scale-105 active:scale-95"
+            >
+              Our Commitment
+            </NavLink>
         </div>
 
         {/* Right Section (Hamburger Menu + Text) */}
         <div className="flex items-center space-x-2 md:space-x-3">
           {/* Text label beside hamburger (Desktop Only) */}
-          <span className="hidden md:inline-block text-gray-700 dark:text-white">Menu</span>
 
           {/* Hamburger Button */}
           <button
@@ -63,9 +76,7 @@ const Navbar = () => {
         <div className="p-5 flex justify-between items-center border-b border-gray-300">
           <span className="text-lg font-semibold">
             <a
-              href="#"
               onClick={() => setIsOpen(false)}
-              className="block w-full py-3 px-3 text-black no-underline rounded transition-all duration-200 hover:bg-gray-100 active:bg-gray-200"
             >
               <Loginmodal />
             </a>
@@ -78,69 +89,60 @@ const Navbar = () => {
         <ul className="p-4 space-y-3 flex flex-col items-center text-center flex-grow w-full">
         {/* These will only show inside the hamburger menu on mobile */}
         <li className="md:hidden w-full">
-          <a
-            href="#"
+          <NavLink
+            to="/About"
             onClick={() => setIsOpen(false)}
             className="block w-full py-3 px-3 text-black no-underline rounded transition-all duration-200 hover:bg-gray-100 active:bg-gray-200"
           >
             About Us
-          </a>
+          </NavLink>
         </li>
         <li className="md:hidden w-full">
-          <a
-            href="#"
+        <NavLink
+            to="/Services"
             onClick={() => setIsOpen(false)}
             className="block w-full py-3 px-3 text-black no-underline rounded transition-all duration-200 hover:bg-gray-100 active:bg-gray-200"
           >
             Services
-          </a>
+          </NavLink>
         </li>
         <li className="md:hidden w-full">
-          <a
-            href="#"
+        <NavLink
+            to="/OurCommitment"
             onClick={() => setIsOpen(false)}
             className="block w-full py-3 px-3 text-black no-underline rounded transition-all duration-200 hover:bg-gray-100 active:bg-gray-200"
           >
             Our Commitment
-          </a>
+          </NavLink>
         </li>
 
         {/* Always inside the hamburger menu */}
         <li className="w-full">
-          <a
-            href="#"
-            onClick={() => setIsOpen(false)}
-            className="block w-full py-3 px-3 text-black no-underline rounded transition-all duration-200 hover:bg-gray-100 active:bg-gray-200"
-          >
-            Log In / Sign Up
-          </a>
-        </li>
-        <li className="w-full">
-          <a
-            href="#"
+          <NavLink
+            to="/TrackPackage"
             onClick={() => setIsOpen(false)}
             className="block w-full py-3 px-3 text-black no-underline rounded transition-all duration-200 hover:bg-gray-100 active:bg-gray-200"
           >
             Track Package
-          </a>
+          </NavLink>
         </li>
         <li className="w-full">
-          <a
-            href="#"
+          <NavLink
+            to="/Contact"
             onClick={() => setIsOpen(false)}
             className="block w-full py-3 px-3 text-black no-underline rounded transition-all duration-200 hover:bg-gray-100 active:bg-gray-200"
           >
-            Contact Us
-          </a>
+            Contact Us!
+          </NavLink>
         </li>
         <li className="w-full">
-          <a
-            href="#123"
+          <NavLink
+            to="/ChatHelp"
             onClick={() => setIsOpen(false)}
             className="block w-full py-3 px-3 text-black no-underline rounded transition-all duration-200 hover:bg-gray-100 active:bg-gray-200"
           >
             Need Help?
-          </a>
+          </NavLink>
         </li>
 
         {/* Offcanvas Footer */}

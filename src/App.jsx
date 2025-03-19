@@ -1,7 +1,10 @@
 import { Routes, Route } from "react-router-dom";
+import Unauthorized from "./pages/Unauthorized"; // Page for access denied
+import ProtectedRoute from "./utils/ProtectedRoute"; // Role-based protection
 import Home from "./pages/Home";
 import About from "./pages/About";
 import Services from "./pages/Services";
+import OurCommitment from "./pages/OurCommitment";
 import Contact from "./pages/Contact";
 import Navbar from "./component/Navbar";
 import Navbartesting from "./component/Navbartesting"
@@ -12,9 +15,8 @@ import AdminDashboard from "./pages/AdminDashboard";
 import UserDashboard from "./pages/UserDashboard";
 import AirCargoTracking from "./pages/AirTracking";
 import StaffDashboard from "./pages/StaffDashboard";
-import Unauthorized from "./pages/Unauthorized"; // Page for access denied
-import ProtectedRoute from "./utils/ProtectedRoute"; // Role-based protection
 import ManageUsers from "./modals/ManageUsers";
+import FaqChat from "./pages/FaqChat";
 
 const App = () => {
   return (
@@ -24,12 +26,14 @@ const App = () => {
         <Route path="/" element={<Home />} />
         <Route path="/About" element={<About />} />
         <Route path="/Services" element={<Services />} />
+        <Route path="/OurCommitment" element={<OurCommitment />} />
         <Route path="/Contact" element={<Contact />} />
         <Route path="/Login" element={<LoginModal />} />
         <Route path="/FirebaseTest" element={<FirebaseTest />} />
         <Route path="/TrackPackage" element={<TrackPackage />} />
         <Route path="/AirCargoTracking" element={<AirCargoTracking />} />
         <Route path="/UserDashboard" element={<UserDashboard />} />
+        <Route path="/ChatHelp" element={<FaqChat />} />
 
         {/* Protected Routes for Admin and Staff */}
         {/* ADMIN ROUTES */}
