@@ -6,8 +6,7 @@ import About from "./pages/About";
 import Services from "./pages/Services";
 import OurCommitment from "./pages/OurCommitment";
 import Contact from "./pages/Contact";
-import Navbar from "./component/Navbar";
-import Navbartesting from "./component/Navbartesting"
+import Navbartesting from "./component/Navbar"
 import LoginModal from "./modals/Login";
 import FirebaseTest from "./pages/FirebaseTest";
 import TrackPackage from "./pages/TrackPackage";
