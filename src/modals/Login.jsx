@@ -130,7 +130,12 @@ function LoginModal() {
 
   return (
     <>
-      <div className="cursor-pointer block w-full py-3 px-3 text-black no-underline rounded transition-all duration-200 hover:bg-blue-200 active:bg-gray-200" onClick={handleShow}>
+      <div
+        className="text-xl drop-shadow-[2px_2px_2px_rgba(0,0,0,0.8)] font-bold relative block py-2 px-0 no-underline transition-all duration-200 transform hover:scale-110 active:scale-95 
+                  after:content-[''] after:absolute after:left-0 after:bottom-0 after:w-0 after:h-[2px] after:bg-black/90 after:transition-all after:duration-300 
+                  hover:after:w-full text-white/100 hover:text-green-400 cursor-pointer"
+        onClick={handleShow}
+      >
         Log In / Sign Up
       </div>
 
@@ -261,6 +266,11 @@ function LoginModal() {
               <Button variant="primary" type="submit" className="w-100">
                 Sign Up
               </Button>
+              <div className="mt-3 text-center">
+                <a href="#" onClick={(e) => { e.preventDefault(); setView("login"); }}>
+                  Back to Login
+                </a>
+              </div>
             </Form>
           )}
         </Modal.Body>

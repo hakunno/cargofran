@@ -14,6 +14,7 @@ const Navbar = () => {
   const [firstName, setFirstName] = useState(""); // State for first name
   const [role, setRole] = useState(undefined); // Initial state is undefined
   const [manageUsersShow, setManageUsersShow] = useState(false);
+  const [isActive, setIsActive] = useState(false);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
@@ -61,26 +62,43 @@ const Navbar = () => {
           <div className="hidden md:flex items-center gap-4 ml-auto">
             {/* Conditional Rendering Based on Role */}
             {role === "admin" ? (
-                <div className="mr-3 block py-2 px-3 text-black no-underline hover:bg-gray-100 rounded transition-all duration-200 transform hover:scale-105 active:scale-95" onClick={() => setManageUsersShow(true)}>
-                  Manage Users
-                </div>
+              <div
+              className="mr-3 cursor-pointer relative block py-2 px-3 text-black no-underline rounded transition-all duration-200 transform hover:scale-105 active:scale-95 
+                          after:content-[''] after:absolute after:left-0 after:bottom-0 after:h-[2px] after:w-0 after:bg-blue-500 after:transition-all after:duration-300 
+                          hover:after:w-full"
+              onClick={() => setManageUsersShow(true)}
+            >
+              Manage Users
+            </div>
             ) : (
               <>
                 <NavLink
                   to="/About"
-                  className="block py-2 px-3 text-black no-underline hover:bg-gray-100 rounded transition-all duration-200 transform hover:scale-105 active:scale-95"
+                  className={({ isActive }) =>
+                    `relative block py-2 px-3 text-black no-underline transition-all duration-200 transform hover:scale-105 active:scale-95 
+                     after:content-[''] after:absolute after:left-0 after:bottom-0 after:h-[2px] after:bg-blue-500 after:transition-all after:duration-300
+                     ${isActive ? "after:w-full scale-110" : "after:w-0 hover:after:w-full"}`
+                  }
                 >
                   About Us
                 </NavLink>
                 <NavLink
                   to="/Services"
-                  className="block py-2 px-3 text-black no-underline hover:bg-gray-100 rounded transition-all duration-200 transform hover:scale-105 active:scale-95"
+                  className={({ isActive }) =>
+                    `relative block py-2 px-3 text-black no-underline transition-all duration-200 transform hover:scale-105 active:scale-95 
+                     after:content-[''] after:absolute after:left-0 after:bottom-0 after:h-[2px] after:bg-blue-500 after:transition-all after:duration-300
+                     ${isActive ? "after:w-full scale-110" : "after:w-0 hover:after:w-full"}`
+                  }
                 >
                   Services
                 </NavLink>
                 <NavLink
                   to="/OurCommitment"
-                  className="block py-2 px-3 mr-3 text-black no-underline hover:bg-gray-100 rounded transition-all duration-200 transform hover:scale-105 active:scale-95"
+                  className={({ isActive }) =>
+                    `relative block py-2 px-3 text-black no-underline transition-all duration-200 transform hover:scale-105 active:scale-95 
+                     after:content-[''] after:absolute after:left-0 after:bottom-0 after:h-[2px] after:bg-blue-500 after:transition-all after:duration-300 mr-3
+                     ${isActive ? "after:w-full scale-110" : "after:w-0 hover:after:w-full"}`
+                  }
                 >
                   Our Commitment
                 </NavLink>
@@ -93,7 +111,7 @@ const Navbar = () => {
             {/* Hamburger Button */}
             <button
               onClick={() => setIsOpen(true)}
-              className="p-2 text-gray-500 rounded-lg hover:bg-gray-100 focus:outline-none"
+              className="p-2 text-black rounded-lg hover:bg-gray-100 focus:outline-none"
             >
               <svg
                 className="w-6 h-6"
@@ -122,22 +140,24 @@ const Navbar = () => {
 
         {/* Offcanvas Menu (Right Side) */}
         <div
-          className={`fixed inset-y-0 right-0 w-full sm:w-95 bg-white text-black shadow-lg transform ${isOpen ? "translate-x-0" : "translate-x-full"
+          className={`fixed inset-y-0 right-0 w-full sm:w-80 bg-white text-black shadow-lg transform ${isOpen ? "translate-x-0" : "translate-x-full"
             } transition-transform duration-300 ease-in-out z-50 flex flex-col h-full`}
         >
           {/* Header */}
-          <div className="p-5 flex justify-between items-center border-b border-gray-300">
-            <span className="text-lg font-semibold">
+          <div className="p-5 flex justify-between items-center border-b border-gray-500 bg-[rgba(0,127,130,255)]">
+            <span className="text-md font-semibold">
               <a>
                 {user ? (
                   <>
-                    <div className="text-2xl mb-3">
+                    <div className="drop-shadow-[2px_2px_2px_rgba(0,0,0,0.8)] text-white text-xl mb-3">
                       {/* Display role-specific greeting */}
                       Welcome, {role === "admin" ? "Admin" : firstName || "User"}!
                     </div>
                     <button
                       onClick={handleLogout}
-                      className="py-1 px-1 text-black hover:bg-red-200 rounded"
+                      className="drop-shadow-[2px_2px_2px_rgba(0,0,0,0.8)] font-bold relative block py-2 px-0 no-underline transition-all duration-200 transform hover:scale-105 active:scale-95 
+                      after:content-[''] after:absolute after:left-0 after:bottom-0 after:w-0 after:h-[2px] after:bg-black/100 after:transition-all after:duration-300 
+                      hover:after:w-full text-white/100 hover:text-red-400 cursor-pointer text-sm"
                     >
                       Log Out
                     </button>
@@ -147,24 +167,29 @@ const Navbar = () => {
                 )}
               </a>
             </span>
-            <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-black">
+            <button onClick={() => setIsOpen(false)} className="text-black hover:text-black">
               ✕
             </button>
           </div>
 
-          <ul className="p-4 space-y-3 flex flex-col items-center text-center flex-grow w-full text-xl">
+          <ul className="p-0 space-y-0 flex flex-col items-center text-center flex-grow w-full text-xl">
             {/* Conditional Rendering of Menu Items */}
             {role === "admin" ? (
               <>
               <li className="w-full">
-                <div className="md:hidden block py-2 px-3 text-black no-underline hover:bg-gray-100 rounded transition-all duration-200 transform hover:scale-105 active:scale-95" onClick={() => setManageUsersShow(true)}>
+                <div className="md:hidden border-b border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 hover:bg-blue-200 active:bg-blue-300 
+                              hover:scale-105 cursor-pointer"
+                 onClick={() => setManageUsersShow(true)}>
                   Manage Users
                 </div>
               </li>
               <li className="w-full">
                 <NavLink
                   onClick={() => setIsOpen(false)}
-                  className="block w-full py-3 px-3 text-black no-underline rounded transition-all duration-200 hover:bg-gray-100 active:bg-gray-200"
+                  className={({ isActive }) =>
+                    `border-b border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
+                    ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
+                  }
                 >
                   Messages
                 </NavLink>
@@ -173,47 +198,62 @@ const Navbar = () => {
               
             ) : (
               <>
-                <li className="w-full m:hidden">
+                <li className="w-full">
                   <NavLink
                     to="/About"
                     onClick={() => setIsOpen(false)}
-                    className="md:hidden block w-full py-3 px-3 text-black no-underline rounded transition-all duration-200 hover:bg-gray-100 active:bg-gray-200"
+                    className={({ isActive }) =>
+                      `md:hidden border-b border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
+                      ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
+                    }
                   >
                     About Us
                   </NavLink>
                 </li>
-                <li className="w-full m:hidden">
+                <li className="w-full">
                   <NavLink
                     to="/Services"
                     onClick={() => setIsOpen(false)}
-                    className="md:hidden block w-full py-3 px-3 text-black no-underline rounded transition-all duration-200 hover:bg-gray-100 active:bg-gray-200"
+                    className={({ isActive }) =>
+                      `md:hidden border-b border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
+                      ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
+                    }
                   >
                     Services
                   </NavLink>
                 </li>
-                <li className="w-full m:hidden">
+                <li className="w-full">
                   <NavLink
                     to="/OurCommitment"
                     onClick={() => setIsOpen(false)}
-                    className="md:hidden block w-full py-3 px-3 text-black no-underline rounded transition-all duration-200 hover:bg-gray-100 active:bg-gray-200"
+                    className={({ isActive }) =>
+                      `md:hidden border-b border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
+                      ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
+                    }
                   >
                     Our Commitment
                   </NavLink>
                 </li>
                 <li className="w-full">
-                  <NavLink
-                    to="/TrackPackage"
-                    onClick={() => setIsOpen(false)}
-                    className="block w-full py-3 px-3 text-black no-underline rounded transition-all duration-200 hover:bg-orange-100 active:bg-orange-200"
-                  >
-                    Track Package
-                  </NavLink>
+                <NavLink
+                  to="/TrackPackage"
+                  onClick={() => setIsOpen(false)}
+                  className={({ isActive }) =>
+                    `border-b border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
+                    ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
+                  }
+                >
+                  Track Package
+                </NavLink>
                 </li>
                 <li className="w-full">
                   <NavLink
                     to="/Contact"
                     onClick={() => setIsOpen(false)}
-                    className="block w-full py-3 px-3 text-black no-underline rounded transition-all duration-200 hover:bg-orange-100 active:bg-orange-200"
+                    className={({ isActive }) =>
+                      `border-b border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
+                      ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
+                    }
                   >
                     Contact Us!
                   </NavLink>
@@ -222,7 +262,10 @@ const Navbar = () => {
                   <NavLink
                     to="/ChatHelp"
                     onClick={() => setIsOpen(false)}
-                    className="block w-full py-3 px-3 text-black no-underline rounded transition-all duration-200 hover:bg-orange-100 active:bg-orange-200"
+                    className={({ isActive }) =>
+                      `border-b border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
+                      ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
+                    }
                   >
                     Need Help?
                   </NavLink>
@@ -231,9 +274,11 @@ const Navbar = () => {
             )}
 
             {/* Offcanvas Footer */}
-            <li className="mt-auto pt-4 border-t w-full text-center text-gray-500 text-sm">
+            <li className="bg-white mt-auto pt-4 border-t w-full text-center text-gray-500 text-sm">
               © 2025 Frances Logistics. All rights reserved.
+              <img src={Logo} className="mx-auto h-15 w-auto mt-2" alt="FCL" />
             </li>
+
           </ul>
           <ManageUsers show={manageUsersShow} onHide={() => setManageUsersShow(false)} />
         </div>
