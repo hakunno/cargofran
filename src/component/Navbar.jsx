@@ -204,7 +204,7 @@ const Navbar = () => {
                   <NavLink
                     to="/TrackPackage"
                     onClick={() => setIsOpen(false)}
-                    className="block w-full py-3 px-3 text-black no-underline rounded transition-all duration-200 hover:bg-gray-100 active:bg-gray-200"
+                    className="block w-full py-3 px-3 text-black no-underline rounded transition-all duration-200 hover:bg-orange-100 active:bg-orange-200"
                   >
                     Track Package
                   </NavLink>
@@ -213,7 +213,7 @@ const Navbar = () => {
                   <NavLink
                     to="/Contact"
                     onClick={() => setIsOpen(false)}
-                    className="block w-full py-3 px-3 text-black no-underline rounded transition-all duration-200 hover:bg-gray-100 active:bg-gray-200"
+                    className="block w-full py-3 px-3 text-black no-underline rounded transition-all duration-200 hover:bg-orange-100 active:bg-orange-200"
                   >
                     Contact Us!
                   </NavLink>
@@ -222,7 +222,7 @@ const Navbar = () => {
                   <NavLink
                     to="/ChatHelp"
                     onClick={() => setIsOpen(false)}
-                    className="block w-full py-3 px-3 text-black no-underline rounded transition-all duration-200 hover:bg-gray-100 active:bg-gray-200"
+                    className="block w-full py-3 px-3 text-black no-underline rounded transition-all duration-200 hover:bg-orange-100 active:bg-orange-200"
                   >
                     Need Help?
                   </NavLink>
