@@ -1,9 +1,10 @@
 import React from 'react'
+import VideoBackground from '../component/VideoBackground'
 
 const Home = () => {
   return (
     <div>
-      <h1>This is Home Page</h1>
+      <VideoBackground />
     </div>
   )
 }

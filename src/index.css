@@ -1,6 +1,43 @@
 body {
     background-color: #9fbcc7;
+}
 
+::-webkit-scrollbar {
+    display: none;
+  }
+  
+  /* Hide scrollbar for Firefox */
+  html {
+    scrollbar-width: none;
+  }
+  
+  /* Ensure scrolling still works */
+  html, body {
+    overflow: auto;
+  }
+
+
+  /* Fonts */
+.oswald {
+    font-family: "Oswald", sans-serif;
+}
+
+.kanit-thin {
+    font-family: "Kanit", sans-serif;
+    font-weight: 200;
+}
+
+.kanit-regular {
+    font-family: "Kanit", sans-serif;
+    font-weight: 400;
+    font-style: normal;
+}
+  
+.lexend{
+    font-family: "Lexend", sans-serif;
+    font-optical-sizing: auto;
+    font-weight: 400;
+    font-style: normal;
 }
 
 @import "tailwindcss";

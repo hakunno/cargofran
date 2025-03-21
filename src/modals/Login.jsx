@@ -11,7 +11,7 @@ import {
 import { auth, db } from "../jsfile/firebase"; 
 import { doc, setDoc, getDoc } from "firebase/firestore";
 
-function LoginModal() {
+function LoginModal({ setIsOpen }) {
   const [show, setShow] = useState(false);
   const [view, setView] = useState("login");
   const [firstName, setFirstName] = useState("");
@@ -34,41 +34,43 @@ function LoginModal() {
   const handleShow = () => setShow(true);
 
   // Handle Login
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setError("");
+const handleLogin = async (e) => {
+  e.preventDefault();
+  setError("");
 
-    try {
-      await setPersistence(auth, browserLocalPersistence);
+  try {
+    await setPersistence(auth, browserLocalPersistence);
+    setIsOpen(false);
 
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
 
-      const userDoc = await getDoc(doc(db, "Users", user.uid));
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
+    const userDoc = await getDoc(doc(db, "Users", user.uid));
+    if (userDoc.exists()) {
+      const userData = userDoc.data();
 
-        if (userData.role === "admin") {
-          navigate("/AdminDashboard");
-        } else if (userData.role === "staff") {
-          navigate("/StaffDashboard");
-        } else {
-          navigate("/UserDashboard");
-        }
-
-        // ✅ Check verification status
-        if (!userData.verified) {
-          setSuccessMessage("Your account is not verified yet. Some features may be restricted.");
-        }
+      if (userData.role === "admin") {
+        navigate("/AdminDashboard");
+      } else if (userData.role === "staff") {
+        navigate("/AdminDashboard");
       } else {
-        setError("User role not found in database.");
+        navigate("/UserDashboard");
       }
 
-      handleClose();
-    } catch (error) {
-      setError(error.message);
+      // ✅ Check verification status
+      if (!userData.verified) {
+        setSuccessMessage("Your account is not verified yet. Some features may be restricted.");
+      }
+    } else {
+      setError("User role not found in database.");
     }
-  };
+
+    handleClose(); // This likely closes the login modal, keeping it if needed
+  } catch (error) {
+    setError(error.message);
+  }
+};
+
 
   // Handle Signup (No Verification Required)
   const handleSignup = async (e) => {
@@ -131,7 +133,7 @@ function LoginModal() {
   return (
     <>
       <div
-        className="text-xl drop-shadow-[2px_2px_2px_rgba(0,0,0,0.8)] font-bold relative block py-2 px-0 no-underline transition-all duration-200 transform hover:scale-110 active:scale-95 
+        className="lexend text-xl drop-shadow-[2px_2px_2px_rgba(0,0,0,0.8)] font-bold relative block py-2 px-0 no-underline transition-all duration-200 transform hover:scale-110 active:scale-95 
                   after:content-[''] after:absolute after:left-0 after:bottom-0 after:w-0 after:h-[2px] after:bg-black/90 after:transition-all after:duration-300 
                   hover:after:w-full text-white/100 hover:text-green-400 cursor-pointer"
         onClick={handleShow}

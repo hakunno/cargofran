@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     tailwindcss()
   ],
-  base: "/cargofran/",
+  base: "/cargofran",
   server: {
     historyApiFallback: true,
   },
