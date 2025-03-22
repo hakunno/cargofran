@@ -93,7 +93,7 @@ const Navbar = () => {
           {/* Navbar Links (Desktop Only) */}
           <div className="hidden md:flex items-center gap-1 ml-auto">
             {/* Conditional Rendering Based on Role */}
-            {role === "admin" ? (
+            {role === "admin" ? (<>
               <div
               className="lexend mr-3 cursor-pointer relative block py-2 px-3 text-black no-underline rounded transition-all duration-200 transform hover:scale-105 active:scale-95 
                           after:content-[''] after:absolute after:left-0 after:bottom-0 after:h-[2px] after:w-0 after:bg-blue-500 after:transition-all after:duration-300 
@@ -102,6 +102,17 @@ const Navbar = () => {
             >
               Manage Users
             </div>
+            <NavLink
+                  to="/Shipments"
+                  className={({ isActive }) =>
+                    `lexend relative block py-2 px-3 text-black no-underline transition-all duration-200 transform hover:scale-105 active:scale-95 
+                    after:content-[''] after:absolute after:left-0 after:bottom-0 after:h-[2px] after:bg-blue-500 after:transition-all after:duration-300
+                    ${isActive ? "after:w-0 scale-110" : "after:w-0 hover:after:w-full"}`
+                  }
+                >
+              Shipment
+            </NavLink>
+            </>
             /* STAFF ROLES */
             ) : role === "staff" ? (
               <>
@@ -222,7 +233,7 @@ const Navbar = () => {
 
               {/* Dropdown Menu */}
               <div
-                className={`absolute right-0 mt-2 w-48 bg-white shadow-lg rounded-md 
+                className={`absolute right-0 mt-2 w-40 bg-white shadow-lg rounded-md 
                             transition-all duration-300 ease-in-out ${
                               iconIsOpen ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2 pointer-events-none"
                             }`}
@@ -313,7 +324,7 @@ const Navbar = () => {
                       onClick={handleLogout}
                       className="lexend drop-shadow-[2px_2px_2px_rgba(0,0,0,0.8)] font-bold relative block py-2 px-0 no-underline transition-all duration-200 transform hover:scale-105 active:scale-95 
                       after:content-[''] after:absolute after:left-0 after:bottom-0 after:w-0 after:h-[2px] after:bg-black/100 after:transition-all after:duration-300 
-                      hover:after:w-full text-white/100 hover:text-red-400 cursor-pointer text-sm"
+                      hover:after:w-full text-white/100 hover:text-blue-300 cursor-pointer text-sm"
                     >
                       Log Out
                     </button>
@@ -344,7 +355,7 @@ const Navbar = () => {
                   to='/Messages'
                   onClick={() => setIsOpen(false)}
                   className={({ isActive }) =>
-                    `kanit-regular border-b border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
+                    `kanit-regular border-b-2 border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
                     ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
                   }
                 >

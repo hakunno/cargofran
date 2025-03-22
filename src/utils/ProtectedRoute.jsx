@@ -34,7 +34,7 @@ const ProtectedRoute = ({ children, requiredRoles }) => {
     return () => unsubscribe();
   }, []);
 
-  if (loading) return <div className="h-screen flex items-center justify-center">Loading Dashboard ....</div>;
+  if (loading) return <div className="h-screen flex items-center justify-center">Loading....</div>;
 
   // If user is not authenticated OR role is not allowed, redirect to Home
   if (!user || !requiredRoles.includes(role)) {

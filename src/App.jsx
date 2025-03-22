@@ -9,17 +9,21 @@ import OurCommitment from "./pages/OurCommitment";
 import Contact from "./pages/Contact";
 import FirebaseTest from "./pages/FirebaseTest";
 import TrackPackage from "./pages/TrackPackage";
-import AdminDashboard from "./pages/AdminDashboard";
 import UserDashboard from "./pages/UserDashboard";
 import AirCargoTracking from "./pages/AirTracking";
 import FaqChat from "./pages/FaqChat";
 import Messages from "./pages/Messages";
 
+/* ADMIN / STAFF */
+import AdminDashboard from "./pages/adminstaff/AdminDashboard";
+import Shipments from "./pages/adminstaff/Shipments";
+
+
 
 const App = () => {
   const location = useLocation(); 
 
-  const hiddenFooterRoutes = ["/AdminDashboard"];
+  const hiddenFooterRoutes = ["/Shipments"];
   
   return (
     <>
@@ -43,6 +47,16 @@ const App = () => {
           element={
             <ProtectedRoute requiredRoles={["admin", "staff"]}>
               <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+
+      <Route
+          path="/Shipments"
+          element={
+            <ProtectedRoute requiredRoles={["admin", "staff"]}>
+              <Shipments />
             </ProtectedRoute>
           }
         />
