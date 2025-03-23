@@ -78,19 +78,35 @@ const Navbar = () => {
   return (
     <>
       {role !== undefined && (
-      <nav className="border-gray-300 bg-white dark:bg-gray-800 dark:border-gray-700 font-semibold z-40">
+      <nav className={`font-semibold z-40 
+        ${role === "admin" || role === "staff" ? "bg-blue-300 border-b-2" : "bg-white"} 
+        `}>
         <div className="max-w-screen-xl flex items-center justify-between mx-auto p-3">
           {/* Logo with conditional navigation based on user role */}
+          {(role === "user" || role === undefined) ? (
+        
           <NavLink 
-            to={role === "admin" ? "/AdminDashboard" : role === "staff" ? "/AdminDashboard" : "/"} 
+            to="/" 
             className={`flex items-center space-x-3 transition-transform duration-300 
               hover:scale-110
             }`}
           >
             <img src={Logo} className="h-12 w-auto" alt="FCL" />  
           </NavLink>
+        ) : (
+          <>
+            <NavLink 
+              to={role === "admin" ? "/AdminDashboard" : role === "staff" ? "/AdminDashboard" : "/"} 
+              className={`flex items-center space-x-3 transition-transform duration-300 
+                hover:scale-110 
+                ${(role === "admin" || role === "staff") ? "md:hidden" : ""}
+              `}
+            >
+              <img src={Logo} className="h-12 w-auto" alt="FCL" />  
+            </NavLink>
+          </>
+        )}
 
-          {/* Navbar Links (Desktop Only) */}
           <div className="hidden md:flex items-center gap-1 ml-auto">
             {/* Conditional Rendering Based on Role */}
             {role === "admin" ? (<>
@@ -102,16 +118,6 @@ const Navbar = () => {
             >
               Manage Users
             </div>
-            <NavLink
-                  to="/Shipments"
-                  className={({ isActive }) =>
-                    `lexend relative block py-2 px-3 text-black no-underline transition-all duration-200 transform hover:scale-105 active:scale-95 
-                    after:content-[''] after:absolute after:left-0 after:bottom-0 after:h-[2px] after:bg-blue-500 after:transition-all after:duration-300
-                    ${isActive ? "after:w-0 scale-110" : "after:w-0 hover:after:w-full"}`
-                  }
-                >
-              Shipment
-            </NavLink>
             </>
             /* STAFF ROLES */
             ) : role === "staff" ? (
@@ -226,7 +232,7 @@ const Navbar = () => {
               >
                 <FaUserCircle
                   className={`transition-all duration-300 ${
-                    iconIsOpen ? "text-cyan-500 scale-110" : "text-gray-700"
+                    iconIsOpen ? "text-black scale-110" : "text-gray-700"
                   }`}
                 />
               </button>

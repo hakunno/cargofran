@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
+import Sidebar from "../../component/adminstaff/Sidebar";
 
 function AdminDashboard() {
   const [user, setUser] = useState(null);
@@ -15,7 +16,9 @@ function AdminDashboard() {
 
   return (
     <div>
-      <h1>Welcome {user ? user.email : "Guest"}</h1>
+      <div className="flex flex-col md:flex-row">
+      <Sidebar />
+      </div>
     </div>
   );
 }
