@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Table, Button, Modal, Form } from "react-bootstrap";
 import { db } from "../../jsfile/firebase";
 import { collection, addDoc, getDocs, updateDoc, doc } from "firebase/firestore";
@@ -19,6 +19,9 @@ const Shipments = () => {
     airwayBill: "",
     dateStarted: null,
   });
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortField, setSortField] = useState("customId");
+  const [sortOrder, setSortOrder] = useState("asc");
 
   useEffect(() => {
     const fetchShipments = async () => {
@@ -34,8 +37,36 @@ const Shipments = () => {
     fetchShipments();
   }, []);
 
+  // Sorting handler for header click
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortOrder("asc");
+    }
+  };
+
+  // Filter shipments based on search query (using default empty strings)
+  const filteredShipments = shipments.filter((shipment) => {
+    const queryLower = searchQuery.toLowerCase();
+    return (
+      (shipment.packageNumber || "").toLowerCase().includes(queryLower) ||
+      (shipment.shipperName || "").toLowerCase().includes(queryLower) ||
+      (shipment.serviceType || "").toLowerCase().includes(queryLower)
+    );
+  });
+
+  // Sort shipments based on sortField and sortOrder
+  const sortedShipments = filteredShipments.sort((a, b) => {
+    const aVal = a[sortField] || "";
+    const bVal = b[sortField] || "";
+    if (aVal < bVal) return sortOrder === "asc" ? -1 : 1;
+    if (aVal > bVal) return sortOrder === "asc" ? 1 : -1;
+    return 0;
+  });
+
   const handleAddShipment = async () => {
-    // Validate required fields
     if (!formData.packageNumber || !formData.shipperName || !formData.serviceType) {
       alert("Please fill in Package Number, Shipper Name, and Service Type.");
       return;
@@ -43,12 +74,13 @@ const Shipments = () => {
     const confirmAdd = window.confirm("Are you sure you want to add this shipment?");
     if (!confirmAdd) return;
 
-    // Calculate the new custom id by finding the maximum existing customId (or 0 if none) and adding 1.
     const maxId = shipments.reduce((acc, s) => Math.max(acc, s.customId || 0), 0);
     const newCustomId = maxId + 1;
-
-    // Auto-generate dateStarted when adding a shipment
-    const newShipment = { ...formData, customId: newCustomId, dateStarted: new Date().toISOString() };
+    const newShipment = { 
+      ...formData, 
+      customId: newCustomId, 
+      dateStarted: new Date().toISOString() 
+    };
 
     try {
       const docRef = await addDoc(collection(db, "Packages"), newShipment);
@@ -116,11 +148,26 @@ const Shipments = () => {
       <Sidebar />
       <div className="flex-1 p-4 md:p-6 relative">
         <h2 className="text-xl font-semibold text-center mb-6">Shipment Information</h2>
-        <div className="overflow-x-auto shadow rounded-lg">
+        {/* Search Input */}
+        <div className="mb-4 flex justify-center">
+          <input
+            type="text"
+            className="w-full md:w-1/2 p-2 border rounded"
+            placeholder="Search shipments..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <div className="overflow-x-auto overflow-y-auto shadow rounded-lg max-h-[70vh] md:max-h-[75vh]">
           <Table striped bordered hover className="min-w-full">
             <thead className="bg-gray-200">
               <tr>
-                <th className="p-2">ID</th>
+                <th
+                  className="p-2 cursor-pointer"
+                  onClick={() => handleSort("customId")}
+                >
+                  ID {sortField === "customId" && (sortOrder === "asc" ? "▲" : "▼")}
+                </th>
                 <th className="p-2">Package Number</th>
                 <th className="p-2">Shipper</th>
                 <th className="p-2">Service</th>
@@ -131,7 +178,7 @@ const Shipments = () => {
               </tr>
             </thead>
             <tbody>
-              {shipments.map((shipment) => (
+              {sortedShipments.map((shipment) => (
                 <tr
                   key={shipment.docId}
                   className={`text-center ${shipment.canceled ? "bg-gray-100" : ""}`}
@@ -180,7 +227,7 @@ const Shipments = () => {
             </tbody>
           </Table>
         </div>
-        {/* Add Shipment Button - bottom right on desktop, centered on mobile */}
+        {/* Add Shipment Button */}
         <div className="mt-4 flex justify-center md:justify-end">
           <Button variant="primary" onClick={() => setShowModal(true)}>
             Add Shipment

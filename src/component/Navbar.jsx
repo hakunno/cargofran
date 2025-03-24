@@ -57,6 +57,17 @@ const Navbar = () => {
     };
   }, []);
 
+  useEffect(() => {
+    const handleOpenOffCanvas = () => {
+      setIsOpen(true);
+    };
+
+    window.addEventListener("openOffCanvas", handleOpenOffCanvas);
+    return () => {
+      window.removeEventListener("openOffCanvas", handleOpenOffCanvas);
+    };
+  }, []);
+
   const handleLogout = async () => {
     try {
       setIconIsOpen(false);
@@ -79,7 +90,7 @@ const Navbar = () => {
     <>
       {role !== undefined && (
       <nav className={`font-semibold z-40 
-        ${role === "admin" || role === "staff" ? "bg-blue-300 border-b-2" : "bg-white"} 
+        ${role === "admin" || role === "staff" ? "bg-blue-300 border-b-2 md:hidden" : "bg-white"} 
         `}>
         <div className="max-w-screen-xl flex items-center justify-between mx-auto p-3">
           {/* Logo with conditional navigation based on user role */}
@@ -358,14 +369,62 @@ const Navbar = () => {
               </li>
               <li className="w-full">
                 <NavLink
-                  to='/Messages'
+                  to='/AdminDashboard'
                   onClick={() => setIsOpen(false)}
+                  className={({ isActive }) =>
+                    `kanit-regular border-b-1 border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
+                    ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
+                  }
+                >
+                  Dashboard
+                </NavLink>
+              </li>
+              <li className="w-full">
+                <NavLink
+                  to='/Shipments'
+                  onClick={() => setIsOpen(false)}
+                  className={({ isActive }) =>
+                    `kanit-regular border-b-1 border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
+                    ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
+                  }
+                >
+                  Shipments
+                </NavLink>
+              </li>
+              <li className="w-full">
+                <NavLink
+                  to='/MessageRequest'
+                  onClick={() => setIsOpen(false)}
+                  className={({ isActive }) =>
+                    `kanit-regular border-b-1 border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
+                    ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
+                  }
+                >
+                  Message Requests
+                </NavLink>
+              </li>
+              <li className="w-full">
+                <NavLink
+                  to='/AdminMessages'
+                  onClick={() => setIsOpen(false)}
+                  className={({ isActive }) =>
+                    `kanit-regular border-b-1 border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
+                    ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
+                  }
+                >
+                  Messages
+                </NavLink>
+              </li>
+              <li className="w-full">
+                <NavLink
+                  to="/"
+                  onClick={handleLogout}
                   className={({ isActive }) =>
                     `kanit-regular border-b-2 border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
                     ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
                   }
                 >
-                  Messages
+                  Log Out
                 </NavLink>
               </li>
               </>

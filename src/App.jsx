@@ -17,14 +17,15 @@ import Messages from "./pages/Messages";
 /* ADMIN / STAFF */
 import AdminDashboard from "./pages/adminstaff/AdminDashboard";
 import Shipments from "./pages/adminstaff/Shipments";
-import AdminMessages from "./pages/adminstaff/Messages"
+import AdminMessages from "./pages/adminstaff/AdminMessages";
+import MessageRequest from "./pages/adminstaff/MessageRequest";
 
 
 
 const App = () => {
   const location = useLocation(); 
 
-  const hiddenFooterRoutes = ["/Shipments","/AdminMessages","/AdminDashboard"];
+  const hiddenFooterRoutes = ["/Shipments","/AdminMessages","/AdminDashboard","/Messages","/MessageRequest"];
   
   return (
     <>
@@ -68,6 +69,16 @@ const App = () => {
           element={
             <ProtectedRoute requiredRoles={["admin", "staff"]}>
               <AdminMessages />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+        
+        <Route
+          path="/MessageRequest"
+          element={
+            <ProtectedRoute requiredRoles={["admin", "staff"]}>
+              <MessageRequest />
             </ProtectedRoute>
           }
         />
