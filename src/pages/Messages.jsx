@@ -151,7 +151,7 @@ const ChatWindow = ({ conversationId: propConversationId, onBack }) => {
       const remaining = 300 - elapsedSeconds;
       if (remaining > 0) {
         setCountdown(remaining);
-        setNotification(`This conversation has ended. You can create a new conversation in (${formatTime(remaining)}).`);
+        setNotification(`This conversation has ended. You can create a new conversation in`);
         setInputDisabled(true);
         const interval = setInterval(() => {
           setCountdown((prev) => {
@@ -165,7 +165,7 @@ const ChatWindow = ({ conversationId: propConversationId, onBack }) => {
               return 0;
             }
             const newTime = prev - 1;
-            setNotification(`This conversation has ended. You can create a new conversation in (${formatTime(newTime)}).`);
+            setNotification(`This conversation has ended. You can create a new conversation in`);
             return newTime;
           });
         }, 1000);
@@ -356,9 +356,9 @@ const ChatWindow = ({ conversationId: propConversationId, onBack }) => {
   return (
     <div className={`flex flex-col w-full ${containerHeightClass}`}>
       {/* Header */}
-      <div className="p-4 bg-gray-200 border-b flex items-center justify-between flex-shrink-0">
+      <div className="p-4 bg-blue-200 border-t-2 border-b-2 flex items-center justify-between flex-shrink-0">
         <h2 className="text-lg font-semibold">{headerTitle}</h2>
-        <button onClick={handleOpenNavbar} className="p-2 text-gray-700 hover:text-gray-900">
+        <button onClick={handleOpenNavbar} className={`${role === "admin" ? "md:hidden" : ""} p-2 text-gray-700 hover:text-gray-900`}>
         <svg
           xmlns="http://www.w3.org/2000/svg"
           className="h-6 w-6"
@@ -389,7 +389,7 @@ const ChatWindow = ({ conversationId: propConversationId, onBack }) => {
 
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto p-4 bg-white flex flex-col">
-        {conversationIsActive ? (
+        {conversationIsActive ? ( 
           conversationStatus === "pending" && role !== "admin" && role !== "staff" ? (
             <p className="text-center text-yellow-600 mb-2">
               Waiting for an admin to accept your request...
