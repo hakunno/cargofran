@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { Table, Button, Modal, Form } from "react-bootstrap";
 import { db } from "../../jsfile/firebase";
-import { collection, addDoc, getDocs, updateDoc, doc } from "firebase/firestore";
+import {
+  collection,
+  addDoc,
+  getDocs,
+  updateDoc,
+  doc,
+  serverTimestamp,
+} from "firebase/firestore";
 import Sidebar from "../../component/adminstaff/Sidebar";
 
 const Shipments = () => {
@@ -12,6 +19,8 @@ const Shipments = () => {
   const [formData, setFormData] = useState({
     packageNumber: "",
     shipperName: "",
+    from: "",
+    destination: "",
     email: "",
     serviceType: "",
     packageStatus: "On the way",
@@ -26,18 +35,16 @@ const Shipments = () => {
   useEffect(() => {
     const fetchShipments = async () => {
       const querySnapshot = await getDocs(collection(db, "Packages"));
-      const shipmentsList = querySnapshot.docs.map((doc) => ({
-        // Use stored customId if exists; otherwise, fallback to doc.id
-        customId: doc.data().customId,
-        docId: doc.id,
-        ...doc.data(),
+      const shipmentsList = querySnapshot.docs.map((docSnap) => ({
+        customId: docSnap.data().customId,
+        docId: docSnap.id,
+        ...docSnap.data(),
       }));
       setShipments(shipmentsList);
     };
     fetchShipments();
   }, []);
 
-  // Sorting handler for header click
   const handleSort = (field) => {
     if (sortField === field) {
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -47,7 +54,6 @@ const Shipments = () => {
     }
   };
 
-  // Filter shipments based on search query (using default empty strings)
   const filteredShipments = shipments.filter((shipment) => {
     const queryLower = searchQuery.toLowerCase();
     return (
@@ -57,7 +63,6 @@ const Shipments = () => {
     );
   });
 
-  // Sort shipments based on sortField and sortOrder
   const sortedShipments = filteredShipments.sort((a, b) => {
     const aVal = a[sortField] || "";
     const bVal = b[sortField] || "";
@@ -67,23 +72,41 @@ const Shipments = () => {
   });
 
   const handleAddShipment = async () => {
-    if (!formData.packageNumber || !formData.shipperName || !formData.serviceType) {
+    if (
+      !formData.packageNumber ||
+      !formData.shipperName ||
+      !formData.serviceType
+    ) {
       alert("Please fill in Package Number, Shipper Name, and Service Type.");
       return;
     }
-    const confirmAdd = window.confirm("Are you sure you want to add this shipment?");
+    const confirmAdd = window.confirm(
+      "Are you sure you want to add this shipment?"
+    );
     if (!confirmAdd) return;
 
-    const maxId = shipments.reduce((acc, s) => Math.max(acc, s.customId || 0), 0);
+    const maxId = shipments.reduce(
+      (acc, s) => Math.max(acc, s.customId || 0),
+      0
+    );
     const newCustomId = maxId + 1;
-    const newShipment = { 
-      ...formData, 
-      customId: newCustomId, 
-      dateStarted: new Date().toISOString() 
+    const newShipment = {
+      ...formData,
+      customId: newCustomId,
+      dateStarted: new Date().toISOString(),
+      createdTime: serverTimestamp(),
     };
 
     try {
+      // Add the shipment to the Packages collection
       const docRef = await addDoc(collection(db, "Packages"), newShipment);
+
+      // Create the initial status entry in the statusHistory subcollection
+      await addDoc(collection(db, "Packages", docRef.id, "statusHistory"), {
+        status: formData.packageStatus,
+        timestamp: serverTimestamp(),
+      });
+
       setShipments((prev) => [
         ...prev,
         { customId: newCustomId, docId: docRef.id, ...newShipment },
@@ -92,6 +115,8 @@ const Shipments = () => {
       setFormData({
         packageNumber: "",
         shipperName: "",
+        from: "",
+        destination: "",
         email: "",
         serviceType: "",
         packageStatus: "On the way",
@@ -107,13 +132,37 @@ const Shipments = () => {
 
   const handleEditShipment = async () => {
     if (currentShipment) {
-      const confirmEdit = window.confirm("Are you sure you want to save changes?");
+      const confirmEdit = window.confirm(
+        "Are you sure you want to save changes?"
+      );
       if (confirmEdit) {
         try {
-          await updateDoc(doc(db, "Packages", currentShipment.docId), formData);
+          // Check if the status has changed to record a status history entry
+          const statusChanged =
+            formData.packageStatus !== currentShipment.packageStatus;
+
+          // Merge the formData with the updatedTime field.
+          const updatedData = {
+            ...formData,
+            updatedTime: serverTimestamp(),
+          };
+
+          await updateDoc(doc(db, "Packages", currentShipment.docId), updatedData);
+
+          // If status has changed, add a new document to the statusHistory subcollection
+          if (statusChanged) {
+            await addDoc(
+              collection(db, "Packages", currentShipment.docId, "statusHistory"),
+              {
+                status: formData.packageStatus,
+                timestamp: serverTimestamp(),
+              }
+            );
+          }
+
           setShipments((prev) =>
             prev.map((s) =>
-              s.docId === currentShipment.docId ? { ...s, ...formData } : s
+              s.docId === currentShipment.docId ? { ...s, ...updatedData } : s
             )
           );
           setEditModal(false);
@@ -127,10 +176,15 @@ const Shipments = () => {
   };
 
   const handleCancelShipment = async (shipment) => {
-    const confirmCancel = window.confirm("Are you sure you want to cancel this shipment?");
+    const confirmCancel = window.confirm(
+      "Are you sure you want to cancel this shipment?"
+    );
     if (confirmCancel) {
       try {
-        await updateDoc(doc(db, "Packages", shipment.docId), { canceled: true });
+        await updateDoc(doc(db, "Packages", shipment.docId), {
+          canceled: true,
+          updatedTime: serverTimestamp(),
+        });
         setShipments((prev) =>
           prev.map((s) =>
             s.docId === shipment.docId ? { ...s, canceled: true } : s
@@ -147,8 +201,9 @@ const Shipments = () => {
     <div className="flex flex-col md:flex-row min-h-screen">
       <Sidebar />
       <div className="flex-1 p-4 md:p-6 relative">
-        <h2 className="text-xl font-semibold text-center mb-6">Shipment Information</h2>
-        {/* Search Input */}
+        <h2 className="text-xl font-semibold text-center mb-6">
+          Shipment Information
+        </h2>
         <div className="mb-4 flex justify-center">
           <input
             type="text"
@@ -160,7 +215,7 @@ const Shipments = () => {
         </div>
         <div className="overflow-x-auto overflow-y-auto shadow rounded-lg max-h-[70vh] md:max-h-[75vh]">
           <Table striped bordered hover className="min-w-full">
-            <thead className="bg-gray-200">
+            <thead className="bg-gray-200 sticky top-0 z-10">
               <tr>
                 <th
                   className="p-2 cursor-pointer"
@@ -171,7 +226,11 @@ const Shipments = () => {
                 <th className="p-2">Package Number</th>
                 <th className="p-2">Shipper</th>
                 <th className="p-2">Service</th>
+                <th className="p-2">From</th>
                 <th className="p-2">Status</th>
+                <th className="p-2">Destination</th>
+                <th className="p-2">Email</th>
+                <th className="p-2">Airway Bill</th>
                 <th className="p-2">Paid</th>
                 <th className="p-2">Date Started</th>
                 <th className="p-2">Actions</th>
@@ -187,7 +246,11 @@ const Shipments = () => {
                   <td className="p-2">{shipment.packageNumber}</td>
                   <td className="p-2">{shipment.shipperName}</td>
                   <td className="p-2">{shipment.serviceType}</td>
+                  <td className="p-2">{shipment.from || "N/A"}</td>
                   <td className="p-2">{shipment.packageStatus}</td>
+                  <td className="p-2">{shipment.destination || "N/A"}</td>
+                  <td className="p-2">{shipment.email || "N/A"}</td>
+                  <td className="p-2">{shipment.airwayBill || "N/A"}</td>
                   <td className={`p-2 ${shipment.paid ? "bg-green-200" : "bg-red-200"}`}>
                     {shipment.paid ? "Yes" : "No"}
                   </td>
@@ -227,7 +290,6 @@ const Shipments = () => {
             </tbody>
           </Table>
         </div>
-        {/* Add Shipment Button */}
         <div className="mt-4 flex justify-center md:justify-end">
           <Button variant="primary" onClick={() => setShowModal(true)}>
             Add Shipment
@@ -261,6 +323,26 @@ const Shipments = () => {
                     setFormData({ ...formData, shipperName: e.target.value })
                   }
                   required
+                />
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label>From</Form.Label>
+                <Form.Control
+                  type="text"
+                  value={formData.from}
+                  onChange={(e) =>
+                    setFormData({ ...formData, from: e.target.value })
+                  }
+                />
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label>Destination</Form.Label>
+                <Form.Control
+                  type="text"
+                  value={formData.destination}
+                  onChange={(e) =>
+                    setFormData({ ...formData, destination: e.target.value })
+                  }
                 />
               </Form.Group>
               <Form.Group className="mb-3">
@@ -348,15 +430,33 @@ const Shipments = () => {
           </Modal.Header>
           <Modal.Body>
             <Form>
-              {/* Package Number (uneditable) */}
               <Form.Group className="mb-3">
                 <Form.Label>Package Number</Form.Label>
                 <p className="form-control-plaintext">{formData.packageNumber}</p>
               </Form.Group>
-              {/* Shipper Name (uneditable) */}
               <Form.Group className="mb-3">
                 <Form.Label>Shipper Full Name</Form.Label>
                 <p className="form-control-plaintext">{formData.shipperName}</p>
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label>From</Form.Label>
+                <Form.Control
+                  type="text"
+                  value={formData.from}
+                  onChange={(e) =>
+                    setFormData({ ...formData, from: e.target.value })
+                  }
+                />
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label>Destination</Form.Label>
+                <Form.Control
+                  type="text"
+                  value={formData.destination}
+                  onChange={(e) =>
+                    setFormData({ ...formData, destination: e.target.value })
+                  }
+                />
               </Form.Group>
               <Form.Group className="mb-3">
                 <Form.Label>Airway Bill</Form.Label>

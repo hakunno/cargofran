@@ -90,7 +90,7 @@ const Navbar = () => {
     <>
       {role !== undefined && (
       <nav className={`font-semibold z-40 
-        ${role === "admin" || role === "staff" ? "bg-blue-300 border-b-2 md:hidden" : "bg-white"} 
+        ${role === "admin" || role === "staff" ? "bg-blue-300 border-b-2" : "bg-white"} 
         `}>
         <div className="max-w-screen-xl flex items-center justify-between mx-auto p-3">
           {/* Logo with conditional navigation based on user role */}
@@ -463,6 +463,18 @@ const Navbar = () => {
             <>
                 <li className="w-full">
                   <NavLink
+                    to="/"
+                    onClick={() => setIsOpen(false)}
+                    className={({ isActive }) =>
+                      `kanit-regular md:hidden border-b border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
+                      ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
+                    }
+                  >
+                    Home
+                  </NavLink>
+                </li>
+                <li className="w-full">
+                  <NavLink
                     to="/About"
                     onClick={() => setIsOpen(false)}
                     className={({ isActive }) =>
@@ -526,23 +538,11 @@ const Navbar = () => {
                     to="/Contact"
                     onClick={() => setIsOpen(false)}
                     className={({ isActive }) =>
-                      `kanit-regular border-b border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
-                      ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
-                    }
-                  >
-                    Contact Us!
-                  </NavLink>
-                </li>
-                <li className="w-full">
-                  <NavLink
-                    to="/ChatHelp"
-                    onClick={() => setIsOpen(false)}
-                    className={({ isActive }) =>
                       `kanit-regular border-b-2 border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
                       ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
                     }
                   >
-                    Need Help?
+                    Contact Us!
                   </NavLink>
                 </li>
               </>
@@ -550,7 +550,19 @@ const Navbar = () => {
               /* NOT LOGGED IN / NO ROLES NAVIGATION BAR */
           ) : (
             <>
-            <li className="w-full">
+                <li className="w-full">
+                  <NavLink
+                    to="/"
+                    onClick={() => setIsOpen(false)}
+                    className={({ isActive }) =>
+                      `kanit-regular md:hidden border-b border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
+                      ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
+                    }
+                  >
+                    Home
+                  </NavLink>
+                </li>
+                <li className="w-full">
                   <NavLink
                     to="/About"
                     onClick={() => setIsOpen(false)}
@@ -608,18 +620,6 @@ const Navbar = () => {
                     }
                   >
                     Contact Us!
-                  </NavLink>
-                </li>
-                <li className="w-full">
-                  <NavLink
-                    to="/ChatHelp"
-                    onClick={() => setIsOpen(false)}
-                    className={({ isActive }) =>
-                      `kanit-regular border-b-2 border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
-                      ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
-                    }
-                  >
-                    Need Help?
                   </NavLink>
                 </li>
               </>

@@ -10,7 +10,6 @@ import Contact from "./pages/Contact";
 import FirebaseTest from "./pages/FirebaseTest";
 import TrackPackage from "./pages/TrackPackage";
 import UserDashboard from "./pages/UserDashboard";
-import AirCargoTracking from "./pages/AirTracking";
 import FaqChat from "./pages/FaqChat";
 import Messages from "./pages/Messages";
 
@@ -38,7 +37,6 @@ const App = () => {
         <Route path="/Contact" element={<Contact />} />
         <Route path="/FirebaseTest" element={<FirebaseTest />} />
         <Route path="/TrackPackage" element={<TrackPackage />} />
-        <Route path="/AirCargoTracking" element={<AirCargoTracking />} />
         <Route path="/UserDashboard" element={<UserDashboard />} />
         <Route path="/ChatHelp" element={<FaqChat />} />
         <Route path="/Messages" element={<Messages />} />
@@ -54,38 +52,38 @@ const App = () => {
         />
         <Route path="*" element={<Navigate to="/" replace />} />
 
-      <Route
-          path="/Shipments"
-          element={
-            <ProtectedRoute requiredRoles={["admin", "staff"]}>
-              <Shipments />
-            </ProtectedRoute>
-          }
-        />
-        <Route path="*" element={<Navigate to="/" replace />} />
-
         <Route
-          path="/AdminMessages"
-          element={
-            <ProtectedRoute requiredRoles={["admin", "staff"]}>
-              <AdminMessages />
-            </ProtectedRoute>
-          }
-        />
-        <Route path="*" element={<Navigate to="/" replace />} />
-        
-        <Route
-          path="/MessageRequest"
-          element={
-            <ProtectedRoute requiredRoles={["admin", "staff"]}>
-              <MessageRequest />
-            </ProtectedRoute>
-          }
-        />
-        <Route path="*" element={<Navigate to="/" replace />} />
+            path="/Shipments"
+            element={
+              <ProtectedRoute requiredRoles={["admin", "staff"]}>
+                <Shipments />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+
+          <Route
+            path="/AdminMessages"
+            element={
+              <ProtectedRoute requiredRoles={["admin", "staff"]}>
+                <AdminMessages />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+          
+          <Route
+            path="/MessageRequest"
+            element={
+              <ProtectedRoute requiredRoles={["admin", "staff"]}>
+                <MessageRequest />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
 
 
-      </Routes>
+        </Routes>
 
       {!hiddenFooterRoutes.includes(location.pathname) && <Footer />}
     </>
