@@ -13,8 +13,17 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 
+// Import helper functions and constants
+import { fetchUserData } from "../helpers/AuthHelpers";
+import { createNewConversation, updateConversationStatus, stopConversation } from "../helpers/ConversationHelpers";
+import { faqStep1Options, faqFollowUp } from "../helpers/FaqHelpers";
+import { sendMessage } from "../helpers/MessageHelpers";
+
+// Import the LoginModal component
+import LoginModal from "../modals/Login";
+
 const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMode = false }) => {
-  // User and conversation state
+  // State variables...
   const [authUser, setAuthUser] = useState(null);
   const [role, setRole] = useState(null); // "admin", "staff", or "user"
   const [userData, setUserData] = useState(null);
@@ -30,61 +39,13 @@ const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMo
   const [countdown, setCountdown] = useState(0);
   const messagesEndRef = useRef(null);
 
-  // FAQ flow state:
-  // faqStep: 0 means not in FAQ flow, 1 for initial topic selection, 2 for follow-up
-  // selectedCategory will hold the id (e.g. "delivery") from step 1
+  // FAQ flow state
   const [faqStep, setFaqStep] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState(null);
+  // New state to control showing the LoginModal
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
-  // --- Define FAQ flow constants ---
-  // Step 1 options
-  const faqStep1Options = [
-    { id: "delivery", text: "Delivery time" },
-    { id: "tracking", text: "Package Tracking" },
-    { id: "shipping", text: "Shipping cost" },
-    { id: "other", text: "Other inquiries" },
-  ];
-
-  // Follow-up (step 2) for each category
-  const faqFollowUp = {
-    delivery: {
-      message: "For Delivery time, please select an option:",
-      options: [
-        { id: "when", text: "When will it arrive?" },
-        { id: "delay", text: "Why is it delayed?" },
-        { id: "done", text: "Done" },
-        { id: "contact", text: "Contact admin" },
-      ],
-    },
-    tracking: {
-      message: "For Package Tracking, please select an option:",
-      options: [
-        { id: "how", text: "How to track my package?" },
-        { id: "update", text: "Why no update?" },
-        { id: "done", text: "Done" },
-        { id: "contact", text: "Contact admin" },
-      ],
-    },
-    shipping: {
-      message: "For Shipping cost, please select an option:",
-      options: [
-        { id: "cost", text: "What is the shipping cost?" },
-        { id: "free", text: "How to get free shipping?" },
-        { id: "done", text: "Done" },
-        { id: "contact", text: "Contact admin" },
-      ],
-    },
-    other: {
-      message: "For Other inquiries, please select an option:",
-      options: [
-        { id: "general", text: "General inquiry" },
-        { id: "done", text: "Done" },
-        { id: "contact", text: "Contact admin" },
-      ],
-    },
-  };
-
-  // --- Helper Functions ---
+  // --- Utility Functions ---
   const formatTime = (seconds) => {
     const m = Math.floor(seconds / 60).toString().padStart(2, "0");
     const s = (seconds % 60).toString().padStart(2, "0");
@@ -102,23 +63,18 @@ const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMo
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setAuthUser(user);
-        try {
-          const userDocRef = doc(db, "Users", user.uid);
-          const userSnap = await getDoc(userDocRef);
-          if (userSnap.exists()) {
-            const data = userSnap.data();
-            setUserData(data);
-            setRole(data.role || "user");
-          } else {
-            setRole("user");
-          }
-        } catch (error) {
-          console.error("Error fetching user data:", error);
-          setRole("user");
-        }
+        const data = await fetchUserData(db, user);
+        setUserData(data);
+        setRole(data?.role || "user");
       } else {
+        // When user logs out, clear conversation state
         setAuthUser(null);
         setRole(null);
+        setLocalConversationId(null);
+        setConversationData(null);
+        setConversationStatus(null);
+        setMessages([]);
+        localStorage.removeItem("conversationId");
       }
     });
     return () => unsubscribe();
@@ -144,8 +100,7 @@ const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMo
 
   // --- Listen for Messages ---
   useEffect(() => {
-    if (!localConversationId) return;
-    if (conversationStatus === "ended") return;
+    if (!localConversationId || conversationStatus === "ended") return;
     const messagesRef = collection(db, "conversations", localConversationId, "messages");
     const q = query(messagesRef, orderBy("timestamp", "asc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -195,7 +150,7 @@ const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMo
       const remaining = 300 - elapsedSeconds;
       if (remaining > 0) {
         setCountdown(remaining);
-        setNotification(`This conversation has ended. You can create a new conversation in`);
+        setNotification("This conversation has ended. You can create a new conversation in");
         setInputDisabled(true);
         const interval = setInterval(() => {
           setCountdown((prev) => {
@@ -208,9 +163,8 @@ const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMo
               localStorage.removeItem("conversationEndTimestamp");
               return 0;
             }
-            const newTime = prev - 1;
-            setNotification(`This conversation has ended. You can create a new conversation in`);
-            return newTime;
+            setNotification("This conversation has ended. You can create a new conversation in");
+            return prev - 1;
           });
         }, 1000);
         return () => clearInterval(interval);
@@ -229,11 +183,7 @@ const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMo
   // --- Helpers for Message Display ---
   const getMessageClasses = (msgSenderId) => {
     if (msgSenderId === "system") return "self-end bg-yellow-200";
-    if (role === "user") {
-      return msgSenderId === authUser?.uid ? "self-end bg-blue-100" : "self-start bg-gray-100";
-    } else {
-      return msgSenderId === authUser?.uid ? "self-end bg-blue-100" : "self-start bg-gray-100";
-    }
+    return msgSenderId === authUser?.uid ? "self-end bg-blue-100" : "self-start bg-gray-100";
   };
 
   const getSenderName = (msgSenderId) => {
@@ -243,21 +193,18 @@ const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMo
         return conversationData?.adminFirstName || conversationData?.adminLastName
           ? `${conversationData.adminFirstName || ""} ${conversationData.adminLastName || ""}`.trim()
           : "Admin";
-      } else {
-        return conversationData?.userFirstName || conversationData?.userLastName
-          ? `${conversationData.userFirstName || ""} ${conversationData.userLastName || ""}`.trim()
-          : "User";
       }
+      return conversationData?.userFirstName || conversationData?.userLastName
+        ? `${conversationData.userFirstName || ""} ${conversationData.userLastName || ""}`.trim()
+        : "User";
     } else {
-      if (msgSenderId === authUser?.uid) {
-        return userData
+      return msgSenderId === authUser?.uid
+        ? userData
           ? `${userData.firstName || ""} ${userData.lastName || ""}`.trim()
-          : "You";
-      } else {
-        return conversationData?.adminFirstName || conversationData?.adminLastName
-          ? `${conversationData.adminFirstName || ""} ${conversationData.adminLastName || ""}`.trim()
-          : "Admin";
-      }
+          : "You"
+        : conversationData?.adminFirstName || conversationData?.adminLastName
+        ? `${conversationData.adminFirstName || ""} ${conversationData.adminLastName || ""}`.trim()
+        : "Admin";
     }
   };
 
@@ -293,27 +240,20 @@ const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMo
     return () => unsubscribe();
   }, [localConversationId]);
 
-  // --- FAQ Option Handlers --- 
-
-  // For Step 1: User selects a topic
+  // --- FAQ Option Handlers ---
   const handleFAQOptionStep1 = async (option) => {
     if (!localConversationId) return;
     try {
-      // Record user's selection as a FAQ chat message with status "faqchat"
+      // Record user's FAQ selection
       await addDoc(collection(db, "conversations", localConversationId, "messages"), {
         text: option.text,
         senderId: authUser.uid,
         timestamp: new Date(),
         status: "faqchat",
       });
-      // Update the conversation status to "faqchat" to prevent the pending notification
-      await updateDoc(doc(db, "conversations", localConversationId), {
-        status: "faqchat",
-      });
-      // Update flow: save selected category and move to step 2
+      await updateConversationStatus(db, localConversationId, "faqchat");
       setSelectedCategory(option.id);
       setFaqStep(2);
-      // Auto-send system follow-up message for the selected category with status "faqchat"
       const followUpMessage = faqFollowUp[option.id]?.message;
       if (followUpMessage) {
         await addDoc(collection(db, "conversations", localConversationId, "messages"), {
@@ -326,36 +266,37 @@ const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMo
     } catch (error) {
       console.error("Error in FAQ step 1:", error);
     }
-  };  
+  };
 
-  // For Step 2: Follow-up options for the selected topic
   const handleFAQOptionStep2 = async (option) => {
     if (!localConversationId) return;
     try {
-      // Record the user's selection
-      await addDoc(collection(db, "conversations", localConversationId, "messages"), {
-        text: option.text,
-        senderId: authUser.uid,
-        timestamp: new Date(),
-      });
-      if (option.id === "done") {
-        // End the FAQ flow
-        setFaqStep(0);
-        setSelectedCategory(null);
-      } else if (option.id === "contact") {
-        // Update conversation to indicate admin request and end FAQ flow
-        await updateDoc(doc(db, "conversations", localConversationId), {
-          request: "sent",
-          updatedAt: new Date().toISOString(),
-          status: "pending",
-        });
-        setFaqStep(0);
-        setSelectedCategory(null);
+      // If the user selects "Contact admin" and their role is undefined,
+      // prompt them to log in / sign up using the LoginModal
+      if (option.id === "contact") {
+        if (!role || role === "undefined") {
+          // Show the login modal instead of sending a message
+          setShowLoginModal(true);
+          return;
+        } else {
+          // Otherwise, update the conversation to indicate a contact request
+          await updateDoc(doc(db, "conversations", localConversationId), {
+            request: "sent",
+            updatedAt: new Date().toISOString(),
+            status: "pending",
+          });
+        }
       } else {
-        // For any other option in follow-up, end FAQ flow (or extend further if needed)
-        setFaqStep(0);
-        setSelectedCategory(null);
+        // Record the FAQ selection for other options
+        await addDoc(collection(db, "conversations", localConversationId, "messages"), {
+          text: option.text,
+          senderId: authUser.uid,
+          timestamp: new Date(),
+        });
       }
+      // End FAQ flow
+      setFaqStep(0);
+      setSelectedCategory(null);
     } catch (error) {
       console.error("Error in FAQ step 2:", error);
     }
@@ -370,37 +311,18 @@ const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMo
     if (!newMessage.trim()) return;
     const currentUserId = authUser.uid;
 
-    // If conversation doesn't exist or is ended, start a new conversation (only for non-admin/staff)
+    // If no active conversation, create a new one
     if ((!conversationIsActive || conversationStatus === "ended") && role !== "admin" && role !== "staff") {
       try {
-        const fullName = userData
-          ? `${userData.firstName || ""} ${userData.lastName || ""}`.trim()
-          : "Unknown User";
-        const convoRef = await addDoc(collection(db, "conversations"), {
-          userId: currentUserId,
-          userFirstName: userData?.firstName || "",
-          userLastName: userData?.lastName || "",
-          userFullName: fullName,
-          userEmail: userData?.email || authUser.email,
-          status: "faqchat",
-          createdAt: serverTimestamp(),
-        });
-        setLocalConversationId(convoRef.id);
-        localStorage.setItem("conversationId", convoRef.id);
-
-        // Add user's first message
-        await addDoc(collection(db, "conversations", convoRef.id, "messages"), {
-          text: newMessage,
-          senderId: currentUserId,
-          timestamp: new Date(),
-        });
-        // Instead of a generic concern prompt, auto-send the FAQ step 1 message
-        await addDoc(collection(db, "conversations", convoRef.id, "messages"), {
+        const convoId = await createNewConversation(db, authUser, userData, newMessage);
+        setLocalConversationId(convoId);
+        localStorage.setItem("conversationId", convoId);
+        // Auto-send FAQ step 1 prompt
+        await addDoc(collection(db, "conversations", convoId, "messages"), {
           text: "Please select a topic from the options below:",
           senderId: "system",
           timestamp: new Date(),
         });
-        // Start FAQ flow at step 1
         setFaqStep(1);
         setNewMessage("");
       } catch (error) {
@@ -409,19 +331,10 @@ const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMo
       return;
     }
 
-    // If conversation exists, send the message normally
     if (conversationIsActive) {
       try {
-        await addDoc(collection(db, "conversations", localConversationId, "messages"), {
-          text: newMessage,
-          senderId: currentUserId,
-          timestamp: new Date(),
-        });
+        await sendMessage(db, localConversationId, newMessage, currentUserId);
         setNewMessage("");
-        await updateDoc(doc(db, "conversations", localConversationId), {
-          updatedAt: new Date().toISOString(),
-          lastMessage: newMessage,
-        });
       } catch (error) {
         console.error("Error sending message:", error);
       }
@@ -434,9 +347,7 @@ const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMo
     const confirmStop = window.confirm("Are you sure you want to stop this conversation?");
     if (!confirmStop) return;
     try {
-      await updateDoc(doc(db, "conversations", localConversationId), {
-        status: "ended",
-      });
+      await stopConversation(db, localConversationId);
     } catch (error) {
       console.error("Error stopping conversation:", error);
     }
@@ -465,9 +376,15 @@ const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMo
     window.dispatchEvent(new CustomEvent("openOffCanvas"));
   };
 
+  // In FAQ mode, disable the text input so users can't type messages.
+  const isInputDisabled = conversationStatus === "ended" ||
+    conversationStatus === "rejected" ||
+    inputDisabled ||
+    (conversationStatus === "faqchat");
+
   const containerHeightClass = widgetMode
     ? "h-full text-sm"
-    : (role === "admin" || role === "staff")
+    : role === "admin" || role === "staff"
     ? "h-screen md:h-full"
     : "h-screen";
 
@@ -483,7 +400,7 @@ const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMo
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
           </svg>
         </button>
-        {role && (role === "admin" || role === "staff") && conversationIsActive && (
+        {(role === "admin" || role === "staff") && conversationIsActive && (
           <button className="p-2 bg-red-500 text-white rounded" onClick={handleStopConversation}>
             Stop
           </button>
@@ -491,27 +408,15 @@ const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMo
       </div>
 
       {/* Notification */}
-      {(notification ||
-        (conversationIsActive &&
-          conversationStatus === "pending" &&
-          role !== "admin" &&
-          role !== "staff")) && (
+      {(notification || (conversationIsActive && conversationStatus === "pending" && role !== "admin" && role !== "staff")) && (
         <div className={`p-2 text-center ${getNotificationClasses()}`}>
-          {notification ||
-            "Waiting for an admin to accept your request..."}{" "}
+          {notification || "Waiting for an admin to accept your request..."}{" "}
           {conversationStatus === "ended" && `(${formatTime(countdown)})`}
         </div>
       )}
 
       {/* Messages Area */}
       <div className={`flex-1 overflow-y-auto ${basePadding} bg-white flex flex-col`}>
-        {conversationIsActive &&
-          conversationStatus === "pending" &&
-          role !== "admin" &&
-          role !== "staff" && (
-            <p className="text-center text-yellow-600 mb-2">
-            </p>
-          )}
         {conversationIsActive ? (
           messages.length > 0 ? (
             messages.map((msg) => (
@@ -531,14 +436,14 @@ const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMo
         ) : (
           <p className="text-center text-gray-500">
             {conversationStatus === "ended"
-              ? "This conversation has ended. Send a message to request a new conversation."
-              : "No active conversation. Send a message to request a conversation."}
+              ? "This conversation has ended."
+              : "No active conversation. Send a message to start conversation."}
           </p>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* FAQ Options: Render based on the FAQ flow step */}
+      {/* FAQ Options */}
       {conversationIsActive && role === "user" && faqStep > 0 && (
         <div className={`${basePadding} bg-gray-50 flex flex-wrap gap-2`}>
           {faqStep === 1 &&
@@ -551,7 +456,9 @@ const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMo
                 {option.text}
               </button>
             ))}
-          {faqStep === 2 && selectedCategory && faqFollowUp[selectedCategory] &&
+          {faqStep === 2 &&
+            selectedCategory &&
+            faqFollowUp[selectedCategory] &&
             faqFollowUp[selectedCategory].options.map((option) => (
               <button
                 key={option.id}
@@ -583,16 +490,17 @@ const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMo
                 handleSendMessage();
               }
             }}
-            disabled={conversationStatus === "ended" || conversationStatus === "rejected" || inputDisabled}
+            disabled={isInputDisabled}
           />
-          <button
-            className="ml-2 p-2 bg-blue-500 text-white rounded"
-            onClick={handleSendMessage}
-            disabled={conversationStatus === "ended" || conversationStatus === "rejected" || inputDisabled}
-          >
+          <button className="ml-2 p-2 bg-blue-500 text-white rounded" onClick={handleSendMessage} disabled={isInputDisabled}>
             Send
           </button>
         </div>
+      )}
+
+      {/* Render the LoginModal if needed */}
+      {showLoginModal && (
+        <LoginModal setIsOpen={() => setShowLoginModal(false)} />
       )}
     </div>
   );

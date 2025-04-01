@@ -1,9 +1,19 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import ChatWindow from "../pages/Messages";
+import { useAuth } from "../utils/AuthContext"; // Adjust path as needed
 
 const ChatWidget = () => {
+  const { role } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
+
+  // Automatically close the widget if the auth role changes (e.g., log in/out)
+  useEffect(() => {
+    setIsOpen(false);
+  }, [role]);
+
+  // Only show the widget for "user" or guest roles.
+  if (role === "admin" || role === "staff") return null;
 
   const toggleChat = () => setIsOpen(!isOpen);
 

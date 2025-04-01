@@ -526,7 +526,7 @@ const Navbar = () => {
                   to="/Messages"
                   onClick={() => setIsOpen(false)}
                   className={({ isActive }) =>
-                    `kanit-regular border-b border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
+                    `kanit-regular md:hidden border-b border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
                     ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
                   }
                 >

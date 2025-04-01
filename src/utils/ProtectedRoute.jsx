@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../jsfile/firebase";
 
-const ProtectedRoute = ({ children, requiredRoles }) => {
+const ProtectedRoute = ({ children, requiredRoles, redirectForAdmin = false }) => {
   const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
@@ -25,8 +25,9 @@ const ProtectedRoute = ({ children, requiredRoles }) => {
           setRole(null);
         }
       } else {
+        // If no user is logged in, treat as guest.
         setUser(null);
-        setRole(null);
+        setRole("guest");
       }
       setLoading(false);
     });
@@ -34,10 +35,21 @@ const ProtectedRoute = ({ children, requiredRoles }) => {
     return () => unsubscribe();
   }, []);
 
-  if (loading) return <div className="h-screen flex items-center justify-center">Loading....</div>;
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        Loading...
+      </div>
+    );
+  }
 
-  // If user is not authenticated OR role is not allowed, redirect to Home
-  if (!user || !requiredRoles.includes(role)) {
+  // If the route is set to redirect admin/staff and role is admin or staff.
+  if (redirectForAdmin && (role === "admin" || role === "staff")) {
+    return <Navigate to="/AdminDashboard" replace />;
+  }
+
+  // If requiredRoles is provided, allow access only if role is included.
+  if (requiredRoles && !requiredRoles.includes(role)) {
     return <Navigate to="/" replace />;
   }
 
