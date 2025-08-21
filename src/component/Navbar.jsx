@@ -90,7 +90,7 @@ const Navbar = () => {
     <>
       {role !== undefined && (
       <nav className={`font-semibold z-40 
-        ${role === "admin" || role === "staff" ? "bg-blue-300 border-b-2" : "bg-white"} 
+        ${role === "admin" || role === "staff" ? "md:hidden bg-blue-300 border-b-2" : "bg-white"} 
         `}>
         <div className="max-w-screen-xl flex items-center justify-between mx-auto p-3">
           {/* Logo with conditional navigation based on user role */}
@@ -120,15 +120,7 @@ const Navbar = () => {
 
           <div className="hidden md:flex items-center gap-1 ml-auto">
             {/* Conditional Rendering Based on Role */}
-            {role === "admin" ? (<>
-              <div
-              className="lexend mr-3 cursor-pointer relative block py-2 px-3 text-black no-underline rounded transition-all duration-200 transform hover:scale-105 active:scale-95 
-                          after:content-[''] after:absolute after:left-0 after:bottom-0 after:h-[2px] after:w-0 after:bg-blue-500 after:transition-all after:duration-300 
-                          hover:after:w-full"
-              onClick={() => setManageUsersShow(true)}
-            >
-              Manage Users
-            </div>
+            {role === "admin" ? (<> 
             </>
             /* STAFF ROLES */
             ) : role === "staff" ? (
@@ -187,16 +179,6 @@ const Navbar = () => {
                 >
                   Services
                 </NavLink>
-                <NavLink
-                  to="/OurCommitment"
-                  className={({ isActive }) =>
-                    `lexend relative block py-2 px-3 text-black no-underline transition-all duration-200 transform hover:scale-105 active:scale-95 
-                    after:content-[''] after:absolute after:left-0 after:bottom-0 after:h-[2px] after:bg-blue-500 after:transition-all after:duration-300
-                    ${isActive ? "after:w-0 scale-110" : "after:w-0 hover:after:w-full"}`
-                  }
-                >
-                  Our Commitment
-                </NavLink>
               </>
               /* NO ROLES */
             ) : (
@@ -220,16 +202,6 @@ const Navbar = () => {
                   }
                 >
                   Services
-                </NavLink>
-                <NavLink
-                  to="/OurCommitment"
-                  className={({ isActive }) =>
-                    `lexend relative block py-2 px-3 text-black no-underline transition-all duration-200 transform hover:scale-105 active:scale-95 
-                    after:content-[''] after:absolute after:left-0 after:bottom-0 after:h-[2px] after:bg-blue-500 after:transition-all after:duration-300
-                    ${isActive ? "after:w-0 scale-110" : "after:w-0 hover:after:w-full"}`
-                  }
-                >
-                  Our Commitment
                 </NavLink>
               </>
             )}
@@ -498,18 +470,6 @@ const Navbar = () => {
                   </NavLink>
                 </li>
                 <li className="w-full">
-                  <NavLink
-                    to="/OurCommitment"
-                    onClick={() => setIsOpen(false)}
-                    className={({ isActive }) =>
-                      `kanit-regular md:hidden border-b border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
-                      ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
-                    }
-                  >
-                    Our Commitment
-                  </NavLink>
-                </li>
-                <li className="w-full">
                 <NavLink
                   to="/TrackPackage"
                   onClick={() => setIsOpen(false)}
@@ -532,6 +492,18 @@ const Navbar = () => {
                 >
                    Chat with Admin
                 </NavLink>
+                </li>
+                <li className="w-full">
+                  <NavLink
+                    to="/ShippingInquiry"
+                    onClick={() => setIsOpen(false)}
+                    className={({ isActive }) =>
+                      `kanit-regular border-b-1 border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
+                      ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
+                    }
+                  >
+                    Inquire Shipping (COD)
+                  </NavLink>
                 </li>
                 <li className="w-full">
                   <NavLink
@@ -587,18 +559,6 @@ const Navbar = () => {
                   </NavLink>
                 </li>
                 <li className="w-full">
-                  <NavLink
-                    to="/OurCommitment"
-                    onClick={() => setIsOpen(false)}
-                    className={({ isActive }) =>
-                      `kanit-regular md:hidden border-b border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
-                      ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
-                    }
-                  >
-                    Our Commitment
-                  </NavLink>
-                </li>
-                <li className="w-full">
                 <NavLink
                   to="/TrackPackage"
                   onClick={() => setIsOpen(false)}
@@ -615,7 +575,7 @@ const Navbar = () => {
                     to="/Contact"
                     onClick={() => setIsOpen(false)}
                     className={({ isActive }) =>
-                      `kanit-regular border-b border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
+                      `kanit-regular border-b-2 border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
                       ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
                     }
                   >

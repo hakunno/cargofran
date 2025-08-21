@@ -15,9 +15,36 @@ import { db } from "../jsfile/firebase";
 import Modal from "react-bootstrap/Modal";
 import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
-import "../assets/css/ManageUsers.css"; // Ensure this file contains styling
+import "../assets/css/ManageUsers.css";
+import { useAuth } from "../utils/AuthContext"; // Import your auth context
 
 function ManageUsers({ show, onHide }) {
+  // Get current user's role and loading state from your auth context
+  const { role, loading } = useAuth();
+
+  // Only allow admin or staff to access this modal.
+  if (loading) {
+    return (
+      <Modal show={show} onHide={onHide} centered>
+        <Modal.Body className="text-center">
+          Loading...
+        </Modal.Body>
+      </Modal>
+    );
+  }
+
+  if (!(role === "admin" || role === "staff")) {
+    return null; // Or you could return a message, e.g.,
+    // return (
+    //   <Modal show={show} onHide={onHide} centered>
+    //     <Modal.Body className="text-center">
+    //       You are not authorized to view this content.
+    //     </Modal.Body>
+    //   </Modal>
+    // );
+  }
+
+  // If authorized, render the ManageUsers modal
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState("");
   const [showAddUserModal, setShowAddUserModal] = useState(false);
@@ -38,13 +65,13 @@ function ManageUsers({ show, onHide }) {
         id: doc.id,
         ...doc.data(),
       }));
-  
+
       // Sort users by createdAt (ascending)
       userList.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-  
+
       setUsers(userList);
     };
-  
+
     fetchUsers();
   }, []);
 
@@ -100,18 +127,23 @@ function ManageUsers({ show, onHide }) {
   };
 
   const handleAddUser = async () => {
-    if (!newUserFirstName || !newUserLastName || !newUserEmail || !newUserPassword) {
+    if (
+      !newUserFirstName ||
+      !newUserLastName ||
+      !newUserEmail ||
+      !newUserPassword
+    ) {
       alert("Please fill in all fields.");
       return;
     }
-  
+
     if (newUserPassword.length < 6) {
       alert("Password must be at least 6 characters long.");
       return;
     }
-  
-    const createdAt = new Date().toISOString(); // Capture the current timestamp
-  
+
+    const createdAt = new Date().toISOString();
+
     try {
       const response = await fetch("http://localhost:5000/createUser", {
         method: "POST",
@@ -122,27 +154,28 @@ function ManageUsers({ show, onHide }) {
           email: newUserEmail,
           password: newUserPassword,
           role: newUserRole,
-          createdAt: new Date().toISOString(),
+          createdAt,
         }),
       });
-  
+
       const data = await response.json();
-  
+
       if (response.ok) {
         setUsers((prevUsers) =>
-          [...prevUsers,
+          [
+            ...prevUsers,
             {
               id: data.uid,
               firstName: newUserFirstName,
               lastName: newUserLastName,
               email: newUserEmail,
               role: newUserRole,
-              createdAt, // Store timestamp
+              createdAt,
               verified: false,
             },
-          ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)) // Sort by createdAt (newest first)
+          ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
         );
-  
+
         alert("User created successfully!");
         setShowAddUserModal(false);
         setNewUserFirstName("");
@@ -158,19 +191,21 @@ function ManageUsers({ show, onHide }) {
       alert("Something went wrong.");
     }
   };
-  
+
   const handleDeleteUser = async (userId) => {
-    const confirmDelete = window.confirm("Are you sure you want to delete this user? This action cannot be undone.");
-  
+    const confirmDelete = window.confirm(
+      "Are you sure you want to delete this user? This action cannot be undone."
+    );
+
     if (!confirmDelete) return;
-  
+
     try {
       const response = await fetch(`http://localhost:5000/deleteUser/${userId}`, {
         method: "DELETE",
       });
-  
+
       const data = await response.json();
-  
+
       if (response.ok) {
         setUsers((prevUsers) => prevUsers.filter((user) => user.id !== userId));
         alert("User deleted successfully!");
@@ -181,14 +216,14 @@ function ManageUsers({ show, onHide }) {
       console.error("Error:", error);
       alert("Something went wrong while deleting the user.");
     }
-  };  
+  };
 
   const handleToggleVerification = async (userId, currentStatus) => {
-    const newStatus = !currentStatus; // Toggle verification status
-  
+    const newStatus = !currentStatus;
+
     try {
       await updateDoc(doc(db, "Users", userId), { verified: newStatus });
-  
+
       setUsers((prevUsers) =>
         prevUsers.map((user) =>
           user.id === userId ? { ...user, verified: newStatus } : user
@@ -199,22 +234,21 @@ function ManageUsers({ show, onHide }) {
       alert("Failed to update verification status.");
     }
   };
-  
 
   const handleBackToManageUsers = () => {
-    setShowAddUserModal(false); // Hide Add User Modal
+    setShowAddUserModal(false);
   };
 
   return (
     <>
       {/* Main Manage Users Modal */}
       <Modal
-      show={show}
-      onHide={onHide}
-      centered
-      size="xl"
-      className="sm:max-w-full sm:h-screen sm:modal-dialog"
-    >
+        show={show}
+        onHide={onHide}
+        centered
+        size="xl"
+        className="sm:max-w-full sm:h-screen sm:modal-dialog"
+      >
         <Modal.Header closeButton>
           <Modal.Title>Manage Users</Modal.Title>
         </Modal.Header>
@@ -270,7 +304,7 @@ function ManageUsers({ show, onHide }) {
                       </td>
                       <td className="p-2 border">
                         <Button
-                          variant={user.verified ? "danger" : "success"} // Red if Verified, Green if Unverified
+                          variant={user.verified ? "danger" : "success"}
                           onClick={() => handleToggleVerification(user.id, user.verified)}
                         >
                           {user.verified ? "Unverify" : "Verify"}
@@ -287,11 +321,6 @@ function ManageUsers({ show, onHide }) {
                             : "Send Reset Email"}
                         </Button>
                       </td>
-                      <td className="p-2 border">
-                        <Button variant="danger" onClick={() => handleDeleteUser(user.id)}>
-                          Delete
-                        </Button>
-                      </td>
                     </tr>
                   ))}
               </tbody>
@@ -306,10 +335,10 @@ function ManageUsers({ show, onHide }) {
       </Modal>
 
       {/* Add User Modal */}
-      <Modal 
-        show={showAddUserModal} 
-        onHide={() => setShowAddUserModal(false)} 
-        centered 
+      <Modal
+        show={showAddUserModal}
+        onHide={() => setShowAddUserModal(false)}
+        centered
         size="md"
       >
         <Modal.Header closeButton>
@@ -365,7 +394,6 @@ function ManageUsers({ show, onHide }) {
           <Button variant="secondary" onClick={handleBackToManageUsers}>
             Back
           </Button>
-
           <Button
             variant="success"
             onClick={async () => {
@@ -376,7 +404,6 @@ function ManageUsers({ show, onHide }) {
           </Button>
         </Modal.Footer>
       </Modal>
-
     </>
   );
 }

@@ -31,7 +31,7 @@ const deleteExpiredConversations = async () => {
       return;
     }
 
-    const statusesToDelete = ["pending", "ending", "rejected", "faqchat"];
+    const statusesToDelete = ["pending", "ended", "rejected", "faqchat"];
     const deletePromises = [];
 
     snapshot.forEach((doc) => {

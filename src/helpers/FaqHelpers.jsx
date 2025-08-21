@@ -1,4 +1,4 @@
-export const faqStep1Options = [
+  export const faqStep1Options = [
     { id: "delivery", text: "Delivery time" },
     { id: "tracking", text: "Package Tracking" },
     { id: "shipping", text: "Shipping cost" },

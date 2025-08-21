@@ -393,7 +393,7 @@ const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMo
   return (
     <div className={`flex flex-col w-full ${containerHeightClass}`}>
       {/* Header */}
-      <div className={`${basePadding} bg-blue-200 border-t-2 border-b-2 flex items-center justify-between flex-shrink-0`}>
+      <div className={`${basePadding} bg-blue-200 border-b-2 flex items-center justify-between flex-shrink-0`}>
         <h4 className="text-lg font-semibold">{headerTitle}</h4>
         <button onClick={handleOpenNavbar} className={`${role === "admin" ? "md:hidden" : ""} p-2 text-gray-700 hover:text-gray-900`}>
           <svg xmlns="http://www.w3.org/2000/svg" className="md:hidden h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -437,7 +437,7 @@ const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMo
           <p className="text-center text-gray-500">
             {conversationStatus === "ended"
               ? "This conversation has ended."
-              : "No active conversation. Send a message to start conversation."}
+              : "Send a message to start conversation."}
           </p>
         )}
         <div ref={messagesEndRef} />

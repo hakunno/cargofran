@@ -7,23 +7,25 @@ import About from "./pages/About";
 import Services from "./pages/Services";
 import OurCommitment from "./pages/OurCommitment";
 import Contact from "./pages/Contact";
-import FirebaseTest from "./pages/FirebaseTest";
 import TrackPackage from "./pages/TrackPackage";
 import UserDashboard from "./pages/UserDashboard";
 import FaqChat from "./pages/FaqChat";
 import Messages from "./pages/Messages";
 import ChatWidget from "./component/ChatWidget";
+import ShippingInquiry from "./pages/ShippingInquiry";
+import TermsAndConditions from "./pages/TermsAndConditions";
 
 /* ADMIN / STAFF */
 import AdminDashboard from "./pages/adminstaff/AdminDashboard";
 import Shipments from "./pages/adminstaff/Shipments";
 import AdminMessages from "./pages/adminstaff/AdminMessages";
 import MessageRequest from "./pages/adminstaff/MessageRequest";
+import ShipmentRequest from "./pages/adminstaff/ShipmentRequest";
 
 const App = () => {
   const location = useLocation(); 
 
-  const hiddenFooterRoutes = ["/Shipments","/AdminMessages","/AdminDashboard","/Messages","/MessageRequest"];
+  const hiddenFooterRoutes = ["/Shipments","/AdminMessages","/AdminDashboard","/Messages","/MessageRequest","/ShipmentRequest","/TrackPackage","/ShippingInquiry","/TermsAndConditions"];
   
   return (
     <>
@@ -44,11 +46,12 @@ const App = () => {
         <Route path="/Services" element={<Services />} />
         <Route path="/OurCommitment" element={<OurCommitment />} />
         <Route path="/Contact" element={<Contact />} />
-        <Route path="/FirebaseTest" element={<FirebaseTest />} />
         <Route path="/TrackPackage" element={<TrackPackage />} />
         <Route path="/UserDashboard" element={<UserDashboard />} />
         <Route path="/ChatHelp" element={<FaqChat />} />
         <Route path="/Messages" element={<Messages />} />
+        <Route path="/ShippingInquiry" element={<ShippingInquiry/>} />
+        <Route path="/TermsAndConditions" element={<TermsAndConditions/>} />
 
         {/* Protected Routes for Admin and Staff */}
         <Route
@@ -80,6 +83,14 @@ const App = () => {
           element={
             <ProtectedRoute requiredRoles={["admin", "staff"]}>
               <MessageRequest />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ShipmentRequest"
+          element={
+            <ProtectedRoute requiredRoles={["admin", "staff"]}>
+              <ShipmentRequest />
             </ProtectedRoute>
           }
         />

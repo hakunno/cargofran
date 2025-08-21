@@ -64,20 +64,27 @@ const ConversationsAdmin = () => {
   const handleApprove = async (conv) => {
     const confirmApprove = window.confirm("Approve this conversation?");
     if (!confirmApprove) return;
-
+  
     try {
+      const currentAdmin = auth.currentUser;
+      if (!currentAdmin) {
+        alert("Admin not logged in.");
+        return;
+      }
+      
       const { adminFirstName, adminLastName } = await fetchAdminDetails();
       await updateDoc(doc(db, "conversations", conv.id), {
         status: "approved",
         adminFirstName,
         adminLastName,
+        adminId: currentAdmin.uid, // store the approver's UID
       });
     } catch (error) {
       console.error("Error approving conversation:", error);
       alert("Failed to approve conversation. Please try again.");
     }
   };
-
+  
   const handleReject = async (conv) => {
     const confirmReject = window.confirm("Reject this conversation?");
     if (!confirmReject) return;

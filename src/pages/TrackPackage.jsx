@@ -21,23 +21,22 @@ const TrackPackage = () => {
     setShipment(null);
     setStatusHistory([]);
     try {
-      // Query the Packages collection by packageNumber.
       const q = query(
         collection(db, "Packages"),
         where("packageNumber", "==", packageNumber)
       );
       const querySnapshot = await getDocs(q);
+
       if (querySnapshot.empty) {
         setError("Package not found.");
         setLoading(false);
         return;
       }
-      // Assume package numbers are unique and take the first document.
+
       const docSnap = querySnapshot.docs[0];
       const packageData = { id: docSnap.id, ...docSnap.data() };
       setShipment(packageData);
 
-      // Query the statusHistory subcollection and order by timestamp (oldest first).
       const historyQuery = query(
         collection(db, "Packages", docSnap.id, "statusHistory"),
         orderBy("timestamp", "asc")
@@ -57,62 +56,57 @@ const TrackPackage = () => {
   };
 
   return (
-    <div style={{ padding: "1rem" }}>
-      <h2>Track Package</h2>
-      <div style={{ marginBottom: "1rem" }}>
+    <div className="max-w-3xl mx-auto p-6 bg-gray-50 rounded-lg mb-10 drop-shadow-[0px_2px_5px_rgba(0,0,0,1)] shadow-xl">
+      <h2 className="text-2xl font-semibold text-gray-800 mb-4">Track Package</h2>
+
+      <div className="flex flex-col sm:flex-row items-center mb-10 gap-4 mb-6">
         <input
           type="text"
           placeholder="Enter Package Number"
           value={packageNumber}
           onChange={(e) => setPackageNumber(e.target.value)}
-          style={{ padding: "0.5rem", width: "250px" }}
+          className="w-full sm:flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <button
           onClick={handleSearch}
-          style={{ marginLeft: "1rem", padding: "0.5rem 1rem" }}
+          disabled={loading}
+          className="px-6 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
         >
-          Track
+          {loading ? 'Searching...' : 'Track'}
         </button>
       </div>
 
-      {loading && <p>Loading...</p>}
-      {error && <p style={{ color: "red" }}>{error}</p>}
+      {error && <p className="text-red-600 mb-4">{error}</p>}
 
       {shipment && (
-        <div style={{ border: "1px solid #ccc", padding: "1rem" }}>
-          <h3>Package Details</h3>
-          <p>
-            <strong>Package Number:</strong> {shipment.packageNumber}
-          </p>
-          <p>
-            <strong>From:</strong> {shipment.from}
-          </p>
-          <p>
-            <strong>Current Status:</strong> {shipment.packageStatus}
-          </p>
-          <p>
-            <strong>Location:</strong> {shipment.destination}
-          </p>
-          <p>
-            <strong>Airway Bill:</strong>{" "}
-            {shipment.airwayBill ? shipment.airwayBill : "N/A"}
-          </p>
+        <div className="bg-white p-6 rounded-lg shadow-lg">
+          <h3 className="text-xl font-medium text-gray-700 mb-4">Package Details</h3>
 
-          <h4>Status History</h4>
+          <div className="space-y-2 mb-6">
+            <p><span className="font-semibold">Package Number:</span> {shipment.packageNumber}</p>
+            <p><span className="font-semibold">From:</span> {shipment.from}</p>
+            <p><span className="font-semibold">Current Status:</span> {shipment.packageStatus}</p>
+            <p><span className="font-semibold">Destination:</span> {shipment.destination}</p>
+            <p><span className="font-semibold">Airway Bill:</span> {shipment.airwayBill || 'N/A'}</p>
+          </div>
+
+          <h4 className="text-lg font-medium text-gray-600 mb-3">Status History</h4>
+
           {statusHistory.length > 0 ? (
-            <ul>
+            <ul className="space-y-2">
               {statusHistory.map((entry) => (
-                <li key={entry.id}>
-                  <strong>Status:</strong> {entry.status} -{" "}
-                  <strong>Time:</strong>{" "}
-                  {entry.timestamp?.toDate
-                    ? entry.timestamp.toDate().toLocaleString()
-                    : "Pending"}
+                <li key={entry.id} className="flex justify-between bg-gray-100 p-3 rounded">
+                  <span>{entry.status}</span>
+                  <span className="text-sm text-gray-500">
+                    {entry.timestamp?.toDate
+                      ? entry.timestamp.toDate().toLocaleString()
+                      : 'Pending'}
+                  </span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p>No status history available.</p>
+            <p className="text-gray-500">No status history available.</p>
           )}
         </div>
       )}

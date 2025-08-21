@@ -72,7 +72,7 @@ function LoginModal({ setIsOpen }) {
         } else if (userData.role === "staff") {
           navigate("/AdminDashboard");
         } else {
-          navigate("/UserDashboard");
+          navigate("/");
         }
   
         // Show verification warning if needed
@@ -154,24 +154,16 @@ function LoginModal({ setIsOpen }) {
     try {
       const formattedEmail = email.trim().toLowerCase();
   
-      const usersRef = collection(db, "Users");
-      const q = query(usersRef, where("email", "==", formattedEmail));
-      const querySnapshot = await getDocs(q);
-  
-      if (querySnapshot.empty) {
-        setError("No account found with this email. Please check or sign up.");
-        return;
-      }
-
+      // Directly send password reset email without Firestore query
       await sendPasswordResetEmail(auth, formattedEmail);
       setSuccessMessage("Password reset link sent to your email.");
       setEmail(""); 
-  
     } catch (error) {
       setError("Failed to send reset link. Please try again later.");
       console.error("Reset Password Error:", error);
     }
   };
+  
 
   const toTitleCase = (str) => {
     return str

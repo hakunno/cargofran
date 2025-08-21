@@ -394,6 +394,7 @@ const Shipments = () => {
                     setFormData({ ...formData, packageStatus: e.target.value })
                   }
                 >
+                  <option>Processing</option>
                   <option>On the way</option>
                   <option>In warehouse</option>
                   <option>On transit</option>
@@ -487,6 +488,7 @@ const Shipments = () => {
                     setFormData({ ...formData, packageStatus: e.target.value })
                   }
                 >
+                  <option>Processing</option>
                   <option>On the way</option>
                   <option>In warehouse</option>
                   <option>On transit</option>

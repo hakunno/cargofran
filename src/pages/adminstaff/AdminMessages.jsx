@@ -1,13 +1,24 @@
 import React, { useState, useEffect } from "react";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { addDoc, collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "../../jsfile/firebase";
 import Sidebar from "../../component/adminstaff/Sidebar";
 import ChatWindow from "../Messages"; // adjust import as needed
 import { FaArrowLeft } from "react-icons/fa"; // Import left arrow icon
+import { auth } from "../../jsfile/firebase";
 
-const AdminConversations = ({ currentUserId }) => {
+const AdminConversations = () => {
   const [conversations, setConversations] = useState([]);
   const [selectedConversationId, setSelectedConversationId] = useState(null);
+  const [currentUserId, setCurrentUserId] = useState(null);
+
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (user) {
+        setCurrentUserId(user.uid);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     // Only fetch approved conversations
@@ -33,26 +44,38 @@ const AdminConversations = ({ currentUserId }) => {
         <div
           className={`${
             selectedConversationId ? "hidden md:block" : "block"
-          } w-full md:w-64 border-b md:border-r p-4 overflow-y-auto`}
-          style={{ maxHeight: "100vh" }}
+          } w-full md:w-64 border-b md:border-r p-4 bg-white`}
         >
-          <h2 className="text-lg font-semibold mb-2">Conversations</h2>
-          <ul className="space-y-2">
-            {conversations.map((conv, index) => (
-              <li
-                key={conv.id}
-                onClick={() => setSelectedConversationId(conv.id)}
-                className="cursor-pointer hover:bg-gray-100 p-2 rounded"
-              >
-                <p className="font-semibold">
-                  Conversation: {conv.userFullName || `#${index + 1}`}
-                </p>
-                <p className="text-sm text-gray-500">Status: {conv.status}</p>
-                <p className="text-sm text-gray-500">User Email: {conv.userEmail}</p>
-              </li>
-            ))}
+          <h2 className="text-lg font-semibold mb-4 text-center border-b pb-2">
+            Conversations
+          </h2>
+          <ul className="space-y-2 overflow-y-auto max-h-[calc(100vh-120px)] pr-2">
+            {conversations
+              .filter((conv) => !conv.adminId || conv.adminId === currentUserId)
+              .map((conv, index) => {
+                const isActive = conv.id === selectedConversationId;
+                return (
+                  <li
+                    key={conv.id}
+                    onClick={() => setSelectedConversationId(conv.id)}
+                    className={`cursor-pointer rounded-lg border p-3 shadow-sm transition-all duration-200 ${
+                      isActive
+                        ? "bg-blue-100 border-blue-400"
+                        : "hover:bg-gray-100 border-gray-200"
+                    }`}
+                  >
+                    <p className="font-semibold text-sm truncate">
+                      {conv.userFullName || `#${index + 1}`}
+                    </p>
+                    <p className="text-xs text-gray-500 truncate">
+                      {conv.userEmail || "No email"}
+                    </p>
+                  </li>
+                );
+              })}
           </ul>
         </div>
+
 
         {/* Chat Window Panel */}
         <div

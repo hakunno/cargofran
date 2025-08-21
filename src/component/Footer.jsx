@@ -33,12 +33,12 @@ const Footer = () => {
 
           <p className="flex items-center space-x-2">
             <FaMobileScreenButton className="text-lg" />
-            <span className="ml-1">+63 912 345 6789</span>
+            <span className="ml-1">+63 908 881 3881</span>
           </p>
 
           <p className="flex items-center space-x-2">
             <IoIosMail className="text-lg" />
-            <span className="ml-2">cessamoroso@francesslogistics.com</span>
+            <span className="ml-2">info.sales@francesslogistics.com</span>
           </p>
 
           <p className="flex items-left md:!items-start space-x-2">
