@@ -1,25 +1,146 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { db } from '../jsfile/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db, auth } from '../jsfile/firebase';
+import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
 import AddressSelector from './AddressSelector';
+import countryList from 'react-select-country-list';
+import PhoneInput from 'react-phone-number-input';
+import 'react-phone-number-input/style.css';
 
-const ShippingServiceRequestForm = () => {
+export default function ShippingServiceRequestForm() {
   const [formData, setFormData] = useState({
-  name: '',
-  email: '',
-  mobile: '',
-  shipmentDestination: '',
-  serviceType: '',
-  pickupOption: 'deliverToWarehouse',
-  pickupRegion: '',
-  pickupProvince: '',
-  pickupCity: '',
-  pickupBarangay: '',
-  pickupVehicleSize: '',
-  packageImage: null,
-  agreedToTerms: false,
-});
+    name: '',
+    email: '',
+    mobile: '',
+    senderCountry: '',
+    destinationCountry: '',
+    destinationAddress: '',
+    transportMode: '',
+    shipmentDirection: '',
+    loadType: '',
+    pickupOption: 'deliverToWarehouse',
+    pickupRegion: '',
+    pickupProvince: '',
+    pickupCity: '',
+    pickupBarangay: '',
+    pickupDetailedAddress: '',
+    packages: [{
+      length: '',
+      width: '',
+      height: '',
+      weight: '',
+      contents: '',
+      image: null,
+    }],
+    agreedToTerms: false,
+    additionalServices: {
+      Documentation: false,
+      'Customs Clearance': false,
+      Brokerage: false,
+      Consolidation: false,
+    },
+  });
+
+  const [isEmailLocked, setIsEmailLocked] = useState(false);
+  const [isNameLocked, setIsNameLocked] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
+
+  // map transport modes to available load types
+  const LOAD_OPTIONS = {
+    Sea: [
+      { value: 'FCL', label: 'Full Container Load (FCL)' },
+      { value: 'LCL', label: 'Less than Container Load (LCL)' },
+    ],
+    Road: [
+      { value: 'FTL', label: 'Full Truckload (FTL)' },
+      { value: 'LTL', label: 'Less than Truckload (LTL)' },
+    ],
+  };
+
+  const countries = useMemo(() => countryList().getData(), []);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (user && user.email) {
+        const normalizedEmail = user.email.toLowerCase().trim();
+        setIsEmailLocked(true);
+        try {
+          const userDocRef = doc(db, "Users", user.uid);
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) {
+            const data = userDoc.data();
+            const fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim();
+            setFormData((prev) => ({ ...prev, email: normalizedEmail, name: fullName }));
+            setIsNameLocked(true);
+          } else {
+            setFormData((prev) => ({ ...prev, email: normalizedEmail }));
+            setIsNameLocked(false);
+          }
+        } catch (error) {
+          console.error("Error fetching user data:", error);
+          setFormData((prev) => ({ ...prev, email: normalizedEmail }));
+          setIsNameLocked(false);
+        }
+      } else {
+        setIsEmailLocked(false);
+        setIsNameLocked(false);
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    if (formData.senderCountry === formData.destinationCountry && formData.senderCountry !== '') {
+      setFormData((prev) => ({ ...prev, shipmentDirection: 'Domestic' }));
+    } else if (formData.shipmentDirection === 'Domestic') {
+      setFormData((prev) => ({ ...prev, shipmentDirection: '' }));
+    }
+    if (formData.senderCountry !== formData.destinationCountry && formData.transportMode === 'Road') {
+      setFormData((prev) => ({ ...prev, transportMode: '' }));
+    }
+  }, [formData.senderCountry, formData.destinationCountry]);
+
+  // when transport mode changes, reset loadType if invalid
+  useEffect(() => {
+    if (!formData.transportMode) return;
+    if (!LOAD_OPTIONS[formData.transportMode] && formData.loadType !== '') {
+      setFormData((prev) => ({ ...prev, loadType: '' }));
+    }
+  }, [formData.transportMode]);
+
+  useEffect(() => {
+    if (formData.transportMode === 'Road') {
+      setFormData((prev) => ({
+        ...prev,
+        shipmentDirection: 'Domestic',
+        additionalServices: {
+          Documentation: false,
+          'Customs Clearance': false,
+          Brokerage: false,
+          Consolidation: false,
+        },
+      }));
+    }
+  }, [formData.transportMode]);
+
+  // when loadType changes to full load, reset packages to one if more
+  useEffect(() => {
+    const isFullLoad = formData.loadType === 'FCL' || formData.loadType === 'FTL';
+    if (isFullLoad && formData.packages.length > 1) {
+      setFormData((prev) => ({
+        ...prev,
+        packages: [{
+          length: '',
+          width: '',
+          height: '',
+          weight: '',
+          contents: '',
+          image: null,
+        }],
+      }));
+    }
+  }, [formData.loadType]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -29,38 +150,167 @@ const ShippingServiceRequestForm = () => {
     }));
   };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
+  const handleAdditionalServiceChange = (e) => {
+    const { name, checked } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      additionalServices: {
+        ...prev.additionalServices,
+        [name]: checked,
+      },
+    }));
+  };
+
+  const updatePackage = (index, field, value) => {
+    setFormData((prev) => {
+      const packages = [...prev.packages];
+      packages[index][field] = value;
+      return { ...prev, packages };
+    });
+  };
+
+  const handlePackageFileChange = (index, file) => {
     if (file && file.size > 5 * 1024 * 1024) {
       alert('File size must be less than 5MB');
       return;
     }
-    setFormData((prev) => ({ ...prev, packageImage: file }));
+    updatePackage(index, 'image', file);
   };
 
-  const handlePickupAddressSelect = ({ region, province, city, barangay }) => {
+  const addPackage = () => {
     setFormData((prev) => ({
       ...prev,
-      pickupRegion: region,
-      pickupProvince: province,
-      pickupCity: city,
-      pickupBarangay: barangay,
+      packages: [
+        ...prev.packages,
+        { length: '', width: '', height: '', weight: '', contents: '', image: null },
+      ],
     }));
+  };
+
+  const removePackage = (index) => {
+    setFormData((prev) => ({
+      ...prev,
+      packages: prev.packages.filter((_, i) => i !== index),
+    }));
+  };
+
+  const getAddressString = (item) => {
+    if (typeof item === 'string') return item.trim();
+    if (item && typeof item === 'object') {
+      return (item.label || item.value || '').trim();
+    }
+    return '';
+  };
+
+  const handlePickupAddressSelect = useCallback(({ region, province, city, barangay }) => {
+    setFormData((prev) => ({
+      ...prev,
+      pickupRegion: getAddressString(region),
+      pickupProvince: getAddressString(province),
+      pickupCity: getAddressString(city),
+      pickupBarangay: getAddressString(barangay),
+    }));
+  }, []);
+
+  const isDomestic = formData.senderCountry === formData.destinationCountry && formData.senderCountry !== '';
+
+  const validateStep1 = () => {
+    if (!formData.senderCountry || !formData.destinationCountry) {
+      alert('Please select both sender and destination countries.');
+      return false;
+    }
+    return true;
+  };
+
+  const validateStep2 = () => {
+    if (!formData.name || !formData.email || !formData.mobile || !formData.transportMode || !formData.shipmentDirection || !formData.destinationAddress) {
+      alert('Please fill in all required fields in this step.');
+      return false;
+    }
+    if ((formData.transportMode === 'Sea' || formData.transportMode === 'Road') && !formData.loadType) {
+      alert('Please select a load type.');
+      return false;
+    }
+    return true;
+  };
+
+  const handleNext = () => {
+    if (currentStep === 1 && validateStep1()) {
+      setCurrentStep(2);
+    } else if (currentStep === 2 && validateStep2()) {
+      setCurrentStep(3);
+    }
+  };
+
+  const handleBack = () => {
+    setCurrentStep((prev) => prev - 1);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     if (!formData.agreedToTerms) {
       alert('You must agree to the terms and conditions to proceed.');
       return;
     }
 
+    if (!formData.transportMode) {
+      alert('Please select a mode of transport (Air / Sea / Road).');
+      return;
+    }
+
+    if (!formData.shipmentDirection) {
+      alert('Please select a shipment direction.');
+      return;
+    }
+
+    if (formData.pickupOption === 'needPickup') {
+      let missingFields = [];
+      if (!formData.pickupRegion.trim()) missingFields.push('Region');
+      if (!formData.pickupProvince.trim()) missingFields.push('Province');
+      if (!formData.pickupCity.trim()) missingFields.push('City');
+      if (!formData.pickupBarangay.trim()) missingFields.push('Barangay');
+      if (!formData.pickupDetailedAddress?.trim()) missingFields.push('Street Address');
+      if (missingFields.length > 0) {
+        alert('Please fill in the following pickup address fields: ' + missingFields.join(', '));
+        return;
+      }
+    }
+
+    const isFullLoad = formData.loadType === 'FCL' || formData.loadType === 'FTL';
+
+    // Validate packages
+    if (isFullLoad) {
+      if (formData.packages.length === 0 || !formData.packages[0].weight) {
+        alert('Please enter the total weight.');
+        return;
+      }
+    } else {
+      if (
+        formData.packages.length === 0 ||
+        formData.packages.some(
+          (pkg) => !pkg.length || !pkg.width || !pkg.height || !pkg.weight
+        )
+      ) {
+        alert('Please add at least one package and fill in dimensions and weight.');
+        return;
+      }
+    }
+
+    const user = auth.currentUser;
+    const normalizedEmail = (user?.email || formData.email || '').toLowerCase().trim();
+
     const requestData = {
       name: formData.name,
-      email: formData.email,
+      email: normalizedEmail,
+      userUid: user?.uid || null,
       mobile: formData.mobile,
-      shipmentDestination: formData.shipmentDestination,
-      serviceType: formData.serviceType,
+      senderCountry: formData.senderCountry,
+      destinationCountry: formData.destinationCountry,
+      destinationAddress: formData.destinationAddress,
+      transportMode: formData.transportMode,
+      shipmentDirection: formData.shipmentDirection,
+      loadType: formData.loadType,
       pickupOption: formData.pickupOption,
       pickupAddress:
         formData.pickupOption === 'needPickup'
@@ -69,10 +319,14 @@ const ShippingServiceRequestForm = () => {
               province: formData.pickupProvince,
               city: formData.pickupCity,
               barangay: formData.pickupBarangay,
+              detailedAddress: formData.pickupDetailedAddress,
             }
           : null,
-      pickupVehicleSize: formData.pickupOption === 'needPickup' ? formData.pickupVehicleSize : null,
-      packageImage: formData.packageImage ? formData.packageImage.name : null,
+      packages: formData.packages.map((pkg) => ({
+        ...pkg,
+        image: pkg.image ? pkg.image.name : null,
+      })),
+      additionalServices: formData.additionalServices,
       createdAt: serverTimestamp(),
       requestTime: new Date().toISOString(),
       status: 'Processing',
@@ -82,201 +336,474 @@ const ShippingServiceRequestForm = () => {
       await addDoc(collection(db, 'shipRequests'), requestData);
       alert('Shipping Service Request Submitted!');
 
-      setFormData({
-        name: '',
+      // keep email and name if locked, reset others
+      setFormData((prev) => ({
+        name: isNameLocked ? prev.name : '',
+        email: isEmailLocked ? prev.email : '',
         mobile: '',
-        shipmentDestination: '',
-        serviceType: '',
+        senderCountry: '',
+        destinationCountry: '',
+        destinationAddress: '',
+        transportMode: '',
+        shipmentDirection: '',
+        loadType: '',
         pickupOption: 'deliverToWarehouse',
         pickupRegion: '',
         pickupProvince: '',
         pickupCity: '',
         pickupBarangay: '',
-        pickupVehicleSize: '',
-        packageImage: null,
+        pickupDetailedAddress: '',
+        packages: [{
+          length: '',
+          width: '',
+          height: '',
+          weight: '',
+          contents: '',
+          image: null,
+        }],
         agreedToTerms: false,
-      });
+        additionalServices: {
+          Documentation: false,
+          'Customs Clearance': false,
+          Brokerage: false,
+          Consolidation: false,
+        },
+      }));
+      setCurrentStep(1);
     } catch (err) {
       console.error('Error submitting request:', err);
       alert('Failed to submit. Please try again.');
     }
   };
 
+  const availableTransportModes = isDomestic ? ['Air', 'Sea', 'Road'] : ['Air', 'Sea'];
+
+  const isLoadTypeVisible = formData.transportMode === 'Sea' || formData.transportMode === 'Road';
+
+  const isFullLoad = formData.loadType === 'FCL' || formData.loadType === 'FTL';
+
+  const isRoad = formData.transportMode === 'Road';
+
   return (
-    <div className="max-w-4xl mx-auto p-8 bg-white shadow-lg rounded-xl mt-10 mb-20 border border-gray-200">
-      <h2 className="text-3xl font-bold mb-6 text-center text-blue-700">Shipping Service Request</h2>
+    <div className="max-w-4xl mx-auto p-8 bg-white drop-shadow-[0px_2px_5px_rgba(0,0,0,1)] shadow-xl rounded-xl mt-10 mb-20 border border-gray-200">
+      <h2 className="text-3xl font-bold mb-6 text-center text-blue-700 pb-2">Shipping Service Request</h2>
+
+      {/* Tab Indicators */}
+      <div className="flex justify-around mb-6 border-b pb-4">
+        <div className={`cursor-default px-4 py-2 ${currentStep === 1 ? 'border-b-2 border-blue-500 font-bold text-blue-700' : 'text-gray-500'}`}>
+          Step 1: Origin & Destination
+        </div>
+        <div className={`cursor-default px-4 py-2 ${currentStep === 2 ? 'border-b-2 border-blue-500 font-bold text-blue-700' : 'text-gray-500'}`}>
+          Step 2: Shipper Details
+        </div>
+        <div className={`cursor-default px-4 py-2 ${currentStep === 3 ? 'border-b-2 border-blue-500 font-bold text-blue-700' : 'text-gray-500'}`}>
+          Step 3: Package & Pickup
+        </div>
+      </div>
+
       <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Name */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium text-gray-700">Your Name</label>
-          <input
-            type="text"
-            name="name"
-            value={formData.name}
-            onChange={handleChange}
-            required
-            placeholder="John Doe"
-            className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        {/* Email */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium text-gray-700">Email Address</label>
-          <input
-            type="email"
-            name="email"
-            value={formData.email}
-            onChange={handleChange}
-            required
-            placeholder="you@example.com"
-            className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        {/* Mobile Number */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium text-gray-700">Mobile Number</label>
-          <div className="flex rounded-md shadow-sm">
-            <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-100 text-gray-700 text-sm">
-              +63
-            </span>
-            <input
-              type="tel"
-              name="mobile"
-              value={formData.mobile}
-              onChange={handleChange}
-              required
-              placeholder="9123456789"
-              pattern="[0-9]{10}" // optional validation
-              className="p-2 border border-gray-300 rounded-r-md focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
-            />
-          </div>
-        </div>
-        {/* Shipment Destination */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium text-gray-700">Shipment Destination (City, Country)</label>
-          <input
-            type="text"
-            name="shipmentDestination"
-            value={formData.shipmentDestination}
-            onChange={handleChange}
-            required
-            placeholder="e.g., New York, USA"
-            className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        {/* Service Type */}
-        <div className="flex flex-col">
-          <label className="mb-1 font-medium text-gray-700">Service Type</label>
-          <select
-            name="serviceType"
-            value={formData.serviceType}
-            onChange={handleChange}
-            required
-            className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">Select service type</option>
-            <option value="Import & Export (Air/Sea Freight)">Import & Export (Air/Sea Freight)</option>
-            <option value="Domestic (Air/Sea Freight)">Domestic (Air/Sea Freight)</option>
-            <option value="Full Container Load (FCL)">Full Container Load (FCL)</option>
-            <option value="Less than Container Load (LCL)">Less than Container Load (LCL)</option>
-            <option value="Pick-up and Delivery">Pick-up and Delivery</option>
-            <option value="Full Truckload (FTL)">Full Truckload (FTL)</option>
-            <option value="Less than Truckload (LTL)">Less than Truckload (LTL)</option>
-          </select>
-        </div>
-
-        {/* Pickup Option */}
-        <div className="md:col-span-2 mt-4">
-          <h3 className="text-xl font-semibold mb-2">How will the package reach us?</h3>
-          <div className="flex gap-4">
-            <label className="flex items-center">
-              <input
-                type="radio"
-                name="pickupOption"
-                value="deliverToWarehouse"
-                checked={formData.pickupOption === 'deliverToWarehouse'}
-                onChange={handleChange}
-                className="mr-2"
-              />
-              &nbsp;I will deliver to the warehouse
-            </label>
-            <label className="flex items-center">
-              <input
-                type="radio"
-                name="pickupOption"
-                value="needPickup"
-                checked={formData.pickupOption === 'needPickup'}
-                onChange={handleChange}
-                className="mr-2"
-              />
-              &nbsp;I need pickup from my location
-            </label>
-          </div>
-        </div>
-
-        {/* Conditional Pickup Address and Vehicle Size */}
-        {formData.pickupOption === 'needPickup' && (
-          <div className="md:col-span-2 mt-4">
-            <h3 className="text-xl font-semibold mb-4">Pickup Address</h3>
-            <AddressSelector onSelect={handlePickupAddressSelect} />
-            <div className="flex flex-col mt-4">
-              <label className="mb-1 font-medium text-gray-700">Vehicle Size for Pickup</label>
+        {currentStep === 1 && (
+          <>
+            {/* Sender Country */}
+            <div className="flex flex-col">
+              <label className="mb-1 font-medium text-gray-700">From:</label>
               <select
-                name="pickupVehicleSize"
-                value={formData.pickupVehicleSize}
+                name="senderCountry"
+                value={formData.senderCountry}
                 onChange={handleChange}
                 required
                 className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">Select vehicle size</option>
-                <option value="Small Van">Small Van (up to 500 kg)</option>
-                <option value="Medium Truck">Medium Truck (500 kg to 2 tons)</option>
-                <option value="Large Truck">Large Truck (2 tons to 10 tons)</option>
-                <option value="Full Truckload (FTL)">Full Truckload (FTL)</option>
+                <option value="">Select country</option>
+                {countries.map((country) => (
+                  <option key={country.value} value={country.label}>
+                    {country.label}
+                  </option>
+                ))}
               </select>
+            </div>
+
+            {/* Destination Country */}
+            <div className="flex flex-col">
+              <label className="mb-1 font-medium text-gray-700">To:</label>
+              <select
+                name="destinationCountry"
+                value={formData.destinationCountry}
+                onChange={handleChange}
+                required
+                className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select country</option>
+                {countries.map((country) => (
+                  <option key={country.value} value={country.label}>
+                    {country.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="md:col-span-2 flex justify-end mt-20">
+              <button
+                type="button"
+                onClick={handleNext}
+                className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 transition"
+              >
+                Next
+              </button>
+            </div>
+          </>
+        )}
+
+        {currentStep === 2 && (
+          <>
+            {/* Name */}
+            <div className="flex flex-col">
+              <label className="mb-1 font-medium text-gray-700">Full Name</label>
+              <input
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                required
+                placeholder="John Doe"
+                disabled={isNameLocked}
+                className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+              />
+              {isNameLocked && <p className="text-sm text-gray-500 mt-1">Logged in name cannot be changed.</p>}
+            </div>
+
+            {/* Email */}
+            <div className="flex flex-col">
+              <label className="mb-1 font-medium text-gray-700">Email Address</label>
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                required
+                placeholder="you@example.com"
+                disabled={isEmailLocked}
+                className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+              />
+              {isEmailLocked && <p className="text-sm text-gray-500 mt-1">Logged in email cannot be changed.</p>}
+            </div>
+
+            {/* Destination Address */}
+            <div className="md:col-span-2 flex flex-col">
+              <label className="mb-1 font-medium text-gray-700">Destination Address (Warehouse, Business Location, or Street Address)</label>
+              <textarea
+                name="destinationAddress"
+                value={formData.destinationAddress}
+                onChange={handleChange}
+                required
+                placeholder="Enter full destination address"
+                className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows="3"
+              />
+            </div>
+
+            {/* Mobile */}
+            <div className="flex flex-col">
+              <label className="mb-1 font-medium text-gray-700">Mobile Number</label>
+              <PhoneInput
+                international
+                defaultCountry="PH"
+                placeholder="Enter phone number"
+                value={formData.mobile}
+                onChange={(value) => setFormData((prev) => ({ ...prev, mobile: value }))}
+                required
+                className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* Transport Mode */}
+            <div className="flex flex-col">
+              <label className="mb-1 font-medium text-gray-700">Mode of Transport</label>
+              <select
+                name="transportMode"
+                value={formData.transportMode}
+                onChange={handleChange}
+                required
+                className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select mode</option>
+                {availableTransportModes.map((m) => (
+                  <option key={m} value={m}>{m} Freight</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Shipment Direction */}
+            <div className="flex flex-col">
+              <label className="mb-1 font-medium text-gray-700">Shipment Direction</label>
+              {isDomestic || isRoad ? (
+                <input
+                  type="text"
+                  value="Domestic"
+                  disabled
+                  className="p-2 border border-gray-300 rounded-md bg-gray-100"
+                />
+              ) : (
+                <select
+                  name="shipmentDirection"
+                  value={formData.shipmentDirection}
+                  onChange={handleChange}
+                  required
+                  disabled={!formData.transportMode}
+                  className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select direction</option>
+                  <option value="Import">Import</option>
+                  <option value="Export">Export</option>
+                </select>
+              )}
+              {!formData.transportMode && !isDomestic && <p className="text-sm text-gray-500 mt-1">Please select transport mode first.</p>}
+            </div>
+
+            {/* Load Type - dynamic based on transportMode */}
+            {isLoadTypeVisible && (
+              <div className="flex flex-col">
+                <label className="mb-1 font-medium text-gray-700">Load Type</label>
+                <select
+                  name="loadType"
+                  value={formData.loadType}
+                  onChange={handleChange}
+                  required
+                  className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select load type</option>
+                  {LOAD_OPTIONS[formData.transportMode].map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Additional Services Checklist */}
+            {!isRoad && (
+              <div className="flex flex-col mt-2">
+                <label className="mb-1 font-medium text-gray-700">Additional Services</label>
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-1 text-sm">
+                    <input type="checkbox" className="pr-2" name="Documentation" checked={formData.additionalServices.Documentation} onChange={handleAdditionalServiceChange} />
+                    &nbsp;Documentation
+                  </label>
+                  <label className="flex items-center gap-1 text-sm">
+                    <input type="checkbox" name="Customs Clearance" checked={formData.additionalServices['Customs Clearance']} onChange={handleAdditionalServiceChange} />
+                    &nbsp;Customs Clearance
+                  </label>
+                  <label className="flex items-center gap-1 text-sm">
+                    <input type="checkbox" name="Brokerage" checked={formData.additionalServices.Brokerage} onChange={handleAdditionalServiceChange} />
+                    &nbsp;Brokerage
+                  </label>
+                  <label className="flex items-center gap-1 text-sm">
+                    <input type="checkbox" name="Consolidation" checked={formData.additionalServices.Consolidation} onChange={handleAdditionalServiceChange} />
+                    &nbsp;Consolidation
+                  </label>
+                </div>
+              </div>
+            )}
+
+            <div className="md:col-span-2 flex justify-between mt-4">
+              <button
+                type="button"
+                onClick={handleBack}
+                className="bg-gray-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-gray-700 transition"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={handleNext}
+                className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 transition"
+              >
+                Next
+              </button>
+            </div>
+          </>
+        )}
+
+        {currentStep === 3 && (
+          <div className="md:col-span-2">
+            {/* Pickup Option */}
+            <div className="mt-4">
+              <h3 className="text-xl font-semibold mb-2">How will the package reach us?</h3>
+              <div className="flex gap-4">
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="pickupOption"
+                    value="deliverToWarehouse"
+                    checked={formData.pickupOption === 'deliverToWarehouse'}
+                    onChange={handleChange}
+                    className="mr-2"
+                  />
+                  I will deliver to the warehouse
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="pickupOption"
+                    value="needPickup"
+                    checked={formData.pickupOption === 'needPickup'}
+                    onChange={handleChange}
+                    className="mr-2"
+                  />
+                  I need pickup from my location
+                </label>
+              </div>
+              {formData.pickupOption === 'needPickup' && (
+                <p className="text-red-500 mt-2">Note: A downpayment is required for pickup service.</p>
+              )}
+            </div>
+
+            {/* Conditional Pickup Address */}
+            {formData.pickupOption === 'needPickup' && (
+              <div className="mt-4">
+                <h3 className="text-xl font-semibold mb-4">Pickup Address</h3>
+                <AddressSelector onSelect={handlePickupAddressSelect} />
+                <div className="flex flex-col mt-4">
+                  <label className="mb-1 font-medium text-gray-700">Street Address</label>
+                  <textarea
+                    name="pickupDetailedAddress"
+                    value={formData.pickupDetailedAddress}
+                    onChange={handleChange}
+                    placeholder="Enter street, house number, etc."
+                    className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    rows="3"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Packages */}
+            <div className="mt-4">
+              <h3 className="text-xl font-semibold mb-4">Packages</h3>
+              {formData.packages.map((pkg, index) => (
+                <div key={index} className="border border-gray-300 p-4 mb-4 rounded-md relative">
+                  {!isFullLoad ? (
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                      <div className="flex flex-col">
+                        <label className="mb-1 font-medium text-gray-700">Length (cm)</label>
+                        <input
+                          type="number"
+                          placeholder="Length"
+                          value={pkg.length}
+                          onChange={(e) => updatePackage(index, 'length', e.target.value)}
+                          required
+                          className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div className="flex flex-col">
+                        <label className="mb-1 font-medium text-gray-700">Width (cm)</label>
+                        <input
+                          type="number"
+                          placeholder="Width"
+                          value={pkg.width}
+                          onChange={(e) => updatePackage(index, 'width', e.target.value)}
+                          required
+                          className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div className="flex flex-col">
+                        <label className="mb-1 font-medium text-gray-700">Height (cm)</label>
+                        <input
+                          type="number"
+                          placeholder="Height"
+                          value={pkg.height}
+                          onChange={(e) => updatePackage(index, 'height', e.target.value)}
+                          required
+                          className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div className="flex flex-col">
+                        <label className="mb-1 font-medium text-gray-700">Weight (kg)</label>
+                        <input
+                          type="number"
+                          placeholder="Weight"
+                          value={pkg.weight}
+                          onChange={(e) => updatePackage(index, 'weight', e.target.value)}
+                          required
+                          className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col mb-4">
+                      <label className="mb-1 font-medium text-gray-700">Total Weight (kg)</label>
+                      <input
+                        type="number"
+                        placeholder="Total Weight"
+                        value={pkg.weight}
+                        onChange={(e) => updatePackage(index, 'weight', e.target.value)}
+                        required
+                        className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  )}
+                  <div className="flex flex-col mb-4">
+                    <label className="mb-1 font-medium text-gray-700">Contents (optional)</label>
+                    <textarea
+                      placeholder="Describe contents"
+                      value={pkg.contents}
+                      onChange={(e) => updatePackage(index, 'contents', e.target.value)}
+                      className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="flex flex-col">
+                    <label className="mb-1 font-medium text-gray-700">Upload Item Image (Optional, max 5MB)</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handlePackageFileChange(index, e.target.files[0])}
+                      className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  {!isFullLoad && formData.packages.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removePackage(index)}
+                      className="absolute top-2 right-2 bg-red-600 text-white font-semibold py-1 px-2 rounded-md hover:bg-red-700 transition"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              ))}
+              {!isFullLoad && (
+                <button
+                  type="button"
+                  onClick={addPackage}
+                  className="bg-green-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-green-700 transition"
+                >
+                  Add Another Package
+                </button>
+              )}
+            </div>
+
+            {/* Terms of Service Agreement */}
+            <div className="flex flex-col items-center mt-6">
+              <div className="flex items-center mb-4">
+                <input type="checkbox" name="agreedToTerms" checked={formData.agreedToTerms} onChange={handleChange} required className="mr-2" />
+                <label className="text-sm text-gray-700">&nbsp;I agree to the{' '}
+                  <Link to="/TermsAndConditions" className="text-blue-600 underline">Terms and Conditions</Link>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex justify-between mt-4">
+              <button
+                type="button"
+                onClick={handleBack}
+                className="bg-gray-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-gray-700 transition"
+              >
+                Back
+              </button>
+              <button type="submit" className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 transition">Submit Request</button>
             </div>
           </div>
         )}
-
-        {/* Package Image Upload (Optional) */}
-        <div className="flex flex-col md:col-span-2">
-          <label className="mb-1 font-medium text-gray-700">Upload Item Image (Optional, max 5MB)</label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleFileChange}
-            className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-
-        {/* Terms of Service Agreement and Submit Button */}
-        <div className="md:col-span-2 flex flex-col items-center mt-6">
-          <div className="flex items-center mb-4">
-            <input
-              type="checkbox"
-              name="agreedToTerms"
-              checked={formData.agreedToTerms}
-              onChange={handleChange}
-              required
-              className="mr-2"
-            />
-            <label className="text-sm text-gray-700">
-              &nbsp;I agree to the{' '}
-              <Link to="/TermsAndConditions" className="text-blue-600 underline">
-                Terms and Conditions
-              </Link>
-            </label>
-          </div>
-          <button
-            type="submit"
-            className="bg-blue-600 text-white font-semibold py-3 px-8 rounded-md hover:bg-blue-700 transition"
-          >
-            Submit Request
-          </button>
-        </div>
       </form>
     </div>
   );
-};
-
-export default ShippingServiceRequestForm;
+}

@@ -53,6 +53,10 @@ const Sidebar = () => {
         <Link to="/AdminMessages" className={navLink(location, "/AdminMessages")}>
           <FaInbox className="mr-3" /> Messages
         </Link>
+        <Link to="/Reports" className={navLink(location, "/Reports")}>
+          <FaTruck className="mr-3" /> Reports
+        </Link>
+        
       </nav>
 
       <div className="absolute bottom-5 left-5 flex flex-col space-y-3">

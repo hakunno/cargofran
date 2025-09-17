@@ -4,17 +4,27 @@ import "aos/dist/aos.css";
 
 import aboutUsBg from "../assets/About.png";
 import logo from "../assets/man.png";
-import flc from "../assets/locationthing.png"
-import trustedpartner from "../assets/trustedpartners.png"
+import flc from "../assets/locationthing.png";
+import trustedpartner from "../assets/trustedpartners.png";
 import portrait from "../assets/box.png"; // <-- your big portrait image
-import partner1 from "../assets/General_Transport.avif"; // replace with actual logos
+import partner1 from "../assets/General_Transport.avif";
 import partner2 from "../assets/IDI_Software.avif";
 import partner3 from "../assets/Tri-Nex.avif";
 import partner4 from "../assets/Imogen_Cars.avif";
 
 const AboutUs = () => {
   useEffect(() => {
-    AOS.init({ duration: 1000, once: true }); // 1s animation, run once
+    // 🔥 Reset animations when scrolling up
+    AOS.init({ duration: 1000, once: false });
+
+    const handleScroll = () => {
+      AOS.refresh();
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
   }, []);
 
   return (

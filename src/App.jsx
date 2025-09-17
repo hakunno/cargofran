@@ -14,6 +14,7 @@ import Messages from "./pages/Messages";
 import ChatWidget from "./component/ChatWidget";
 import ShippingInquiry from "./pages/ShippingInquiry";
 import TermsAndConditions from "./pages/TermsAndConditions";
+import MyShipments from "./pages/ShipmentHistory";
 
 /* ADMIN / STAFF */
 import AdminDashboard from "./pages/adminstaff/AdminDashboard";
@@ -21,11 +22,14 @@ import Shipments from "./pages/adminstaff/Shipments";
 import AdminMessages from "./pages/adminstaff/AdminMessages";
 import MessageRequest from "./pages/adminstaff/MessageRequest";
 import ShipmentRequest from "./pages/adminstaff/ShipmentRequest";
+import Reports from "./pages/adminstaff/Reports";
 
 const App = () => {
   const location = useLocation(); 
 
-  const hiddenFooterRoutes = ["/Shipments","/AdminMessages","/AdminDashboard","/Messages","/MessageRequest","/ShipmentRequest","/TrackPackage","/ShippingInquiry","/TermsAndConditions"];
+  const hiddenFooterRoutes = ["/Shipments","/AdminMessages","/AdminDashboard","/Messages","/MessageRequest"
+                              ,"/ShipmentRequest","/TrackPackage","/TermsAndConditions","/Reports"
+                              ,"/Contact","/MyShipments"];
   
   return (
     <>
@@ -51,6 +55,7 @@ const App = () => {
         <Route path="/ChatHelp" element={<FaqChat />} />
         <Route path="/Messages" element={<Messages />} />
         <Route path="/ShippingInquiry" element={<ShippingInquiry/>} />
+        <Route path="/MyShipments" element={<MyShipments/>} />
         <Route path="/TermsAndConditions" element={<TermsAndConditions/>} />
 
         {/* Protected Routes for Admin and Staff */}
@@ -91,6 +96,14 @@ const App = () => {
           element={
             <ProtectedRoute requiredRoles={["admin", "staff"]}>
               <ShipmentRequest />
+            </ProtectedRoute>
+          }
+        />
+          <Route
+          path="/Reports"
+          element={
+            <ProtectedRoute requiredRoles={["admin", "staff"]}>
+              <Reports />
             </ProtectedRoute>
           }
         />

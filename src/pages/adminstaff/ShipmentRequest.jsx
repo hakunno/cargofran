@@ -44,16 +44,26 @@ const ShipmentInquiryRequests = () => {
       const newPreviews = {};
       await Promise.all(
         inquiries.map(async (inquiry) => {
-          if (inquiry.validIds && inquiry.validIds.length > 0) {
-            try {
-              const fileName = inquiry.validIds[0];
-              const fileRef = ref(storage, `shipRequests/${inquiry.id}/${fileName}`);
-              const url = await getDownloadURL(fileRef);
-              newPreviews[inquiry.id] = url;
-            } catch (error) {
-              console.error('Error fetching preview for request', inquiry.id, error);
-            }
+          const urls = [];
+          if (inquiry.packages && Array.isArray(inquiry.packages)) {
+            await Promise.all(
+              inquiry.packages.map(async (pkg) => {
+                if (pkg.image) {
+                  try {
+                    const fileRef = ref(storage, `shipRequests/${inquiry.id}/${pkg.image}`);
+                    const url = await getDownloadURL(fileRef);
+                    urls.push(url);
+                  } catch (error) {
+                    console.error('Error fetching image for package', error);
+                    urls.push(null);
+                  }
+                } else {
+                  urls.push(null);
+                }
+              })
+            );
           }
+          newPreviews[inquiry.id] = urls;
         })
       );
       setPreviewUrls(newPreviews);
@@ -63,74 +73,75 @@ const ShipmentInquiryRequests = () => {
     }
   }, [inquiries]);
 
-const openAcceptModal = (inquiry) => {
-  setInquiryToAccept(inquiry);
-  setIsAcceptModalOpen(true);
-  setPackageNumberInput('');
-};
+  const openAcceptModal = (inquiry) => {
+    setInquiryToAccept(inquiry);
+    setIsAcceptModalOpen(true);
+    setPackageNumberInput('');
+  };
 
-const confirmAcceptWithPackageNumber = async () => {
-  if (!packageNumberInput.trim()) {
-    alert('Please enter a package number.');
-    return;
-  }
+  const confirmAcceptWithPackageNumber = async () => {
+    if (!packageNumberInput.trim()) {
+      alert('Please enter a package number.');
+      return;
+    }
 
-  try {
-    // Step 1: Get all current shipments to calculate the next customId
-    const querySnapshot = await getDocs(collection(db, "Packages"));
-    const allShipments = querySnapshot.docs.map(doc => doc.data());
-    const maxId = allShipments.reduce((max, shipment) => {
-      return shipment.customId && shipment.customId > max ? shipment.customId : max;
-    }, 0);
-    const newCustomId = maxId + 1;
+    try {
+      // Step 1: Get all current shipments to calculate the next customId
+      const querySnapshot = await getDocs(collection(db, "Packages"));
+      const allShipments = querySnapshot.docs.map(doc => doc.data());
+      const maxId = allShipments.reduce((max, shipment) => {
+        return shipment.customId && shipment.customId > max ? shipment.customId : max;
+      }, 0);
+      const newCustomId = maxId + 1;
 
-    // Step 2: Prepare the new shipment
-    const newShipment = {
-      ...inquiryToAccept, // ✅ spread first, so we can safely overwrite anything after
-      shipperName: inquiryToAccept.name,
-      packageNumber: packageNumberInput.trim(),
-      customId: newCustomId, // ✅ this now overwrites the one from the inquiry
-      dateStarted: new Date().toISOString(),
-      createdTime: serverTimestamp(),
-      packageStatus: 'Pending',
-    };
+      // Step 2: Prepare the new shipment
+      const newShipment = {
+        ...inquiryToAccept, // ✅ spread first, so we can safely overwrite anything after
+        shipperName: inquiryToAccept.name,
+        packageNumber: packageNumberInput.trim(),
+        customId: newCustomId, // ✅ this now overwrites the one from the inquiry
+        dateStarted: new Date().toISOString(),
+        createdTime: serverTimestamp(),
+        packageStatus: 'Processing',
+      };
 
-    delete newShipment.id;
-    delete newShipment.status;
+      delete newShipment.id;
+      delete newShipment.status;
 
-    // Step 3: Add to Packages collection
-    const docRef = await addDoc(collection(db, 'Packages'), newShipment);
+      // Step 3: Add to Packages collection
+      const docRef = await addDoc(collection(db, 'Packages'), newShipment);
 
-    // Step 4: Add to statusHistory
-    await addDoc(collection(db, 'Packages', docRef.id, 'statusHistory'), {
-      status: newShipment.packageStatus,
-      timestamp: serverTimestamp(),
-    });
+      // Step 4: Add to statusHistory
+      await addDoc(collection(db, 'Packages', docRef.id, 'statusHistory'), {
+        status: newShipment.packageStatus,
+        timestamp: serverTimestamp(),
+      });
 
-    // Step 5: Mark the inquiry as accepted
-    await updateDoc(doc(db, 'shipRequests', inquiryToAccept.id), {
-      status: 'Accepted',
-      acceptedAt: serverTimestamp(),
-    });
+      // Step 5: Mark the inquiry as accepted
+      await updateDoc(doc(db, 'shipRequests', inquiryToAccept.id), {
+        status: 'Accepted',
+        acceptedAt: serverTimestamp(),
+      });
 
-    alert(`Shipment created!`);
-    setInquiries((prev) => prev.filter((i) => i.id !== inquiryToAccept.id));
-    setPreviewUrls((prev) => {
-      const updated = { ...prev };
-      delete updated[inquiryToAccept.id];
-      return updated;
-    });
+      alert(`Shipment created!`);
+      setInquiries((prev) => prev.filter((i) => i.id !== inquiryToAccept.id));
+      setPreviewUrls((prev) => {
+        const updated = { ...prev };
+        delete updated[inquiryToAccept.id];
+        return updated;
+      });
 
-    await deleteDoc(doc(db, 'shipRequests', inquiryToAccept.id));
+      await deleteDoc(doc(db, 'shipRequests', inquiryToAccept.id));
 
-    closeModal();
-    setIsAcceptModalOpen(false);
-    setInquiryToAccept(null);
-  } catch (error) {
-    console.error('Error accepting request:', error);
-    alert('Failed to accept request. Please try again.');
-  }
-};
+      closeModal();
+      setIsAcceptModalOpen(false);
+      setInquiryToAccept(null);
+    } catch (error) {
+      console.error('Error accepting request:', error);
+      alert('Failed to accept request. Please try again.');
+    }
+  };
+
   const rejectInquiry = async (inquiry) => {
     const confirmReject = window.confirm('Reject this request? This will delete it permanently.');
     if (!confirmReject) return;
@@ -166,17 +177,17 @@ const confirmAcceptWithPackageNumber = async () => {
       <div className="flex-1 p-4 md:p-6">
         <h2 className="text-xl font-semibold text-center mb-4">Shipment Requests</h2>
         {inquiries.length === 0 ? (
-          <p className="text-center text-gray-700">No inquiries available.</p>
+          <p className="text-center text-gray-700">No requests available.</p>
         ) : (
           <div className="overflow-x-auto shadow rounded-lg">
             <table className="min-w-full border-collapse border border-gray-300">
               <thead className="bg-gray-200">
                 <tr>
                   <th className="p-2 border border-gray-300">Name</th>
-                  <th className="p-2 border border-gray-300">From</th>
-                  <th className="p-2 border border-gray-300">Service Type</th>
-                  <th className="p-2 border border-gray-300">Valid ID</th>
-                  <th className="p-2 border border-gray-300">Status</th>
+                  <th className="p-2 border border-gray-300">Sender Country</th>
+                  <th className="p-2 border border-gray-300">Destination Country</th>
+                  <th className="p-2 border border-gray-300">Transport Mode</th>
+                  <th className="p-2 border border-gray-300">Shipment Direction</th>
                   <th className="p-2 border border-gray-300">Actions</th>
                 </tr>
               </thead>
@@ -184,20 +195,10 @@ const confirmAcceptWithPackageNumber = async () => {
                 {inquiries.map((inquiry) => (
                   <tr key={inquiry.id} className="text-center hover:bg-gray-50">
                     <td className="p-2 border border-gray-300">{inquiry.name}</td>
-                    <td className="p-2 border border-gray-300">{inquiry.from}</td>
-                    <td className="p-2 border border-gray-300">{inquiry.serviceType}</td>
-                    <td className="p-2 border border-gray-300">
-                      {previewUrls[inquiry.id] ? (
-                        <img
-                          src={previewUrls[inquiry.id]}
-                          alt="Valid ID Preview"
-                          className="w-24 h-auto object-contain border border-gray-300 rounded"
-                        />
-                      ) : (
-                        <span className="text-gray-500">No image</span>
-                      )}
-                    </td>
-                    <td className="p-2 border border-gray-300">{inquiry.status}</td>
+                    <td className="p-2 border border-gray-300">{inquiry.senderCountry}</td>
+                    <td className="p-2 border border-gray-300">{inquiry.destinationCountry}</td>
+                    <td className="p-2 border border-gray-300">{inquiry.transportMode}</td>
+                    <td className="p-2 border border-gray-300">{inquiry.shipmentDirection}</td>
                     <td className="p-2 border border-gray-300">
                       <div className="flex flex-col md:flex-row gap-2 justify-center">
                         <button
@@ -224,6 +225,12 @@ const confirmAcceptWithPackageNumber = async () => {
               <p><strong>Name:</strong> {selectedInquiry.name}</p>
               <p><strong>Email:</strong> {selectedInquiry.email}</p>
               <p><strong>Mobile:</strong> {selectedInquiry.mobile}</p>
+              <p><strong>Sender Country:</strong> {selectedInquiry.senderCountry}</p>
+              <p><strong>Destination Country:</strong> {selectedInquiry.destinationCountry}</p>
+              <p><strong>Destination Address:</strong> {selectedInquiry.destinationAddress}</p>
+              <p><strong>Transport Mode:</strong> {selectedInquiry.transportMode}</p>
+              <p><strong>Shipment Direction:</strong> {selectedInquiry.shipmentDirection}</p>
+              {selectedInquiry.loadType && <p><strong>Load Type:</strong> {selectedInquiry.loadType}</p>}
               <p><strong>Pickup Option:</strong> {selectedInquiry.pickupOption === 'needPickup' ? 'Need Pickup' : 'Deliver to Warehouse'}</p>
 
               {selectedInquiry.pickupOption === 'needPickup' && selectedInquiry.pickupAddress && (
@@ -232,29 +239,55 @@ const confirmAcceptWithPackageNumber = async () => {
                   <p><strong>Province:</strong> {selectedInquiry.pickupAddress.province}</p>
                   <p><strong>City:</strong> {selectedInquiry.pickupAddress.city}</p>
                   <p><strong>Barangay:</strong> {selectedInquiry.pickupAddress.barangay}</p>
-                  <p><strong>Pickup Vehicle Size:</strong> {selectedInquiry.pickupVehicleSize}</p>
+                  <p><strong>Detailed Address:</strong> {selectedInquiry.pickupAddress.detailedAddress}</p>
                 </>
               )}
 
               <hr className="my-4" />
-              <p><strong>Shipment Destination:</strong> {selectedInquiry.shipmentDestination}</p>
-              <p><strong>Service Type:</strong> {selectedInquiry.serviceType}</p>
-              <p><strong>Request Time:</strong> {selectedInquiry.requestTime ? new Date(selectedInquiry.requestTime).toLocaleString() : 'N/A'}</p>
-              <p><strong>Status:</strong> {selectedInquiry.status}</p>
 
-              {previewUrls[selectedInquiry.id] && (
-                <div className="mt-4 flex justify-center">
-                  <img
-                    src={previewUrls[selectedInquiry.id]}
-                    alt="Package Image Preview"
-                    className="w-64 h-auto object-contain border border-gray-300 rounded"
-                  />
-                </div>
+              <h4 className="text-lg font-semibold">Packages:</h4>
+              {selectedInquiry.packages && Array.isArray(selectedInquiry.packages) ? (
+                selectedInquiry.packages.map((pkg, idx) => {
+                  const isFullLoad = selectedInquiry.loadType === 'FCL' || selectedInquiry.loadType === 'FTL';
+                  return (
+                    <div key={idx} className="mb-4 border-b pb-2">
+                      <p><strong>Package {idx + 1}:</strong></p>
+                      {!isFullLoad ? (
+                        <p>
+                          Dimensions: {pkg.length} x {pkg.width} x {pkg.height} cm, Weight: {pkg.weight} kg
+                        </p>
+                      ) : (
+                        <p>Total Weight: {pkg.weight} kg</p>
+                      )}
+                      <p>Contents: {pkg.contents || 'N/A'}</p>
+                      {previewUrls[selectedInquiry.id]?.[idx] && (
+                        <div className="mt-2">
+                          <img
+                            src={previewUrls[selectedInquiry.id][idx]}
+                            alt={`Package ${idx + 1} Image`}
+                            className="w-64 h-auto object-contain border border-gray-300 rounded"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <p>No packages available.</p>
               )}
+
+              <p>
+                <strong>Additional Services:</strong>{' '}
+                {Object.keys(selectedInquiry.additionalServices || {})
+                  .filter((key) => selectedInquiry.additionalServices[key])
+                  .join(', ') || 'None'}
+              </p>
+
+              <p><strong>Request Time:</strong> {selectedInquiry.requestTime ? new Date(selectedInquiry.requestTime).toLocaleString() : 'N/A'}</p>
             </div>
             <div className="mt-6 flex flex-col md:flex-row gap-2 justify-center">
               <button
-                onClick={() => openAcceptModal(selectedInquiry) }
+                onClick={() => openAcceptModal(selectedInquiry)}
                 className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded"
               >
                 Accept
@@ -271,37 +304,38 @@ const confirmAcceptWithPackageNumber = async () => {
               >
                 Close
               </button>
-              {isAcceptModalOpen && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-                <div className="bg-white rounded-lg shadow-lg w-11/12 max-w-md p-6">
-                  <h3 className="text-xl font-bold mb-4">Enter Package Number</h3>
-                  <input
-                    type="text"
-                    className="w-full p-2 border border-gray-300 rounded mb-4"
-                    placeholder="Package Number"
-                    value={packageNumberInput}
-                    onChange={(e) => setPackageNumberInput(e.target.value)}
-                  />
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => {
-                        setIsAcceptModalOpen(false);
-                        setInquiryToAccept(null);
-                      }}
-                      className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={confirmAcceptWithPackageNumber}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
-                    >
-                      Confirm
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isAcceptModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-lg shadow-lg w-11/12 max-w-md p-6">
+            <h3 className="text-xl font-bold mb-4">Enter Package Number</h3>
+            <input
+              type="text"
+              className="w-full p-2 border border-gray-300 rounded mb-4"
+              placeholder="Package Number"
+              value={packageNumberInput}
+              onChange={(e) => setPackageNumberInput(e.target.value)}
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setIsAcceptModalOpen(false);
+                  setInquiryToAccept(null);
+                }}
+                className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmAcceptWithPackageNumber}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
+              >
+                Confirm
+              </button>
             </div>
           </div>
         </div>

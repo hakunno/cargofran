@@ -162,9 +162,10 @@ const Navbar = () => {
                 <NavLink
                   to="/About"
                   className={({ isActive }) =>
-                    `lexend relative block py-2 px-3 text-black no-underline transition-all duration-200 transform hover:scale-105 active:scale-95 
+                    `lexend relative block py-2 px-3 text-black no-underline transition-all duration-200 
+                    hover:scale-105 active:scale-95 
                     after:content-[''] after:absolute after:left-0 after:bottom-0 after:h-[2px] after:bg-blue-500 after:transition-all after:duration-300
-                    ${isActive ? "after:w-0 scale-110" : "after:w-0 hover:after:w-full"}`
+                    ${isActive ? "after:w-full" : "after:w-0 hover:after:w-full"}`
                   }
                 >
                   About Us
@@ -172,9 +173,10 @@ const Navbar = () => {
                 <NavLink
                   to="/Services"
                   className={({ isActive }) =>
-                    `lexend relative block py-2 px-3 text-black no-underline transition-all duration-200 transform hover:scale-105 active:scale-95 
+                    `lexend relative block py-2 px-3 text-black no-underline transition-all duration-200 
+                    hover:scale-105 active:scale-95 
                     after:content-[''] after:absolute after:left-0 after:bottom-0 after:h-[2px] after:bg-blue-500 after:transition-all after:duration-300
-                    ${isActive ? "after:w-0 scale-110" : "after:w-0 hover:after:w-full"}`
+                    ${isActive ? "after:w-full" : "after:w-0 hover:after:w-full"}`
                   }
                 >
                   Services
@@ -186,9 +188,10 @@ const Navbar = () => {
                 <NavLink
                   to="/About"
                   className={({ isActive }) =>
-                    `lexend relative block py-2 px-3 text-black no-underline transition-all duration-200 transform hover:scale-105 active:scale-95 
+                    `lexend relative block py-2 px-3 text-black no-underline transition-all duration-200 
+                    hover:scale-105 active:scale-95 
                     after:content-[''] after:absolute after:left-0 after:bottom-0 after:h-[2px] after:bg-blue-500 after:transition-all after:duration-300
-                    ${isActive ? "after:w-0 scale-110" : "after:w-0 hover:after:w-full"}`
+                    ${isActive ? "after:w-full" : "after:w-0 hover:after:w-full"}`
                   }
                 >
                   About Us
@@ -196,9 +199,10 @@ const Navbar = () => {
                 <NavLink
                   to="/Services"
                   className={({ isActive }) =>
-                    `lexend relative block py-2 px-3 text-black no-underline transition-all duration-200 transform hover:scale-105 active:scale-95 
+                    `lexend relative block py-2 px-3 text-black no-underline transition-all duration-200 
+                    hover:scale-105 active:scale-95 
                     after:content-[''] after:absolute after:left-0 after:bottom-0 after:h-[2px] after:bg-blue-500 after:transition-all after:duration-300
-                    ${isActive ? "after:w-0 scale-110" : "after:w-0 hover:after:w-full"}`
+                    ${isActive ? "after:w-full" : "after:w-0 hover:after:w-full"}`
                   }
                 >
                   Services
@@ -365,6 +369,18 @@ const Navbar = () => {
               </li>
               <li className="w-full">
                 <NavLink
+                  to='/ShipmentRequest'
+                  onClick={() => setIsOpen(false)}
+                  className={({ isActive }) =>
+                    `kanit-regular border-b-1 border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
+                    ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
+                  }
+                >
+                  Shipment Request
+                </NavLink>
+              </li>
+              <li className="w-full">
+                <NavLink
                   to='/MessageRequest'
                   onClick={() => setIsOpen(false)}
                   className={({ isActive }) =>
@@ -502,7 +518,19 @@ const Navbar = () => {
                       ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
                     }
                   >
-                    Inquire Shipping (COD)
+                    Request Shipment
+                  </NavLink>
+                </li>
+                <li className="w-full">
+                  <NavLink
+                    to="/MyShipments"
+                    onClick={() => setIsOpen(false)}
+                    className={({ isActive }) =>
+                      `kanit-regular border-b-2 border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
+                      ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
+                    }
+                  >
+                    My Shipments
                   </NavLink>
                 </li>
                 <li className="w-full">

@@ -56,8 +56,8 @@ const TrackPackage = () => {
   };
 
   return (
-    <div className="max-w-3xl mx-auto p-6 bg-gray-50 rounded-lg mb-10 drop-shadow-[0px_2px_5px_rgba(0,0,0,1)] shadow-xl">
-      <h2 className="text-2xl font-semibold text-gray-800 mb-4">Track Package</h2>
+    <div className="max-w-4xl mx-auto mt-5 p-10 bg-gray-50 rounded-lg mb-10 drop-shadow-[0px_2px_5px_rgba(0,0,0,1)] shadow-xl">
+      <h2 className="text-2xl font-semibold text-gray-800 mb-4">Package Status</h2>
 
       <div className="flex flex-col sm:flex-row items-center mb-10 gap-4 mb-6">
         <input
@@ -84,18 +84,18 @@ const TrackPackage = () => {
 
           <div className="space-y-2 mb-6">
             <p><span className="font-semibold">Package Number:</span> {shipment.packageNumber}</p>
-            <p><span className="font-semibold">From:</span> {shipment.from}</p>
+            <p><span className="font-semibold">From:</span> {shipment.senderCountry || 'N/A'}</p>
+            <p><span className="font-semibold">To:</span> {shipment.destinationCountry || 'N/A'}</p>
             <p><span className="font-semibold">Current Status:</span> {shipment.packageStatus}</p>
-            <p><span className="font-semibold">Destination:</span> {shipment.destination}</p>
             <p><span className="font-semibold">Airway Bill:</span> {shipment.airwayBill || 'N/A'}</p>
           </div>
 
           <h4 className="text-lg font-medium text-gray-600 mb-3">Status History</h4>
 
           {statusHistory.length > 0 ? (
-            <ul className="space-y-2">
+            <ul className="pl-0! space-y-2">
               {statusHistory.map((entry) => (
-                <li key={entry.id} className="flex justify-between bg-gray-100 p-3 rounded">
+                <li key={entry.id} className="flex justify-between bg-gray-200 p-3 rounded">
                   <span>{entry.status}</span>
                   <span className="text-sm text-gray-500">
                     {entry.timestamp?.toDate

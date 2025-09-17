@@ -10,7 +10,7 @@ const Home = () => {
   const slides = [
     { 
       src: img1, 
-      label: "INQUIRE SHIPPING", 
+      label: "REQUEST SHIPPING", 
       to: "/shipments", 
       className: "oswald !text-4xl drop-shadow-[1px_0px_1px_rgba(0,0,0,1)]",
       info: "Learn more about our shipping services"

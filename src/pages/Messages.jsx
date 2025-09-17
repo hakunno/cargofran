@@ -366,7 +366,7 @@ const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMo
         const adminLast = conversationData.adminLastName || "";
         return `Chatting with: ${`${adminFirst} ${adminLast}`.trim()} (Admin)`;
       }
-      return `Chat FAQs`;
+      return `FLS Automatic Chat`;
     }
   };
 
@@ -389,6 +389,9 @@ const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMo
     : "h-screen";
 
   const basePadding = widgetMode ? "p-2" : "p-4";
+
+  const sendButtonText = conversationIsActive && messages.length === 0 ? "Start" : "Send";
+  const noMessagesText = conversationIsActive && messages.length === 0 ? "Start a conversation" : "No messages yet.";
 
   return (
     <div className={`flex flex-col w-full ${containerHeightClass}`}>
@@ -431,7 +434,7 @@ const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMo
               </div>
             ))
           ) : (
-            <p className="text-center text-gray-500">No messages yet.</p>
+            <p className="text-center text-gray-500">{noMessagesText}</p>
           )
         ) : (
           <p className="text-center text-gray-500">
@@ -493,7 +496,7 @@ const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMo
             disabled={isInputDisabled}
           />
           <button className="ml-2 p-2 bg-blue-500 text-white rounded" onClick={handleSendMessage} disabled={isInputDisabled}>
-            Send
+            {sendButtonText}
           </button>
         </div>
       )}

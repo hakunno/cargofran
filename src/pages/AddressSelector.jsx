@@ -1,7 +1,7 @@
 import addressData from '../data/philippines-addresses.json';
 import { useState, useEffect } from 'react';
 
-const AddressSelector = () => {
+const AddressSelector = ({ onSelect }) => {
   const [regionList, setRegionList] = useState([]);
   const [provinceList, setProvinceList] = useState([]);
   const [cityList, setCityList] = useState([]);
@@ -16,10 +16,22 @@ const AddressSelector = () => {
     setRegionList(addressData);
   }, []);
 
+  // Notify parent component of address changes
+  useEffect(() => {
+    if (onSelect) {
+      onSelect({
+        region: selectedRegion,
+        province: selectedProvince,
+        city: selectedCity,
+        barangay: selectedBarangay,
+      });
+    }
+  }, [selectedRegion, selectedProvince, selectedCity, selectedBarangay, onSelect]);
+
   const handleRegionChange = (e) => {
     const regionName = e.target.value;
     setSelectedRegion(regionName);
-    const region = addressData.find(r => r.region === regionName);
+    const region = addressData.find((r) => r.region === regionName);
     setProvinceList(region?.provinces || []);
     setCityList([]);
     setBarangayList([]);
@@ -31,8 +43,8 @@ const AddressSelector = () => {
   const handleProvinceChange = (e) => {
     const provinceName = e.target.value;
     setSelectedProvince(provinceName);
-    const region = addressData.find(r => r.region === selectedRegion);
-    const province = region?.provinces.find(p => p.province === provinceName);
+    const region = addressData.find((r) => r.region === selectedRegion);
+    const province = region?.provinces.find((p) => p.province === provinceName);
     setCityList(province?.cities || []);
     setBarangayList([]);
     setSelectedCity('');
@@ -42,9 +54,9 @@ const AddressSelector = () => {
   const handleCityChange = (e) => {
     const cityName = e.target.value;
     setSelectedCity(cityName);
-    const region = addressData.find(r => r.region === selectedRegion);
-    const province = region?.provinces.find(p => p.province === selectedProvince);
-    const city = province?.cities.find(c => c.city === cityName);
+    const region = addressData.find((r) => r.region === selectedRegion);
+    const province = region?.provinces.find((p) => p.province === selectedProvince);
+    const city = province?.cities.find((c) => c.city === cityName);
     setBarangayList(city?.barangays || []);
     setSelectedBarangay('');
   };

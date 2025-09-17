@@ -96,7 +96,7 @@ const deleteOrphanedConversations = async () => {
 const deleteCanceledPackages = async () => {
   try {
     // Calculate timestamp for 24 hours ago 24 * 60 * 60 * 1000
-    const twentyFourHoursAgo = new Date(Date.now() - 1 * 60 * 1000);
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
     // Query for packages with canceled true and createdAt <= 24 hours ago
     const snapshot = await db

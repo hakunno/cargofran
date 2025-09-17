@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Table, Button } from "react-bootstrap";
+import { Table, Button, Modal } from "react-bootstrap";
 import {
   collection,
   query,
@@ -8,12 +8,16 @@ import {
   updateDoc,
   doc,
   getDoc,
+  orderBy,
 } from "firebase/firestore";
 import { db, auth } from "../../jsfile/firebase"; // ✅ Ensure auth is imported
 import Sidebar from "../../component/adminstaff/Sidebar";
 
 const ConversationsAdmin = () => {
   const [conversations, setConversations] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [selectedConversation, setSelectedConversation] = useState(null);
+  const [messages, setMessages] = useState([]);
 
   useEffect(() => {
     // Fetch only pending conversations that have request set to "sent"
@@ -61,7 +65,26 @@ const ConversationsAdmin = () => {
     return { adminFirstName, adminLastName };
   };
 
-  const handleApprove = async (conv) => {
+  const handleShowDetails = async (conv) => {
+    setSelectedConversation(conv);
+    setShowModal(true);
+
+    // Fetch messages for the conversation
+    const messagesRef = collection(db, "conversations", conv.id, "messages");
+    const q = query(messagesRef, orderBy("timestamp", "asc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const msgs = snapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+      }));
+      setMessages(msgs);
+    });
+
+    // Note: You may want to unsubscribe when modal closes, but for simplicity, we'll let it run.
+  };
+
+  const handleApprove = async () => {
+    if (!selectedConversation) return;
     const confirmApprove = window.confirm("Approve this conversation?");
     if (!confirmApprove) return;
   
@@ -73,25 +96,32 @@ const ConversationsAdmin = () => {
       }
       
       const { adminFirstName, adminLastName } = await fetchAdminDetails();
-      await updateDoc(doc(db, "conversations", conv.id), {
+      await updateDoc(doc(db, "conversations", selectedConversation.id), {
         status: "approved",
         adminFirstName,
         adminLastName,
         adminId: currentAdmin.uid, // store the approver's UID
       });
+      setShowModal(false);
+      setSelectedConversation(null);
+      setMessages([]);
     } catch (error) {
       console.error("Error approving conversation:", error);
       alert("Failed to approve conversation. Please try again.");
     }
   };
   
-  const handleReject = async (conv) => {
+  const handleReject = async () => {
+    if (!selectedConversation) return;
     const confirmReject = window.confirm("Reject this conversation?");
     if (!confirmReject) return;
     try {
-      await updateDoc(doc(db, "conversations", conv.id), {
+      await updateDoc(doc(db, "conversations", selectedConversation.id), {
         status: "rejected",
       });
+      setShowModal(false);
+      setSelectedConversation(null);
+      setMessages([]);
     } catch (error) {
       console.error("Error rejecting conversation:", error);
       alert("Failed to reject conversation. Please try again.");
@@ -121,7 +151,6 @@ const ConversationsAdmin = () => {
                 <th className="p-2">User Full Name</th>
                 <th className="p-2">Email</th>
                 <th className="p-2">Time</th>
-                <th className="p-2">Status</th>
                 <th className="p-2">Actions</th>
               </tr>
             </thead>
@@ -132,22 +161,57 @@ const ConversationsAdmin = () => {
                   <td className="p-2">{getFullName(conv)}</td>
                   <td className="p-2">{conv.userEmail || "N/A"}</td>
                   <td className="p-2">{formatTimestamp(conv.createdAt)}</td>
-                  <td className="p-2">{conv.status}</td>
                   <td className="p-2">
-                    <div className="flex flex-col md:flex-row gap-2 justify-center">
-                      <Button variant="success" size="sm" onClick={() => handleApprove(conv)}>
-                        Approve
-                      </Button>
-                      <Button variant="danger" size="sm" onClick={() => handleReject(conv)}>
-                        Reject
-                      </Button>
-                    </div>
+                    <Button variant="info" size="sm" onClick={() => handleShowDetails(conv)}>
+                      Detail
+                    </Button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </Table>
         </div>
+
+        {/* Modal for Conversation Details */}
+        <Modal show={showModal} onHide={() => setShowModal(false)} size="lg">
+          <Modal.Header closeButton>
+            <Modal.Title>Conversation Details</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            {selectedConversation && (
+              <>
+                <p><strong>User Full Name:</strong> {getFullName(selectedConversation)}</p>
+                <p><strong>Email:</strong> {selectedConversation.userEmail || "N/A"}</p>
+                <p><strong>Created At:</strong> {formatTimestamp(selectedConversation.createdAt)}</p>
+                <hr />
+                <h5>Chat History</h5>
+                {messages.length > 0 ? (
+                  <ul>
+                    {messages.map((msg) => (
+                      <li key={msg.id}>
+                        <strong>{msg.senderId === "system" ? "System" : "User"}:</strong> {msg.text} 
+                        <small> ({formatTimestamp(msg.timestamp)})</small>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>No messages yet.</p>
+                )}
+              </>
+            )}
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowModal(false)}>
+              Close
+            </Button>
+            <Button variant="success" onClick={handleApprove}>
+              Accept
+            </Button>
+            <Button variant="danger" onClick={handleReject}>
+              Decline
+            </Button>
+          </Modal.Footer>
+        </Modal>
       </div>
     </div>
   );
