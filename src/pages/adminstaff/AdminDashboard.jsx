@@ -8,6 +8,8 @@ import {
   orderBy,
   limit,
   onSnapshot,
+  addDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 import { db } from "../../jsfile/firebase";
 import {
@@ -37,6 +39,8 @@ const AdminDashboard = () => {
   const [recentShipments, setRecentShipments] = useState([]);
   const [statusCounts, setStatusCounts] = useState({});
   const [recentUpdates, setRecentUpdates] = useState([]);
+  const [allUpdates, setAllUpdates] = useState([]);
+  const [showAllModal, setShowAllModal] = useState(false);
 
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const [recentRequests, setRecentRequests] = useState([]);
@@ -83,6 +87,64 @@ const AdminDashboard = () => {
     return new Date(ts);
   };
 
+  // Log update to Firestore
+  const logUpdate = async (type, details, source) => {
+    try {
+      await addDoc(collection(db, "recentUpdates"), {
+        type,
+        details,
+        source,
+        timestamp: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("Error logging update:", error);
+    }
+  };
+
+  useEffect(() => {
+    // Fetch recent updates (latest 5)
+    const recentQ = query(
+      collection(db, "recentUpdates"),
+      orderBy("timestamp", "desc"),
+      limit(5)
+    );
+    const unsubRecent = onSnapshot(recentQ, (snap) => {
+      setRecentUpdates(snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          ...data,
+          time: data.timestamp ? data.timestamp.toDate() : new Date()  // Add time as Date for consistency
+        };
+      }));
+    }, (error) => {
+      console.error("Error in recentUpdates snapshot:", error);
+    });
+
+    // Fetch all updates
+    const allQ = query(
+      collection(db, "recentUpdates"),
+      orderBy("timestamp", "desc")
+    );
+    const unsubAll = onSnapshot(allQ, (snap) => {
+      setAllUpdates(snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          ...data,
+          time: data.timestamp ? data.timestamp.toDate() : new Date()  // Add time as Date for consistency
+        };
+      }));
+    }, (error) => {
+      console.error("Error in allUpdates snapshot:", error);
+    });
+
+    return () => {
+      unsubRecent();
+      unsubAll();
+    };
+  }, []);
+
   useEffect(() => {
     // Packages: total count + active (status not Delivered / not canceled) + recent 3
     const packagesRef = collection(db, "Packages");
@@ -107,29 +169,49 @@ const AdminDashboard = () => {
       const currentMap = new Map(docs.map((d) => [d.id, d]));
       if (initializedRef.current) {
         const prevMap = prevDocsRef.current;
-        const updates = [];
+        // const updates = []; // Removed local updates to avoid inconsistency; rely on Firestore listener
         // Check for new and modified
         docs.forEach((doc) => {
           const prevDoc = prevMap.get(doc.id);
           if (!prevDoc) {
-            updates.push({ id: doc.id, type: "added", data: doc, time: getDocTime(doc, "added"), source: "package" });
+            // New shipment
+            logUpdate("new_shipment", {
+              packageNumber: doc.packageNumber || `#${doc.id.slice(-6)}`,
+              shipperName: doc.shipperName || "Unknown",
+            }, "package");
+            // updates.push({ id: doc.id, type: "added", data: doc, time: getDocTime(doc, "added"), source: "package" });
           } else if (serializeDoc(prevDoc) !== serializeDoc(doc)) {
-            updates.push({ id: doc.id, type: "edited", data: doc, time: getDocTime(doc, "edited"), source: "package" });
+            // Edited shipment
+            const changes = {};
+            Object.keys(doc).forEach(key => {
+              if (serializeDoc(prevDoc[key]) !== serializeDoc(doc[key])) {
+                changes[key] = { old: prevDoc[key], new: doc[key] };
+              }
+            });
+            logUpdate("shipment_edited", {
+              packageNumber: doc.packageNumber || `#${doc.id.slice(-6)}`,
+              changes,
+            }, "package");
+            // updates.push({ id: doc.id, type: "edited", data: doc, time: getDocTime(doc, "edited"), source: "package" });
           }
         });
-        if (updates.length > 0) {
-          setRecentUpdates((prev) => [...updates, ...prev].sort((a, b) => b.time.getTime() - a.time.getTime()).slice(0, 5));
-        }
+        // if (updates.length > 0) {
+        //   setRecentUpdates((prev) => [...updates, ...prev].sort((a, b) => b.time.getTime() - a.time.getTime()).slice(0, 5));
+        // }
       } else {
         initializedRef.current = true;
       }
       prevDocsRef.current = currentMap;
+    }, (error) => {
+      console.error("Error in packages snapshot:", error);
     });
 
     // recent shipments (ordered by createdTime desc) - separate listener for ordered query
     const recentQ = query(packagesRef, orderBy("createdTime", "desc"), limit(3));
     const unsubRecent = onSnapshot(recentQ, (snap) => {
       setRecentShipments(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    }, (error) => {
+      console.error("Error in recent shipments snapshot:", error);
     });
 
     return () => {
@@ -152,27 +234,52 @@ const AdminDashboard = () => {
       const currentMap = new Map(docs.map((d) => [d.id, d]));
       if (initializedReqRef.current) {
         const prevMap = prevReqsRef.current;
-        const updates = [];
-        // Check for new only
+        // const updates = []; // Removed local updates to avoid inconsistency; rely on Firestore listener
+        // Check for new and modified
         docs.forEach((doc) => {
           const prevDoc = prevMap.get(doc.id);
           if (!prevDoc) {
-            updates.push({ id: doc.id, type: "added", data: doc, time: getDocTime(doc, "added"), source: "request" });
+            // New request
+            logUpdate("new_request", {
+              name: doc.name || "Unknown",
+              email: doc.email || "Unknown",
+            }, "request");
+            // updates.push({ id: doc.id, type: "added", data: doc, time: getDocTime(doc, "added"), source: "request" });
+          } else if (serializeDoc(prevDoc) !== serializeDoc(doc)) {
+            const prevStatus = prevDoc.status || "";
+            const newStatus = doc.status || "";
+            if (newStatus.toLowerCase() === "accepted" && prevStatus.toLowerCase() !== "accepted") {
+              // Request accepted
+              logUpdate("request_accepted", {
+                name: doc.name || "Unknown",
+                packageNumber: doc.packageNumber || "N/A",
+              }, "request");
+            } else if (newStatus.toLowerCase() === "rejected" && prevStatus.toLowerCase() !== "rejected") {
+              // Request rejected
+              logUpdate("request_rejected", {
+                name: doc.name || "Unknown",
+              }, "request");
+            }
+            // updates.push({ id: doc.id, type: "edited", data: doc, time: getDocTime(doc, "edited"), source: "request" });
           }
         });
-        if (updates.length > 0) {
-          setRecentUpdates((prev) => [...updates, ...prev].sort((a, b) => b.time.getTime() - a.time.getTime()).slice(0, 5));
-        }
+        // if (updates.length > 0) {
+        //   setRecentUpdates((prev) => [...updates, ...prev].sort((a, b) => b.time.getTime() - a.time.getTime()).slice(0, 5));
+        // }
       } else {
         initializedReqRef.current = true;
       }
       prevReqsRef.current = currentMap;
+    }, (error) => {
+      console.error("Error in shipRequests snapshot:", error);
     });
 
     // recent requests - order by requestTime if it exists, fallback to document order
     const recentReqQ = query(reqRef, orderBy("requestTime", "desc"), limit(3));
     const unsubRecentReq = onSnapshot(recentReqQ, (snap) => {
       setRecentRequests(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    }, (error) => {
+      console.error("Error in recent requests snapshot:", error);
     });
 
     return () => {
@@ -189,11 +296,15 @@ const AdminDashboard = () => {
     const unsubPending = onSnapshot(qPending, (snap) => {
       setPendingConvosCount(snap.docs.length);
       setRecentPendingConvos(snap.docs.slice(0, 3).map((d) => ({ id: d.id, ...d.data() })));
+    }, (error) => {
+      console.error("Error in pending conversations snapshot:", error);
     });
 
     const qApproved = query(convRef, where("status", "==", "approved"));
     const unsubApproved = onSnapshot(qApproved, (snap) => {
       setApprovedConvosCount(snap.docs.length);
+    }, (error) => {
+      console.error("Error in approved conversations snapshot:", error);
     });
 
     // Separate listener for change detection on all conversations
@@ -202,21 +313,42 @@ const AdminDashboard = () => {
       const currentMap = new Map(docs.map((d) => [d.id, d]));
       if (initializedConvosRef.current) {
         const prevMap = prevConvosRef.current;
-        const updates = [];
-        // Check for new only
+        // const updates = []; // Removed local updates to avoid inconsistency; rely on Firestore listener
+        // Check for new and modified
         docs.forEach((doc) => {
           const prevDoc = prevMap.get(doc.id);
           if (!prevDoc) {
-            updates.push({ id: doc.id, type: "added", data: doc, time: getDocTime(doc, "added"), source: "conversation" });
+            // New convo request
+            logUpdate("new_convo_request", {
+              user: doc.userFullName || doc.userEmail || "Unknown",
+            }, "conversation");
+            // updates.push({ id: doc.id, type: "added", data: doc, time: getDocTime(doc, "added"), source: "conversation" });
+          } else if (serializeDoc(prevDoc) !== serializeDoc(doc)) {
+            const prevStatus = prevDoc.status || "";
+            const newStatus = doc.status || "";
+            if (newStatus === "approved" && prevStatus !== "approved") {
+              // Convo approved
+              logUpdate("convo_approved", {
+                user: doc.userFullName || doc.userEmail || "Unknown",
+              }, "conversation");
+            } else if (newStatus === "rejected" && prevStatus !== "rejected") {
+              // Convo rejected
+              logUpdate("convo_rejected", {
+                user: doc.userFullName || doc.userEmail || "Unknown",
+              }, "conversation");
+            }
+            // updates.push({ id: doc.id, type: "edited", data: doc, time: getDocTime(doc, "edited"), source: "conversation" });
           }
         });
-        if (updates.length > 0) {
-          setRecentUpdates((prev) => [...updates, ...prev].sort((a, b) => b.time.getTime() - a.time.getTime()).slice(0, 5));
-        }
+        // if (updates.length > 0) {
+        //   setRecentUpdates((prev) => [...updates, ...prev].sort((a, b) => b.time.getTime() - a.time.getTime()).slice(0, 5));
+        // }
       } else {
         initializedConvosRef.current = true;
       }
       prevConvosRef.current = currentMap;
+    }, (error) => {
+      console.error("Error in conversations snapshot:", error);
     });
 
     return () => {
@@ -263,6 +395,7 @@ const AdminDashboard = () => {
   const formatDate = (tsOrIso) => {
     if (!tsOrIso) return "N/A";
     try {
+      if (tsOrIso instanceof Date) return tsOrIso.toLocaleString();
       // Firestore Timestamp
       if (tsOrIso.toDate) return tsOrIso.toDate().toLocaleString();
       // ISO string
@@ -272,11 +405,44 @@ const AdminDashboard = () => {
     return String(tsOrIso);
   };
 
+  const formatUpdateText = (update) => {
+    const time = formatDate(update.time || update.timestamp);
+    let text = "";
+    switch (update.type) {
+      case "new_shipment":
+        text = `New shipment ${update.details.packageNumber} added by ${update.details.shipperName}`;
+        break;
+      case "shipment_edited":
+        text = `Shipment ${update.details.packageNumber} edited (changes: ${JSON.stringify(update.details.changes)})`;
+        break;
+      case "new_request":
+        text = `New shipment request from ${update.details.name}`;
+        break;
+      case "request_accepted":
+        text = `Shipment request from ${update.details.name} accepted (Package: ${update.details.packageNumber})`;
+        break;
+      case "request_rejected":
+        text = `Shipment request from ${update.details.name} rejected`;
+        break;
+      case "new_convo_request":
+        text = `New conversation request from ${update.details.user}`;
+        break;
+      case "convo_approved":
+        text = `Conversation with ${update.details.user} approved`;
+        break;
+      case "convo_rejected":
+        text = `Conversation with ${update.details.user} rejected`;
+        break;
+      default:
+        text = "Update logged";
+    }
+    return `${text} at ${time}`;
+  };
+
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-gray-50">
       <Sidebar />
-
-      <main className="flex-1 p-6">
+      <main className="flex-1 p-6 md:ml-64">
         <h1 className="text-2xl font-semibold mb-6">Dashboard</h1>
 
         {/* Top summary cards */}
@@ -375,26 +541,24 @@ const AdminDashboard = () => {
         {/* Footer area for updates and graph */}
         <section className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-white rounded-lg shadow p-4">
-            <h3 className="font-semibold mb-2">Recent Updates</h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-semibold">Recent Updates</h3>
+              <button 
+                onClick={() => setShowAllModal(true)}
+                className="text-sm text-blue-600 hover:underline"
+              >
+                View All
+              </button>
+            </div>
             {recentUpdates.length === 0 ? (
               <p className="text-sm text-gray-500">No recent updates.</p>
             ) : (
               <ul className="space-y-2">
-                {recentUpdates.map((u) => {
-                  let text = "";
-                  if (u.source === "package") {
-                    text = `${formatDate(u.time)}, ${u.data.packageNumber || `#${u.id.slice(-6)}`}, ${u.data.packageStatus || "Processing"}, ${u.type.charAt(0).toUpperCase() + u.type.slice(1)}`;
-                  } else if (u.source === "request") {
-                    text = `Shipment Request from ${u.data.email || u.data.name || "Unknown"}`;
-                  } else if (u.source === "conversation") {
-                    text = `Message Request from ${u.data.userEmail || u.data.userFullName || "Unknown"}`;
-                  }
-                  return (
-                    <li key={`${u.source}-${u.id}-${u.time.toISOString()}`} className="text-sm border-b pb-2 last:border-b-0">
-                      <div className="font-medium text-gray-900">{text}</div>
-                    </li>
-                  );
-                })}
+                {recentUpdates.map((u) => (
+                  <li key={u.id} className="text-sm border-b pb-2 last:border-b-0">
+                    <div className="font-medium text-gray-900">{formatUpdateText(u)}</div>
+                  </li>
+                ))}
               </ul>
             )}
           </div>
@@ -410,6 +574,49 @@ const AdminDashboard = () => {
             )}
           </div>
         </section>
+
+        {/* Modal for All Updates */}
+        {showAllModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+            <div className="bg-white rounded-lg shadow-lg w-11/12 max-w-4xl p-6 max-h-[80vh] overflow-y-auto">
+              <h3 className="text-xl font-bold mb-4">All Updates</h3>
+              {allUpdates.length === 0 ? (
+                <p>No updates available.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border-collapse border border-gray-300">
+                    <thead className="bg-gray-200">
+                      <tr>
+                        <th className="p-2 border border-gray-300">Type</th>
+                        <th className="p-2 border border-gray-300">Details</th>
+                        <th className="p-2 border border-gray-300">Source</th>
+                        <th className="p-2 border border-gray-300">Timestamp</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allUpdates.map((u) => (
+                        <tr key={u.id}>
+                          <td className="p-2 border border-gray-300">{u.type}</td>
+                          <td className="p-2 border border-gray-300">{JSON.stringify(u.details)}</td>
+                          <td className="p-2 border border-gray-300">{u.source}</td>
+                          <td className="p-2 border border-gray-300">{formatDate(u.time || u.timestamp)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <div className="flex justify-end mt-4">
+                <button
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+                  onClick={() => setShowAllModal(false)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

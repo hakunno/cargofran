@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../../jsfile/firebase';
+import { db, auth } from '../../jsfile/firebase';
 import {
   collection,
   getDocs,
@@ -8,9 +8,11 @@ import {
   addDoc,
   deleteDoc,
   serverTimestamp,
+  getDoc,
 } from 'firebase/firestore';
 import Sidebar from '../../component/adminstaff/Sidebar';
 import { getStorage, ref, getDownloadURL } from 'firebase/storage';
+import { logActivity } from "../../modals/StaffActivity.jsx"; // Adjust path to where ActivityModal/logActivity is exported
 
 const storage = getStorage();
 
@@ -73,6 +75,34 @@ const ShipmentInquiryRequests = () => {
     }
   }, [inquiries]);
 
+  const fetchAdminDetails = async () => {
+    const currentAdmin = auth.currentUser;
+    if (!currentAdmin) {
+      alert("Admin not logged in.");
+      return { adminFirstName: "Unknown", adminLastName: "" };
+    }
+
+    let adminFirstName = "";
+    let adminLastName = "";
+
+    if (currentAdmin.displayName) {
+      const nameParts = currentAdmin.displayName.split(" ");
+      adminFirstName = nameParts[0];
+      adminLastName = nameParts.slice(1).join(" ");
+    } else {
+      // Fetch admin details from Firestore if displayName is missing
+      const adminRef = doc(db, "Users", currentAdmin.uid);
+      const adminSnap = await getDoc(adminRef);
+      if (adminSnap.exists()) {
+        const adminData = adminSnap.data();
+        adminFirstName = adminData.firstName || "Unknown";
+        adminLastName = adminData.lastName || "";
+      }
+    }
+
+    return { adminFirstName, adminLastName };
+  };
+
   const openAcceptModal = (inquiry) => {
     setInquiryToAccept(inquiry);
     setIsAcceptModalOpen(true);
@@ -86,6 +116,9 @@ const ShipmentInquiryRequests = () => {
     }
 
     try {
+      const { adminFirstName, adminLastName } = await fetchAdminDetails();
+      const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
+
       // Step 1: Get all current shipments to calculate the next customId
       const querySnapshot = await getDocs(collection(db, "Packages"));
       const allShipments = querySnapshot.docs.map(doc => doc.data());
@@ -117,11 +150,18 @@ const ShipmentInquiryRequests = () => {
         timestamp: serverTimestamp(),
       });
 
-      // Step 5: Mark the inquiry as accepted
+      // Step 5: Mark the inquiry as accepted (with packageNumber for email)
       await updateDoc(doc(db, 'shipRequests', inquiryToAccept.id), {
         status: 'Accepted',
         acceptedAt: serverTimestamp(),
+        packageNumber: packageNumberInput.trim(), // Add this for the email notification
       });
+
+      // Step 6: Delete the shipRequest
+      await deleteDoc(doc(db, 'shipRequests', inquiryToAccept.id));
+
+      // Log the activity
+      await logActivity(adminFullName, `Accepted shipment inquiry ${inquiryToAccept.id} and created package ${packageNumberInput.trim()}`);
 
       alert(`Shipment created!`);
       setInquiries((prev) => prev.filter((i) => i.id !== inquiryToAccept.id));
@@ -130,8 +170,6 @@ const ShipmentInquiryRequests = () => {
         delete updated[inquiryToAccept.id];
         return updated;
       });
-
-      await deleteDoc(doc(db, 'shipRequests', inquiryToAccept.id));
 
       closeModal();
       setIsAcceptModalOpen(false);
@@ -146,7 +184,21 @@ const ShipmentInquiryRequests = () => {
     const confirmReject = window.confirm('Reject this request? This will delete it permanently.');
     if (!confirmReject) return;
     try {
+      const { adminFirstName, adminLastName } = await fetchAdminDetails();
+      const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
+
+      // Update status to 'Rejected' to trigger email
+      await updateDoc(doc(db, 'shipRequests', inquiry.id), {
+        status: 'Rejected',
+        rejectedAt: serverTimestamp(),
+      });
+
+      // Then delete
       await deleteDoc(doc(db, 'shipRequests', inquiry.id));
+
+      // Log the activity
+      await logActivity(adminFullName, `Rejected shipment inquiry ${inquiry.id}`);
+
       alert('Request rejected and deleted.');
       setInquiries((prev) => prev.filter((i) => i.id !== inquiry.id));
       setPreviewUrls((prev) => {
@@ -174,7 +226,7 @@ const ShipmentInquiryRequests = () => {
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-gray-100">
       <Sidebar />
-      <div className="flex-1 p-4 md:p-6">
+      <div className="flex-1 p-4 md:p-6 md:ml-64">
         <h2 className="text-xl font-semibold text-center mb-4">Shipment Requests</h2>
         {inquiries.length === 0 ? (
           <p className="text-center text-gray-700">No requests available.</p>

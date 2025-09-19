@@ -39,7 +39,7 @@ const AdminConversations = () => {
       <Sidebar />
       {/* For mobile: show either conversation list or chat window.
           For desktop: show both side by side */}
-      <div className="flex-1 flex flex-col md:flex-row">
+      <div className="flex-1 flex flex-col md:flex-row md:ml-64">
         {/* Conversation List Panel */}
         <div
           className={`${

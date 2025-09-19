@@ -526,7 +526,7 @@ const Navbar = () => {
                     to="/MyShipments"
                     onClick={() => setIsOpen(false)}
                     className={({ isActive }) =>
-                      `kanit-regular border-b-2 border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
+                      `kanit-regular border-b-1 border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
                       ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
                     }
                   >
@@ -538,7 +538,7 @@ const Navbar = () => {
                     to="/Contact"
                     onClick={() => setIsOpen(false)}
                     className={({ isActive }) =>
-                      `kanit-regular border-b-2 border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
+                      `kanit-regular border-b-3 border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
                       ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
                     }
                   >
@@ -603,7 +603,7 @@ const Navbar = () => {
                     to="/Contact"
                     onClick={() => setIsOpen(false)}
                     className={({ isActive }) =>
-                      `kanit-regular border-b-2 border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
+                      `kanit-regular border-b-3 border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
                       ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
                     }
                   >

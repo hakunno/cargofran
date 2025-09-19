@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { db } from "../../jsfile/firebase";
+import { db, auth } from "../../jsfile/firebase";
 import {
   collection,
   addDoc,
@@ -9,13 +9,15 @@ import {
   serverTimestamp,
   query,
   orderBy,
+  getDoc,
+  deleteDoc,
 } from "firebase/firestore";
 import { useLocation } from "react-router-dom";
 import Sidebar from "../../component/adminstaff/Sidebar";
-import countryList from 'react-select-country-list';
 import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
-import AddressSelector from '../AddressSelector'; // Adjust path if necessary
+import AddressSelector from '../AddressSelector';
+import { logActivity } from "../../modals/StaffActivity.jsx"; // Adjust path to where ActivityModal/logActivity is exported
 
 const Shipments = () => {
   const [shipments, setShipments] = useState([]);
@@ -64,7 +66,7 @@ const Shipments = () => {
   const [view, setView] = useState("all");
   const location = useLocation();
 
-  const countries = useMemo(() => countryList().getData(), []);
+  const [countries, setCountries] = useState([]);
 
   const LOAD_OPTIONS = {
     Sea: [
@@ -76,6 +78,19 @@ const Shipments = () => {
       { value: 'LTL', label: 'Less than Truckload (LTL)' },
     ],
   };
+
+  // Fetch countries from Firebase
+  useEffect(() => {
+    const fetchCountries = async () => {
+      const querySnapshot = await getDocs(collection(db, "countries"));
+      const countriesList = querySnapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+      })).sort((a, b) => a.label.localeCompare(b.label));
+      setCountries(countriesList);
+    };
+    fetchCountries();
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -98,6 +113,34 @@ const Shipments = () => {
     };
     fetchShipments();
   }, []);
+
+  const fetchAdminDetails = async () => {
+    const currentAdmin = auth.currentUser;
+    if (!currentAdmin) {
+      alert("Admin not logged in.");
+      return { adminFirstName: "Unknown", adminLastName: "" };
+    }
+
+    let adminFirstName = "";
+    let adminLastName = "";
+
+    if (currentAdmin.displayName) {
+      const nameParts = currentAdmin.displayName.split(" ");
+      adminFirstName = nameParts[0];
+      adminLastName = nameParts.slice(1).join(" ");
+    } else {
+      // Fetch admin details from Firestore if displayName is missing
+      const adminRef = doc(db, "Users", currentAdmin.uid);
+      const adminSnap = await getDoc(adminRef);
+      if (adminSnap.exists()) {
+        const adminData = adminSnap.data();
+        adminFirstName = adminData.firstName || "Unknown";
+        adminLastName = adminData.lastName || "";
+      }
+    }
+
+    return { adminFirstName, adminLastName };
+  };
 
   useEffect(() => {
     if (formData.senderCountry === formData.destinationCountry && formData.senderCountry !== '') {
@@ -344,6 +387,9 @@ const Shipments = () => {
     };
 
     try {
+      const { adminFirstName, adminLastName } = await fetchAdminDetails();
+      const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
+
       // Add the shipment to the Packages collection
       const docRef = await addDoc(collection(db, "Packages"), newShipment);
 
@@ -352,6 +398,9 @@ const Shipments = () => {
         status: formData.packageStatus,
         timestamp: serverTimestamp(),
       });
+
+      // Log the activity
+      await logActivity(adminFullName, `Added new shipment ${newCustomId}`);
 
       setShipments((prev) => [
         ...prev,
@@ -406,6 +455,9 @@ const Shipments = () => {
       );
       if (confirmEdit) {
         try {
+          const { adminFirstName, adminLastName } = await fetchAdminDetails();
+          const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
+
           // Check if the status has changed to record a status history entry
           const statusChanged =
             formData.packageStatus !== currentShipment.packageStatus;
@@ -428,6 +480,9 @@ const Shipments = () => {
               }
             );
           }
+
+          // Log the activity
+          await logActivity(adminFullName, `Edited shipment ${currentShipment.packageNumber || currentShipment.customId}`);
 
           setShipments((prev) =>
             prev.map((s) =>
@@ -455,6 +510,9 @@ const Shipments = () => {
     );
     if (confirmDone) {
       try {
+        const { adminFirstName, adminLastName } = await fetchAdminDetails();
+        const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
+
         const statusChanged = shipment.packageStatus !== "Delivered";
         const updatedData = {
           packageStatus: "Delivered",
@@ -474,6 +532,9 @@ const Shipments = () => {
           );
         }
 
+        // Log the activity
+        await logActivity(adminFullName, `Marked shipment ${shipment.packageNumber || shipment.customId} as Delivered`);
+
         setShipments((prev) =>
           prev.map((s) =>
             s.docId === shipment.docId ? { ...s, ...updatedData } : s
@@ -492,10 +553,17 @@ const Shipments = () => {
     );
     if (confirmCancel) {
       try {
+        const { adminFirstName, adminLastName } = await fetchAdminDetails();
+        const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
+
         await updateDoc(doc(db, "Packages", shipment.docId), {
           canceled: true,
           updatedTime: serverTimestamp(),
         });
+
+        // Log the activity
+        await logActivity(adminFullName, `Canceled shipment ${shipment.packageNumber || shipment.customId}`);
+
         setShipments((prev) =>
           prev.map((s) =>
             s.docId === shipment.docId ? { ...s, canceled: true } : s
@@ -550,10 +618,65 @@ const Shipments = () => {
     return String(ts);
   };
 
+  // Add Country Modal states
+  const [showAddCountryModal, setShowAddCountryModal] = useState(false);
+  const [newCountry, setNewCountry] = useState('');
+
+  const handleAddCountry = async () => {
+    const trimmed = newCountry.trim();
+    if (!trimmed) {
+      alert("Please enter a country name.");
+      return;
+    }
+
+    if (countries.some(c => c.label.toLowerCase() === trimmed.toLowerCase())) {
+      alert("Country already exists.");
+      return;
+    }
+
+    try {
+      await addDoc(collection(db, "countries"), {
+        label: trimmed,
+        value: trimmed,
+      });
+      alert("Country added successfully.");
+      setNewCountry('');
+      // Refresh countries
+      const querySnapshot = await getDocs(collection(db, "countries"));
+      const countriesList = querySnapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+      })).sort((a, b) => a.label.localeCompare(b.label));
+      setCountries(countriesList);
+    } catch (error) {
+      console.error("Error adding country:", error);
+      alert("Failed to add country. Please try again.");
+    }
+  };
+
+  const handleRemoveCountry = async (countryId, countryName) => {
+    if (!window.confirm(`Are you sure you want to remove ${countryName}?`)) return;
+
+    try {
+      await deleteDoc(doc(db, "countries", countryId));
+      alert("Country removed successfully.");
+      // Refresh countries
+      const querySnapshot = await getDocs(collection(db, "countries"));
+      const countriesList = querySnapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+      })).sort((a, b) => a.label.localeCompare(b.label));
+      setCountries(countriesList);
+    } catch (error) {
+      console.error("Error removing country:", error);
+      alert("Failed to remove country. Please try again.");
+    }
+  };
+
   return (
-    <div className="flex min-h-screen bg-gray-100">
+    <div className="flex flex-col md:flex-row min-h-screen bg-gray-100">
       <Sidebar />
-      <div className="flex-1 p-4 md:p-6">
+      <div className="flex-1 p-4 md:p-6 md:ml-64">
         <h2 className="text-xl font-semibold text-center mb-6">
           Shipment Information
         </h2>
@@ -693,7 +816,13 @@ const Shipments = () => {
             </tbody>
           </table>
         </div>
-        <div className="mt-4 flex justify-center md:justify-end">
+        <div className="mt-4 flex justify-between">
+          <button
+            className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 transition"
+            onClick={() => setShowAddCountryModal(true)}
+          >
+            Add Country
+          </button>
           <button
             className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 transition"
             onClick={() => setShowModal(true)}
@@ -1081,28 +1210,6 @@ const Shipments = () => {
                   <p className="p-2 border border-gray-300 rounded-md bg-gray-100">{formData.shipperName}</p>
                 </div>
                 <div className="flex flex-col mb-3">
-                  <label className="mb-1 font-medium text-gray-700">From</label>
-                  <input
-                    type="text"
-                    className="p-2 border border-gray-300 rounded-md"
-                    value={formData.from}
-                    onChange={(e) =>
-                      setFormData({ ...formData, from: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="flex flex-col mb-3">
-                  <label className="mb-1 font-medium text-gray-700">Destination</label>
-                  <input
-                    type="text"
-                    className="p-2 border border-gray-300 rounded-md"
-                    value={formData.destination}
-                    onChange={(e) =>
-                      setFormData({ ...formData, destination: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="flex flex-col mb-3">
                   <label className="mb-1 font-medium text-gray-700">Way Bill#</label>
                   <input
                     type="text"
@@ -1307,6 +1414,66 @@ const Shipments = () => {
                   }}
                 >
                   Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add Country Modal */}
+        {showAddCountryModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+            <div className="bg-white rounded-lg shadow-lg w-11/12 max-w-xl p-6">
+              <h3 className="text-xl font-bold mb-4">Add Country</h3>
+              <div className="flex flex-col mb-3">
+                <label className="mb-1 font-medium text-gray-700">Country Name</label>
+                <input
+                  type="text"
+                  className="p-2 border border-gray-300 rounded-md"
+                  value={newCountry}
+                  onChange={(e) => setNewCountry(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="mb-4">
+                <div className="overflow-auto max-h-100">
+                  <table className="min-w-full border-collapse border border-gray-300">
+                    <thead className="bg-gray-200">
+                      <tr>
+                        <th className="p-2 border border-gray-300">Current Countries</th>
+                        <th className="p-2 border border-gray-300">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {countries.map((country) => (
+                        <tr key={country.id}>
+                          <td className="p-2 border border-gray-300">{country.label}</td>
+                          <td className="p-2 border border-gray-300">
+                            <button
+                              className="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs"
+                              onClick={() => handleRemoveCountry(country.id, country.label)}
+                            >
+                              Remove
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
+                  onClick={() => setShowAddCountryModal(false)}
+                >
+                  Close
+                </button>
+                <button
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+                  onClick={handleAddCountry}
+                >
+                  Add
                 </button>
               </div>
             </div>

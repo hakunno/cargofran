@@ -1,17 +1,19 @@
-// Sidebar.jsx
 import React from "react";
-import { FaTruck, FaInbox, FaTachometerAlt, FaSignOutAlt, FaSignInAlt } from "react-icons/fa";
+import { FaTruck, FaInbox, FaTachometerAlt, FaSignOutAlt } from "react-icons/fa";
 import { Link, useLocation } from "react-router-dom";
 import Logo from "../../assets/logo2.png";
-import { useAuth } from "../../utils/AuthContext";  // ← import your hook
+import { useAuth } from "../../utils/AuthContext";
 import ManageUsers from "../../modals/ManageUsers";
 import { auth } from "../../jsfile/firebase";
 import { signOut } from "firebase/auth";
+import { HiOutlineDocumentReport } from "react-icons/hi";
+import StaffActivityModal from "../../modals/StaffActivity";
 
 const Sidebar = () => {
   const location = useLocation();
   const { user, role, loading } = useAuth();
   const [manageUsersShow, setManageUsersShow] = React.useState(false);
+  const [showStaffActivityModal, setShowStaffActivityModal] = React.useState(false); // New state
 
   const handleLogout = async () => {
     try {
@@ -28,7 +30,7 @@ const Sidebar = () => {
   if (!user || (role !== "admin" && role !== "staff")) return null;
 
   return (
-    <div className="hidden md:flex flex-col w-64 min-w-[250px] h-screen bg-blue-200 border-r-2 p-5 relative">
+    <div className="hidden md:flex flex-col w-64 min-w-[250px] h-screen bg-blue-200 border-r-2 p-5 fixed top-0 left-0">
       <div className="relative mb-10">
         <img
           src={Logo}
@@ -37,7 +39,7 @@ const Sidebar = () => {
         />
       </div>
 
-      <nav className="flex flex-col m-auto space-y-6 text-2xl">
+      <nav className="flex flex-col m-auto space-y-6 text-2xl mt-50flex-1 overflow-y-auto">
         <Link to="/AdminDashboard" className={navLink(location, "/AdminDashboard")}>
           <FaTachometerAlt className="mr-3" /> Dashboard
         </Link>
@@ -54,19 +56,26 @@ const Sidebar = () => {
           <FaInbox className="mr-3" /> Messages
         </Link>
         <Link to="/Reports" className={navLink(location, "/Reports")}>
-          <FaTruck className="mr-3" /> Reports
+          <HiOutlineDocumentReport className="mr-3" /> Reports
         </Link>
-        
       </nav>
 
       <div className="absolute bottom-5 left-5 flex flex-col space-y-3">
         {role === "admin" && (
-          <button
-            onClick={() => setManageUsersShow(true)}
-            className="lexend flex items-center bg-green-400 border-2 mb-2 text-black px-3 py-2 rounded hover:bg-green-600"
-          >
-            Manage Users
-          </button>
+          <>
+            <button
+              onClick={() => setShowStaffActivityModal(true)} // New button
+              className="lexend flex items-center bg-yellow-400 border-2 mb-2 text-black px-3 py-2 rounded hover:bg-yellow-600"
+            >
+              Staff Activity
+            </button>
+            <button
+              onClick={() => setManageUsersShow(true)}
+              className="lexend flex items-center bg-green-400 border-2 mb-2 text-black px-3 py-2 rounded hover:bg-green-600"
+            >
+              Manage Users
+            </button>
+          </>
         )}
         <button
           onClick={handleLogout}
@@ -77,6 +86,7 @@ const Sidebar = () => {
       </div>
 
       <ManageUsers show={manageUsersShow} onHide={() => setManageUsersShow(false)} />
+      <StaffActivityModal show={showStaffActivityModal} onHide={() => setShowStaffActivityModal(false)} /> {/* New modal */}
     </div>
   );
 };

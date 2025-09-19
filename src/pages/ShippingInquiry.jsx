@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { db, auth } from '../jsfile/firebase';
-import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc, getDocs } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
+import { getStorage, ref, uploadBytes } from 'firebase/storage'; // Added for storage
 import AddressSelector from './AddressSelector';
-import countryList from 'react-select-country-list';
 import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
+
+const storage = getStorage(); // Added
 
 export default function ShippingServiceRequestForm() {
   const [formData, setFormData] = useState({
@@ -19,7 +21,7 @@ export default function ShippingServiceRequestForm() {
     transportMode: '',
     shipmentDirection: '',
     loadType: '',
-    pickupOption: 'deliverToWarehouse',
+    pickupOption: 'needPickup',
     pickupRegion: '',
     pickupProvince: '',
     pickupCity: '',
@@ -40,11 +42,14 @@ export default function ShippingServiceRequestForm() {
       Brokerage: false,
       Consolidation: false,
     },
+    businessName: '',
+    businessPermitImage: null,
   });
 
   const [isEmailLocked, setIsEmailLocked] = useState(false);
   const [isNameLocked, setIsNameLocked] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
+  const [showModal, setShowModal] = useState(false);
 
   // map transport modes to available load types
   const LOAD_OPTIONS = {
@@ -58,27 +63,36 @@ export default function ShippingServiceRequestForm() {
     ],
   };
 
-  const countries = useMemo(() => countryList().getData(), []);
+  const [countries, setCountries] = useState([]);
+
+  // Fetch countries from Firebase
+  useEffect(() => {
+    const fetchCountries = async () => {
+      const querySnapshot = await getDocs(collection(db, "countries"));
+      const countriesList = querySnapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+      }));
+      setCountries(countriesList);
+    };
+    fetchCountries();
+  }, []);
+
+  const foreignCountries = countries.filter(c => c.value !== 'Philippines');
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (user && user.email) {
         const normalizedEmail = user.email.toLowerCase().trim();
         setIsEmailLocked(true);
-        try {
-          const userDocRef = doc(db, "Users", user.uid);
-          const userDoc = await getDoc(userDocRef);
-          if (userDoc.exists()) {
-            const data = userDoc.data();
-            const fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim();
-            setFormData((prev) => ({ ...prev, email: normalizedEmail, name: fullName }));
-            setIsNameLocked(true);
-          } else {
-            setFormData((prev) => ({ ...prev, email: normalizedEmail }));
-            setIsNameLocked(false);
-          }
-        } catch (error) {
-          console.error("Error fetching user data:", error);
+        const userDocRef = doc(db, "Users", user.uid);
+        const userDoc = await getDoc(userDocRef);
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          const fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim();
+          setFormData((prev) => ({ ...prev, email: normalizedEmail, name: fullName }));
+          setIsNameLocked(true);
+        } else {
           setFormData((prev) => ({ ...prev, email: normalizedEmail }));
           setIsNameLocked(false);
         }
@@ -89,17 +103,6 @@ export default function ShippingServiceRequestForm() {
     });
     return () => unsub();
   }, []);
-
-  useEffect(() => {
-    if (formData.senderCountry === formData.destinationCountry && formData.senderCountry !== '') {
-      setFormData((prev) => ({ ...prev, shipmentDirection: 'Domestic' }));
-    } else if (formData.shipmentDirection === 'Domestic') {
-      setFormData((prev) => ({ ...prev, shipmentDirection: '' }));
-    }
-    if (formData.senderCountry !== formData.destinationCountry && formData.transportMode === 'Road') {
-      setFormData((prev) => ({ ...prev, transportMode: '' }));
-    }
-  }, [formData.senderCountry, formData.destinationCountry]);
 
   // when transport mode changes, reset loadType if invalid
   useEffect(() => {
@@ -113,7 +116,6 @@ export default function ShippingServiceRequestForm() {
     if (formData.transportMode === 'Road') {
       setFormData((prev) => ({
         ...prev,
-        shipmentDirection: 'Domestic',
         additionalServices: {
           Documentation: false,
           'Customs Clearance': false,
@@ -141,6 +143,24 @@ export default function ShippingServiceRequestForm() {
       }));
     }
   }, [formData.loadType]);
+
+  // Reset transport mode if Road and not Domestic
+  useEffect(() => {
+    if (formData.shipmentDirection !== 'Domestic' && formData.transportMode === 'Road') {
+      setFormData(prev => ({ ...prev, transportMode: '' }));
+    }
+  }, [formData.shipmentDirection]);
+
+  // Set countries based on direction
+  useEffect(() => {
+    if (formData.shipmentDirection === 'Domestic') {
+      setFormData(prev => ({ ...prev, senderCountry: 'Philippines', destinationCountry: 'Philippines' }));
+    } else if (formData.shipmentDirection === 'Import') {
+      setFormData(prev => ({ ...prev, senderCountry: '', destinationCountry: 'Philippines' }));
+    } else if (formData.shipmentDirection === 'Export') {
+      setFormData(prev => ({ ...prev, senderCountry: 'Philippines', destinationCountry: '' }));
+    }
+  }, [formData.shipmentDirection]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -175,6 +195,14 @@ export default function ShippingServiceRequestForm() {
       return;
     }
     updatePackage(index, 'image', file);
+  };
+
+  const handleBusinessPermitFileChange = (file) => {
+    if (file && file.size > 5 * 1024 * 1024) {
+      alert('File size must be less than 5MB');
+      return;
+    }
+    setFormData(prev => ({ ...prev, businessPermitImage: file }));
   };
 
   const addPackage = () => {
@@ -212,18 +240,36 @@ export default function ShippingServiceRequestForm() {
     }));
   }, []);
 
-  const isDomestic = formData.senderCountry === formData.destinationCountry && formData.senderCountry !== '';
-
   const validateStep1 = () => {
-    if (!formData.senderCountry || !formData.destinationCountry) {
-      alert('Please select both sender and destination countries.');
+    if (!formData.shipmentDirection) {
+      alert('Please select a shipment direction.');
+      return false;
+    }
+    if (!formData.transportMode) {
+      alert('Please select a mode of transport.');
+      return false;
+    }
+    if (formData.transportMode === 'Road' && formData.shipmentDirection !== 'Domestic') {
+      alert('Road freight is only available for Domestic shipments.');
+      return false;
+    }
+    if (formData.shipmentDirection === 'Import' && !formData.senderCountry) {
+      alert('Please select sender country.');
+      return false;
+    }
+    if (formData.shipmentDirection === 'Export' && !formData.destinationCountry) {
+      alert('Please select destination country.');
       return false;
     }
     return true;
   };
 
   const validateStep2 = () => {
-    if (!formData.name || !formData.email || !formData.mobile || !formData.transportMode || !formData.shipmentDirection || !formData.destinationAddress) {
+    if (!formData.businessName) {
+      alert('Please enter business name.');
+      return false;
+    }
+    if (!formData.name || !formData.email || !formData.mobile || !formData.destinationAddress) {
       alert('Please fill in all required fields in this step.');
       return false;
     }
@@ -246,57 +292,9 @@ export default function ShippingServiceRequestForm() {
     setCurrentStep((prev) => prev - 1);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    if (!formData.agreedToTerms) {
-      alert('You must agree to the terms and conditions to proceed.');
-      return;
-    }
-
-    if (!formData.transportMode) {
-      alert('Please select a mode of transport (Air / Sea / Road).');
-      return;
-    }
-
-    if (!formData.shipmentDirection) {
-      alert('Please select a shipment direction.');
-      return;
-    }
-
-    if (formData.pickupOption === 'needPickup') {
-      let missingFields = [];
-      if (!formData.pickupRegion.trim()) missingFields.push('Region');
-      if (!formData.pickupProvince.trim()) missingFields.push('Province');
-      if (!formData.pickupCity.trim()) missingFields.push('City');
-      if (!formData.pickupBarangay.trim()) missingFields.push('Barangay');
-      if (!formData.pickupDetailedAddress?.trim()) missingFields.push('Street Address');
-      if (missingFields.length > 0) {
-        alert('Please fill in the following pickup address fields: ' + missingFields.join(', '));
-        return;
-      }
-    }
-
-    const isFullLoad = formData.loadType === 'FCL' || formData.loadType === 'FTL';
-
-    // Validate packages
-    if (isFullLoad) {
-      if (formData.packages.length === 0 || !formData.packages[0].weight) {
-        alert('Please enter the total weight.');
-        return;
-      }
-    } else {
-      if (
-        formData.packages.length === 0 ||
-        formData.packages.some(
-          (pkg) => !pkg.length || !pkg.width || !pkg.height || !pkg.weight
-        )
-      ) {
-        alert('Please add at least one package and fill in dimensions and weight.');
-        return;
-      }
-    }
-
+  const confirmSubmit = async () => {
+    setShowModal(false);
+    // Perform the actual submit logic here
     const user = auth.currentUser;
     const normalizedEmail = (user?.email || formData.email || '').toLowerCase().trim();
 
@@ -322,18 +320,47 @@ export default function ShippingServiceRequestForm() {
               detailedAddress: formData.pickupDetailedAddress,
             }
           : null,
-      packages: formData.packages.map((pkg) => ({
-        ...pkg,
-        image: pkg.image ? pkg.image.name : null,
-      })),
       additionalServices: formData.additionalServices,
       createdAt: serverTimestamp(),
       requestTime: new Date().toISOString(),
       status: 'Processing',
+      businessName: formData.businessName,
+      businessPermitImage: null,
     };
 
     try {
-      await addDoc(collection(db, 'shipRequests'), requestData);
+      // Create the document without packages and images first
+      const docRef = await addDoc(collection(db, 'shipRequests'), {
+        ...requestData,
+        packages: [], // Temporary empty
+      });
+
+      // Upload images and prepare packages
+      const uploadedPackages = [];
+      for (let i = 0; i < formData.packages.length; i++) {
+        const pkg = formData.packages[i];
+        let imageName = null;
+        if (pkg.image) {
+          imageName = pkg.image.name;
+          const storageRef = ref(storage, `shipRequests/${docRef.id}/${imageName}`);
+          await uploadBytes(storageRef, pkg.image);
+        }
+        uploadedPackages.push({ ...pkg, image: imageName });
+      }
+
+      let updates = { packages: uploadedPackages };
+
+      // Upload business permit image
+      if (formData.businessPermitImage) {
+        const businessPermitImageName = formData.businessPermitImage.name;
+        const businessPermitStorageRef = ref(storage, `shipRequests/${docRef.id}/businessPermitImage/${businessPermitImageName}`);
+        await uploadBytes(businessPermitStorageRef, formData.businessPermitImage);
+        updates.businessPermitImage = businessPermitImageName;
+      }
+
+      // Update the document with uploaded packages and images
+      await updateDoc(docRef, updates);
+
       alert('Shipping Service Request Submitted!');
 
       // keep email and name if locked, reset others
@@ -347,7 +374,7 @@ export default function ShippingServiceRequestForm() {
         transportMode: '',
         shipmentDirection: '',
         loadType: '',
-        pickupOption: 'deliverToWarehouse',
+        pickupOption: 'needPickup',
         pickupRegion: '',
         pickupProvince: '',
         pickupCity: '',
@@ -368,6 +395,8 @@ export default function ShippingServiceRequestForm() {
           Brokerage: false,
           Consolidation: false,
         },
+        businessName: '',
+        businessPermitImage: null,
       }));
       setCurrentStep(1);
     } catch (err) {
@@ -376,13 +405,97 @@ export default function ShippingServiceRequestForm() {
     }
   };
 
-  const availableTransportModes = isDomestic ? ['Air', 'Sea', 'Road'] : ['Air', 'Sea'];
+  const handleSubmit = (e) => {
+    e.preventDefault();
+
+    if (!formData.agreedToTerms) {
+      alert('You must agree to the terms and conditions to proceed.');
+      return;
+    }
+
+    if (!formData.transportMode) {
+      alert('Please select a mode of transport (Air / Sea / Road).');
+      return;
+    }
+
+    if (!formData.shipmentDirection) {
+      alert('Please select a shipment direction.');
+      return;
+    }
+
+    let missingFields = [];
+    if (!formData.pickupRegion.trim()) missingFields.push('Region');
+    if (!formData.pickupProvince.trim()) missingFields.push('Province');
+    if (!formData.pickupCity.trim()) missingFields.push('City');
+    if (!formData.pickupBarangay.trim()) missingFields.push('Barangay');
+    if (!formData.pickupDetailedAddress?.trim()) missingFields.push('Street Address');
+    if (missingFields.length > 0) {
+      alert('Please fill in the following pickup address fields: ' + missingFields.join(', '));
+      return;
+    }
+
+    const isFullLoad = formData.loadType === 'FCL' || formData.loadType === 'FTL';
+
+    // Validate packages
+    if (isFullLoad) {
+      if (formData.packages.length === 0 || !formData.packages[0].weight) {
+        alert('Please enter the total weight.');
+        return;
+      }
+    } else {
+      if (
+        formData.packages.length === 0 ||
+        formData.packages.some(
+          (pkg) => !pkg.length || !pkg.width || !pkg.height || !pkg.weight
+        )
+      ) {
+        alert('Please add at least one package and fill in dimensions and weight.');
+        return;
+      }
+    }
+
+    // Show modal if validation passes
+    setShowModal(true);
+  };
 
   const isLoadTypeVisible = formData.transportMode === 'Sea' || formData.transportMode === 'Road';
 
   const isFullLoad = formData.loadType === 'FCL' || formData.loadType === 'FTL';
 
   const isRoad = formData.transportMode === 'Road';
+
+  const availableModes = formData.shipmentDirection === 'Domestic' 
+    ? ['Air', 'Sea', 'Road'] 
+    : formData.shipmentDirection 
+      ? ['Air', 'Sea'] 
+      : ['Air', 'Sea', 'Road'];
+
+  const getSummary = () => {
+    let summary = `Full Name: ${formData.name}\n`;
+    summary += `Email: ${formData.email}\n`;
+    summary += `Business Name: ${formData.businessName}\n`;
+    summary += `Mobile: ${formData.mobile}\n`;
+    summary += `Shipment Direction: ${formData.shipmentDirection}\n`;
+    summary += `Transport Mode: ${formData.transportMode}\n`;
+    if (formData.loadType) summary += `Load Type: ${formData.loadType}\n`;
+    summary += `Sender Country: ${formData.senderCountry}\n`;
+    summary += `Destination Country: ${formData.destinationCountry}\n`;
+    summary += `Destination Address: ${formData.destinationAddress}\n`;
+    summary += `Pickup Address: ${formData.pickupDetailedAddress}, ${formData.pickupBarangay}, ${formData.pickupCity}, ${formData.pickupProvince}, ${formData.pickupRegion}\n`;
+    summary += `Additional Services: ${Object.keys(formData.additionalServices).filter(key => formData.additionalServices[key]).join(', ') || 'None'}\n`;
+    summary += `Packages:\n`;
+    formData.packages.forEach((pkg, index) => {
+      summary += `Package ${index + 1}:\n`;
+      if (!isFullLoad) {
+        summary += `  Dimensions: ${pkg.length} x ${pkg.width} x ${pkg.height} cm\n`;
+      }
+      summary += `  Weight: ${pkg.weight} kg\n`;
+      summary += `  Contents: ${pkg.contents || 'N/A'}\n`;
+      summary += `  Image: ${pkg.image ? 'Uploaded' : 'None'}\n`;
+    });
+    summary += `Business Permit Image: ${formData.businessPermitImage ? 'Uploaded' : 'None'}\n`;
+    return summary;
+  };
 
   return (
     <div className="max-w-4xl mx-auto p-8 bg-white drop-shadow-[0px_2px_5px_rgba(0,0,0,1)] shadow-xl rounded-xl mt-10 mb-20 border border-gray-200">
@@ -391,7 +504,7 @@ export default function ShippingServiceRequestForm() {
       {/* Tab Indicators */}
       <div className="flex justify-around mb-6 border-b pb-4">
         <div className={`cursor-default px-4 py-2 ${currentStep === 1 ? 'border-b-2 border-blue-500 font-bold text-blue-700' : 'text-gray-500'}`}>
-          Step 1: Origin & Destination
+          Step 1: Shipment Type
         </div>
         <div className={`cursor-default px-4 py-2 ${currentStep === 2 ? 'border-b-2 border-blue-500 font-bold text-blue-700' : 'text-gray-500'}`}>
           Step 2: Shipper Details
@@ -404,43 +517,101 @@ export default function ShippingServiceRequestForm() {
       <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {currentStep === 1 && (
           <>
-            {/* Sender Country */}
+            {/* Shipment Direction */}
             <div className="flex flex-col">
-              <label className="mb-1 font-medium text-gray-700">From:</label>
+              <label className="mb-1 font-medium text-gray-700">Shipment Direction</label>
               <select
-                name="senderCountry"
-                value={formData.senderCountry}
+                name="shipmentDirection"
+                value={formData.shipmentDirection}
                 onChange={handleChange}
                 required
                 className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">Select country</option>
-                {countries.map((country) => (
-                  <option key={country.value} value={country.label}>
-                    {country.label}
-                  </option>
-                ))}
+                <option value="">Select direction</option>
+                <option value="Domestic">Domestic</option>
+                <option value="Import">Import</option>
+                <option value="Export">Export</option>
               </select>
             </div>
 
-            {/* Destination Country */}
+            {/* Transport Mode */}
             <div className="flex flex-col">
-              <label className="mb-1 font-medium text-gray-700">To:</label>
+              <label className="mb-1 font-medium text-gray-700">Mode of Transport</label>
               <select
-                name="destinationCountry"
-                value={formData.destinationCountry}
+                name="transportMode"
+                value={formData.transportMode}
                 onChange={handleChange}
                 required
+                disabled={!formData.shipmentDirection}
                 className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">Select country</option>
-                {countries.map((country) => (
-                  <option key={country.value} value={country.label}>
-                    {country.label}
-                  </option>
+                <option value="">Select mode</option>
+                {availableModes.map((m) => (
+                  <option key={m} value={m}>{m} Freight</option>
                 ))}
               </select>
+              {!formData.shipmentDirection && <p className="text-sm text-gray-500 mt-1">Please select shipment direction first.</p>}
             </div>
+
+            {formData.shipmentDirection && (
+              <>
+                {/* Sender Country */}
+                <div className="flex flex-col">
+                  <label className="mb-1 font-medium text-gray-700">From:</label>
+                  {(formData.shipmentDirection === 'Domestic' || formData.shipmentDirection === 'Export') ? (
+                    <input
+                      type="text"
+                      value="Philippines"
+                      disabled
+                      className="p-2 border border-gray-300 rounded-md bg-gray-100"
+                    />
+                  ) : (
+                    <select
+                      name="senderCountry"
+                      value={formData.senderCountry}
+                      onChange={handleChange}
+                      required
+                      className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Select country</option>
+                      {foreignCountries.map((country) => (
+                        <option key={country.value} value={country.value}>
+                          {country.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                {/* Destination Country */}
+                <div className="flex flex-col">
+                  <label className="mb-1 font-medium text-gray-700">To:</label>
+                  {(formData.shipmentDirection === 'Domestic' || formData.shipmentDirection === 'Import') ? (
+                    <input
+                      type="text"
+                      value="Philippines"
+                      disabled
+                      className="p-2 border border-gray-300 rounded-md bg-gray-100"
+                    />
+                  ) : (
+                    <select
+                      name="destinationCountry"
+                      value={formData.destinationCountry}
+                      onChange={handleChange}
+                      required
+                      className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Select country</option>
+                      {foreignCountries.map((country) => (
+                        <option key={country.value} value={country.value}>
+                          {country.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              </>
+            )}
 
             <div className="md:col-span-2 flex justify-end mt-20">
               <button
@@ -488,6 +659,19 @@ export default function ShippingServiceRequestForm() {
               {isEmailLocked && <p className="text-sm text-gray-500 mt-1">Logged in email cannot be changed.</p>}
             </div>
 
+            <div className="md:col-span-2 flex flex-col">
+              <label className="mb-1 font-medium text-gray-700">Business Name</label>
+              <input
+                type="text"
+                name="businessName"
+                value={formData.businessName}
+                onChange={handleChange}
+                required
+                placeholder="Your Business Name"
+                className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
             {/* Destination Address */}
             <div className="md:col-span-2 flex flex-col">
               <label className="mb-1 font-medium text-gray-700">Destination Address (Warehouse, Business Location, or Street Address)</label>
@@ -514,50 +698,6 @@ export default function ShippingServiceRequestForm() {
                 required
                 className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-            </div>
-
-            {/* Transport Mode */}
-            <div className="flex flex-col">
-              <label className="mb-1 font-medium text-gray-700">Mode of Transport</label>
-              <select
-                name="transportMode"
-                value={formData.transportMode}
-                onChange={handleChange}
-                required
-                className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Select mode</option>
-                {availableTransportModes.map((m) => (
-                  <option key={m} value={m}>{m} Freight</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Shipment Direction */}
-            <div className="flex flex-col">
-              <label className="mb-1 font-medium text-gray-700">Shipment Direction</label>
-              {isDomestic || isRoad ? (
-                <input
-                  type="text"
-                  value="Domestic"
-                  disabled
-                  className="p-2 border border-gray-300 rounded-md bg-gray-100"
-                />
-              ) : (
-                <select
-                  name="shipmentDirection"
-                  value={formData.shipmentDirection}
-                  onChange={handleChange}
-                  required
-                  disabled={!formData.transportMode}
-                  className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select direction</option>
-                  <option value="Import">Import</option>
-                  <option value="Export">Export</option>
-                </select>
-              )}
-              {!formData.transportMode && !isDomestic && <p className="text-sm text-gray-500 mt-1">Please select transport mode first.</p>}
             </div>
 
             {/* Load Type - dynamic based on transportMode */}
@@ -625,56 +765,22 @@ export default function ShippingServiceRequestForm() {
 
         {currentStep === 3 && (
           <div className="md:col-span-2">
-            {/* Pickup Option */}
-            <div className="mt-4">
-              <h3 className="text-xl font-semibold mb-2">How will the package reach us?</h3>
-              <div className="flex gap-4">
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    name="pickupOption"
-                    value="deliverToWarehouse"
-                    checked={formData.pickupOption === 'deliverToWarehouse'}
-                    onChange={handleChange}
-                    className="mr-2"
-                  />
-                  I will deliver to the warehouse
-                </label>
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    name="pickupOption"
-                    value="needPickup"
-                    checked={formData.pickupOption === 'needPickup'}
-                    onChange={handleChange}
-                    className="mr-2"
-                  />
-                  I need pickup from my location
-                </label>
-              </div>
-              {formData.pickupOption === 'needPickup' && (
-                <p className="text-red-500 mt-2">Note: A downpayment is required for pickup service.</p>
-              )}
-            </div>
-
             {/* Conditional Pickup Address */}
-            {formData.pickupOption === 'needPickup' && (
-              <div className="mt-4">
-                <h3 className="text-xl font-semibold mb-4">Pickup Address</h3>
-                <AddressSelector onSelect={handlePickupAddressSelect} />
-                <div className="flex flex-col mt-4">
-                  <label className="mb-1 font-medium text-gray-700">Street Address</label>
-                  <textarea
-                    name="pickupDetailedAddress"
-                    value={formData.pickupDetailedAddress}
-                    onChange={handleChange}
-                    placeholder="Enter street, house number, etc."
-                    className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    rows="3"
-                  />
-                </div>
+            <div className="mt-4">
+              <h3 className="text-xl font-semibold mb-4">Pickup Address</h3>
+              <AddressSelector onSelect={handlePickupAddressSelect} />
+              <div className="flex flex-col mt-4">
+                <label className="mb-1 font-medium text-gray-700">Street Address</label>
+                <textarea
+                  name="pickupDetailedAddress"
+                  value={formData.pickupDetailedAddress}
+                  onChange={handleChange}
+                  placeholder="Enter street, house number, etc."
+                  className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows="3"
+                />
               </div>
-            )}
+            </div>
 
             {/* Packages */}
             <div className="mt-4">
@@ -729,7 +835,7 @@ export default function ShippingServiceRequestForm() {
                       </div>
                     </div>
                   ) : (
-                    <div className="flex flex-col mb-4">
+                    <div className="md:col-span-2 flex flex-col">
                       <label className="mb-1 font-medium text-gray-700">Total Weight (kg)</label>
                       <input
                         type="number"
@@ -781,6 +887,19 @@ export default function ShippingServiceRequestForm() {
               )}
             </div>
 
+            {/* Business Permit Upload */}
+            <div className="mt-4">
+              <div className="flex flex-col">
+                <label className="mb-1 font-medium text-gray-700">Upload Business Permit Image (Optional, max 5MB)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleBusinessPermitFileChange(e.target.files[0])}
+                  className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
             {/* Terms of Service Agreement */}
             <div className="flex flex-col items-center mt-6">
               <div className="flex items-center mb-4">
@@ -804,6 +923,29 @@ export default function ShippingServiceRequestForm() {
           </div>
         )}
       </form>
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg max-w-lg w-full max-h-[80vh] overflow-y-auto">
+            <h3 className="text-xl font-bold mb-4">Confirm Submission</h3>
+            <pre className="whitespace-pre-wrap text-sm mb-4">{getSummary()}</pre>
+            <div className="flex justify-end gap-4">
+              <button
+                onClick={() => setShowModal(false)}
+                className="bg-gray-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-gray-700 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmSubmit}
+                className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 transition"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

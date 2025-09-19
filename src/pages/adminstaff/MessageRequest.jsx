@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import { db, auth } from "../../jsfile/firebase"; // ✅ Ensure auth is imported
 import Sidebar from "../../component/adminstaff/Sidebar";
+import { logActivity } from "../../modals/StaffActivity.jsx"; // Adjust path to where ActivityModal/logActivity is exported
 
 const ConversationsAdmin = () => {
   const [conversations, setConversations] = useState([]);
@@ -96,12 +97,18 @@ const ConversationsAdmin = () => {
       }
       
       const { adminFirstName, adminLastName } = await fetchAdminDetails();
+      const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
+      
       await updateDoc(doc(db, "conversations", selectedConversation.id), {
         status: "approved",
         adminFirstName,
         adminLastName,
         adminId: currentAdmin.uid, // store the approver's UID
       });
+
+      // Log the activity
+      await logActivity(adminFullName, `Approved conversation ${selectedConversation.id}`);
+
       setShowModal(false);
       setSelectedConversation(null);
       setMessages([]);
@@ -116,9 +123,16 @@ const ConversationsAdmin = () => {
     const confirmReject = window.confirm("Reject this conversation?");
     if (!confirmReject) return;
     try {
+      const { adminFirstName, adminLastName } = await fetchAdminDetails();
+      const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
+
       await updateDoc(doc(db, "conversations", selectedConversation.id), {
         status: "rejected",
       });
+
+      // Log the activity
+      await logActivity(adminFullName, `Rejected conversation ${selectedConversation.id}`);
+
       setShowModal(false);
       setSelectedConversation(null);
       setMessages([]);
@@ -141,7 +155,7 @@ const ConversationsAdmin = () => {
   return (
     <div className="flex flex-col md:flex-row min-h-screen">
       <Sidebar />
-      <div className="flex-1 p-4 md:p-6">
+      <div className="flex-1 p-4 md:p-6 md:ml-64">
         <h2 className="text-xl font-semibold text-center mb-4">Pending Conversations</h2>
         <div className="overflow-x-auto shadow rounded-lg">
           <Table striped bordered hover className="min-w-full">
