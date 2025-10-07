@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { db, auth } from '../jsfile/firebase';
 import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc, getDocs } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
-import { getStorage, ref, uploadBytes } from 'firebase/storage'; // Added for storage
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage'; // Added getDownloadURL
 import AddressSelector from './AddressSelector';
 import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
@@ -50,6 +50,7 @@ export default function ShippingServiceRequestForm() {
   const [isNameLocked, setIsNameLocked] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [showModal, setShowModal] = useState(false);
+  const [zoomedImage, setZoomedImage] = useState(null);
 
   // map transport modes to available load types
   const LOAD_OPTIONS = {
@@ -298,6 +299,24 @@ export default function ShippingServiceRequestForm() {
     const user = auth.currentUser;
     const normalizedEmail = (user?.email || formData.email || '').toLowerCase().trim();
 
+    let pickupAddress;
+    if (formData.shipmentDirection === 'Import') {
+      pickupAddress = {
+        country: formData.senderCountry,
+        fullAddress: formData.pickupDetailedAddress,
+      };
+    } else if (formData.pickupOption === 'needPickup') {
+      pickupAddress = {
+        region: formData.pickupRegion,
+        province: formData.pickupProvince,
+        city: formData.pickupCity,
+        barangay: formData.pickupBarangay,
+        detailedAddress: formData.pickupDetailedAddress,
+      };
+    } else {
+      pickupAddress = null;
+    }
+
     const requestData = {
       name: formData.name,
       email: normalizedEmail,
@@ -310,16 +329,7 @@ export default function ShippingServiceRequestForm() {
       shipmentDirection: formData.shipmentDirection,
       loadType: formData.loadType,
       pickupOption: formData.pickupOption,
-      pickupAddress:
-        formData.pickupOption === 'needPickup'
-          ? {
-              region: formData.pickupRegion,
-              province: formData.pickupProvince,
-              city: formData.pickupCity,
-              barangay: formData.pickupBarangay,
-              detailedAddress: formData.pickupDetailedAddress,
-            }
-          : null,
+      pickupAddress,
       additionalServices: formData.additionalServices,
       createdAt: serverTimestamp(),
       requestTime: new Date().toISOString(),
@@ -339,23 +349,25 @@ export default function ShippingServiceRequestForm() {
       const uploadedPackages = [];
       for (let i = 0; i < formData.packages.length; i++) {
         const pkg = formData.packages[i];
-        let imageName = null;
+        let imageUrl = null;
         if (pkg.image) {
-          imageName = pkg.image.name;
-          const storageRef = ref(storage, `shipRequests/${docRef.id}/${imageName}`);
+          const imageName = `${Date.now()}_${pkg.image.name}`;
+          const storageRef = ref(storage, `shipRequests/${docRef.id}/packages/${imageName}`);
           await uploadBytes(storageRef, pkg.image);
+          imageUrl = await getDownloadURL(storageRef);
         }
-        uploadedPackages.push({ ...pkg, image: imageName });
+        uploadedPackages.push({ ...pkg, image: imageUrl });
       }
 
       let updates = { packages: uploadedPackages };
 
       // Upload business permit image
       if (formData.businessPermitImage) {
-        const businessPermitImageName = formData.businessPermitImage.name;
-        const businessPermitStorageRef = ref(storage, `shipRequests/${docRef.id}/businessPermitImage/${businessPermitImageName}`);
+        const businessPermitImageName = `${Date.now()}_${formData.businessPermitImage.name}`;
+        const businessPermitStorageRef = ref(storage, `shipRequests/${docRef.id}/businessPermit/${businessPermitImageName}`);
         await uploadBytes(businessPermitStorageRef, formData.businessPermitImage);
-        updates.businessPermitImage = businessPermitImageName;
+        const businessPermitUrl = await getDownloadURL(businessPermitStorageRef);
+        updates.businessPermitImage = businessPermitUrl;
       }
 
       // Update the document with uploaded packages and images
@@ -424,11 +436,13 @@ export default function ShippingServiceRequestForm() {
     }
 
     let missingFields = [];
-    if (!formData.pickupRegion.trim()) missingFields.push('Region');
-    if (!formData.pickupProvince.trim()) missingFields.push('Province');
-    if (!formData.pickupCity.trim()) missingFields.push('City');
-    if (!formData.pickupBarangay.trim()) missingFields.push('Barangay');
-    if (!formData.pickupDetailedAddress?.trim()) missingFields.push('Street Address');
+    if (formData.shipmentDirection !== 'Import') {
+      if (!formData.pickupRegion.trim()) missingFields.push('Region');
+      if (!formData.pickupProvince.trim()) missingFields.push('Province');
+      if (!formData.pickupCity.trim()) missingFields.push('City');
+      if (!formData.pickupBarangay.trim()) missingFields.push('Barangay');
+    }
+    if (!formData.pickupDetailedAddress?.trim()) missingFields.push(formData.shipmentDirection === 'Import' ? 'Pick Up Location (Full Address)' : 'Street Address');
     if (missingFields.length > 0) {
       alert('Please fill in the following pickup address fields: ' + missingFields.join(', '));
       return;
@@ -469,33 +483,6 @@ export default function ShippingServiceRequestForm() {
     : formData.shipmentDirection 
       ? ['Air', 'Sea'] 
       : ['Air', 'Sea', 'Road'];
-
-  const getSummary = () => {
-    let summary = `Full Name: ${formData.name}\n`;
-    summary += `Email: ${formData.email}\n`;
-    summary += `Business Name: ${formData.businessName}\n`;
-    summary += `Mobile: ${formData.mobile}\n`;
-    summary += `Shipment Direction: ${formData.shipmentDirection}\n`;
-    summary += `Transport Mode: ${formData.transportMode}\n`;
-    if (formData.loadType) summary += `Load Type: ${formData.loadType}\n`;
-    summary += `Sender Country: ${formData.senderCountry}\n`;
-    summary += `Destination Country: ${formData.destinationCountry}\n`;
-    summary += `Destination Address: ${formData.destinationAddress}\n`;
-    summary += `Pickup Address: ${formData.pickupDetailedAddress}, ${formData.pickupBarangay}, ${formData.pickupCity}, ${formData.pickupProvince}, ${formData.pickupRegion}\n`;
-    summary += `Additional Services: ${Object.keys(formData.additionalServices).filter(key => formData.additionalServices[key]).join(', ') || 'None'}\n`;
-    summary += `Packages:\n`;
-    formData.packages.forEach((pkg, index) => {
-      summary += `Package ${index + 1}:\n`;
-      if (!isFullLoad) {
-        summary += `  Dimensions: ${pkg.length} x ${pkg.width} x ${pkg.height} cm\n`;
-      }
-      summary += `  Weight: ${pkg.weight} kg\n`;
-      summary += `  Contents: ${pkg.contents || 'N/A'}\n`;
-      summary += `  Image: ${pkg.image ? 'Uploaded' : 'None'}\n`;
-    });
-    summary += `Business Permit Image: ${formData.businessPermitImage ? 'Uploaded' : 'None'}\n`;
-    return summary;
-  };
 
   return (
     <div className="max-w-4xl mx-auto p-8 bg-white drop-shadow-[0px_2px_5px_rgba(0,0,0,1)] shadow-xl rounded-xl mt-10 mb-20 border border-gray-200">
@@ -768,18 +755,34 @@ export default function ShippingServiceRequestForm() {
             {/* Conditional Pickup Address */}
             <div className="mt-4">
               <h3 className="text-xl font-semibold mb-4">Pickup Address</h3>
-              <AddressSelector onSelect={handlePickupAddressSelect} />
-              <div className="flex flex-col mt-4">
-                <label className="mb-1 font-medium text-gray-700">Street Address</label>
-                <textarea
-                  name="pickupDetailedAddress"
-                  value={formData.pickupDetailedAddress}
-                  onChange={handleChange}
-                  placeholder="Enter street, house number, etc."
-                  className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  rows="3"
-                />
-              </div>
+              {formData.shipmentDirection !== 'Import' ? (
+                <>
+                  <AddressSelector onSelect={handlePickupAddressSelect} />
+                  <div className="flex flex-col mt-4">
+                    <label className="mb-1 font-medium text-gray-700">Street Address</label>
+                    <textarea
+                      name="pickupDetailedAddress"
+                      value={formData.pickupDetailedAddress}
+                      onChange={handleChange}
+                      placeholder="Enter street, house number, etc."
+                      className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      rows="3"
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col">
+                  <label className="mb-1 font-medium text-gray-700">Pick Up Location (Full Address)</label>
+                  <textarea
+                    name="pickupDetailedAddress"
+                    value={formData.pickupDetailedAddress}
+                    onChange={handleChange}
+                    placeholder="Enter full pickup address of the shipment"
+                    className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    rows="3"
+                  />
+                </div>
+              )}
             </div>
 
             {/* Packages */}
@@ -835,7 +838,7 @@ export default function ShippingServiceRequestForm() {
                       </div>
                     </div>
                   ) : (
-                    <div className="md:col-span-2 flex flex-col">
+                    <div className="flex flex-col mb-4">
                       <label className="mb-1 font-medium text-gray-700">Total Weight (kg)</label>
                       <input
                         type="number"
@@ -928,8 +931,58 @@ export default function ShippingServiceRequestForm() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-lg max-w-lg w-full max-h-[80vh] overflow-y-auto">
             <h3 className="text-xl font-bold mb-4">Confirm Submission</h3>
-            <pre className="whitespace-pre-wrap text-sm mb-4">{getSummary()}</pre>
-            <div className="flex justify-end gap-4">
+            <div className="space-y-3 text-gray-800">
+              <p><strong>Full Name:</strong> {formData.name}</p>
+              <p><strong>Email:</strong> {formData.email}</p>
+              <p><strong>Business Name:</strong> {formData.businessName}</p>
+              <p><strong>Mobile:</strong> {formData.mobile}</p>
+              <p><strong>Shipment Direction:</strong> {formData.shipmentDirection}</p>
+              <p><strong>Transport Mode:</strong> {formData.transportMode}</p>
+              {formData.loadType && <p><strong>Load Type:</strong> {formData.loadType}</p>}
+              <p><strong>Sender Country:</strong> {formData.senderCountry}</p>
+              <p><strong>Destination Country:</strong> {formData.destinationCountry}</p>
+              <p><strong>Destination Address:</strong> {formData.destinationAddress}</p>
+              <p><strong>Pickup Address:</strong> {formData.shipmentDirection === 'Import' ? `${formData.pickupDetailedAddress} (in ${formData.senderCountry})` : `${formData.pickupDetailedAddress}, ${formData.pickupBarangay}, ${formData.pickupCity}, ${formData.pickupProvince}, ${formData.pickupRegion}`}</p>
+              <p><strong>Additional Services:</strong> {Object.keys(formData.additionalServices).filter(key => formData.additionalServices[key]).join(', ') || 'None'}</p>
+              <h4 className="text-lg font-semibold mt-4">Packages:</h4>
+              {formData.packages.map((pkg, index) => {
+                const isFullLoad = formData.loadType === 'FCL' || formData.loadType === 'FTL';
+                return (
+                  <div key={index} className="mb-4 border-b pb-2">
+                    <p><strong>Package {index + 1}:</strong></p>
+                    {!isFullLoad ? (
+                      <p>Dimensions: {pkg.length} x {pkg.width} x {pkg.height} cm</p>
+                    ) : null}
+                    <p>Weight: {pkg.weight} kg</p>
+                    <p>Contents: {pkg.contents || 'N/A'}</p>
+                    {pkg.image && (
+                      <div className="mt-2">
+                        <img
+                          src={URL.createObjectURL(pkg.image)}
+                          alt={`Package ${index + 1} Preview`}
+                          className="w-64 h-auto object-contain border border-gray-300 rounded cursor-pointer"
+                          onClick={() => setZoomedImage(URL.createObjectURL(pkg.image))}
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              <h4 className="text-lg font-semibold mt-4">Business Permit Image:</h4>
+              {formData.businessPermitImage ? (
+                <div className="mt-2">
+                  <img
+                    src={URL.createObjectURL(formData.businessPermitImage)}
+                    alt="Business Permit Preview"
+                    className="w-64 h-auto object-contain border border-gray-300 rounded cursor-pointer"
+                    onClick={() => setZoomedImage(URL.createObjectURL(formData.businessPermitImage))}
+                  />
+                </div>
+              ) : (
+                <p>None</p>
+              )}
+            </div>
+            <div className="flex justify-end gap-4 mt-4">
               <button
                 onClick={() => setShowModal(false)}
                 className="bg-gray-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-gray-700 transition"
@@ -944,6 +997,19 @@ export default function ShippingServiceRequestForm() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {zoomedImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80 cursor-pointer"
+          onClick={() => setZoomedImage(null)}
+        >
+          <img
+            src={zoomedImage}
+            alt="Zoomed Image"
+            className="max-w-[90vw] max-h-[90vh] object-contain"
+          />
         </div>
       )}
     </div>

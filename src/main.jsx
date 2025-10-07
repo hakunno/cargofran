@@ -8,7 +8,7 @@ import "bootstrap/dist/js/bootstrap.bundle.min.js";
 
 createRoot(document.getElementById("root")).render(
   <AuthProvider> {/* Wrap App inside AuthProvider */}
-    <BrowserRouter basename="/cargofran">
+    <BrowserRouter>
       <App />
     </BrowserRouter>
   </AuthProvider>

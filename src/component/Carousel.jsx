@@ -25,10 +25,11 @@ export default function Carousel({
         className="flex transition-transform ease-out duration-500 h-full"
         style={{ transform: `translateX(-${curr * 100}%)` }}
       >
-        {slides.map(({ src, label, to, className, info }, i) => (
+        {slides.map(({ src, label, to, className, info, onClick }, i) => (
           <Link
             key={i}
             to={to}
+            onClick={onClick}
             className="relative w-full h-full flex-shrink-0 shadow-lg overflow-hidden rounded-lg"
           >
             <div className={`absolute top-0 left-0 right-0 bg-gradient-to-b from-black to-transparent bg-opacity-30 text-white text-xs md:text-sm text-center py-4 z-10 ${className || ''}`}>

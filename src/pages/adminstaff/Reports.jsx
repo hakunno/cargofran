@@ -45,11 +45,9 @@ const Reports = () => {
   // Data states for each report
   const [shipments, setShipments] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
-  const [conversations, setConversations] = useState([]);
   const [statusData, setStatusData] = useState({ labels: [], datasets: [] });
   const [transportData, setTransportData] = useState({ labels: [], datasets: [] });
   const [deliveryPerformanceData, setDeliveryPerformanceData] = useState({ labels: [], datasets: [] });
-  const [conversationMetrics, setConversationMetrics] = useState({ approved: 0, pending: 0, volumeData: { labels: [], datasets: [] } });
 
   // Date selection states
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -64,14 +62,12 @@ const Reports = () => {
   const shipmentSummaryRef = useRef();
   const deliveryPerformanceRef = useRef();
   const pendingRequestsRef = useRef();
-  const conversationMetricsRef = useRef();
 
   useEffect(() => {
     const fetchAll = async () => {
-      const [shipSnap, reqSnap, convSnap] = await Promise.all([
+      const [shipSnap, reqSnap] = await Promise.all([
         getDocs(collection(db, "Packages")),
-        getDocs(query(collection(db, "shipRequests"), where("status", "!=", "Accepted"))),
-        getDocs(collection(db, "conversations"))
+        getDocs(query(collection(db, "shipRequests"), where("status", "!=", "Accepted")))
       ]);
 
       const shipmentsList = shipSnap.docs.map((docSnap) => ({
@@ -82,25 +78,20 @@ const Reports = () => {
         id: doc.id,
         ...doc.data(),
       }));
-      const convos = convSnap.docs.map((doc) => doc.data());
 
       setShipments(shipmentsList);
       setPendingRequests(requestsList);
-      setConversations(convos);
 
       // Compute dateSet and monthSet
       const allDates = [];
+      const currentTime = new Date();
       shipmentsList.forEach(s => {
         const ts = s.createdTime?.toDate() || (s.dateStarted ? new Date(s.dateStarted) : null);
-        if (ts) allDates.push(ts);
+        if (ts && ts <= currentTime) allDates.push(ts);
       });
       requestsList.forEach(r => {
         const ts = r.requestTime ? new Date(r.requestTime) : null;
-        if (ts) allDates.push(ts);
-      });
-      convos.forEach(c => {
-        const ts = c.createdAt?.toDate();
-        if (ts) allDates.push(ts);
+        if (ts && ts <= currentTime) allDates.push(ts);
       });
 
       const dSet = new Set(allDates.map(d => d.toISOString().slice(0, 10)));
@@ -113,7 +104,7 @@ const Reports = () => {
   }, []);
 
   useEffect(() => {
-    if (shipments.length === 0 && pendingRequests.length === 0 && conversations.length === 0) return;
+    if (shipments.length === 0 && pendingRequests.length === 0) return;
 
     const start = selectedDate;
     const end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
@@ -129,9 +120,6 @@ const Reports = () => {
     );
     const filteredRequests = pendingRequests.filter(r =>
       filterByDate(r, r => r.requestTime ? new Date(r.requestTime) : null)
-    );
-    const filteredConvos = conversations.filter(c =>
-      filterByDate(c, c => c.createdAt?.toDate())
     );
 
     // Shipment Status Pie Chart
@@ -192,36 +180,7 @@ const Reports = () => {
         },
       ],
     });
-
-    // Conversation Metrics
-    const approved = filteredConvos.filter(c => c.status === "approved").length;
-    const pending = filteredConvos.filter(c => c.status === "pending" && c.request === "sent").length;
-
-    // Conversation Volume Line Chart (over time, simplified)
-    const volumeData = filteredConvos.reduce((acc, c) => {
-      const date = c.createdAt?.toDate()?.toLocaleDateString() || "Unknown";
-      acc[date] = (acc[date] || 0) + 1;
-      return acc;
-    }, {});
-    const sortedDates = Object.keys(volumeData).sort((a, b) => new Date(a) - new Date(b));
-    setConversationMetrics({
-      approved,
-      pending,
-      volumeData: {
-        labels: sortedDates,
-        datasets: [
-          {
-            label: "Conversations",
-            data: sortedDates.map(date => volumeData[date]),
-            borderColor: "#8B5CF6",
-            backgroundColor: "#6D28D9",
-            tension: 0.4,
-            fill: false,
-          },
-        ],
-      },
-    });
-  }, [shipments, pendingRequests, conversations, selectedDate]);
+  }, [shipments, pendingRequests, selectedDate]);
 
   const prevMonth = () => {
     const newDate = new Date(selectedDate);
@@ -320,23 +279,6 @@ const Reports = () => {
     }`,
   });
 
-  const handlePrintConversationMetrics = useReactToPrint({
-    contentRef: conversationMetricsRef,
-    documentTitle: "Francess Logistic Conversation Metrics Report",
-    pageStyle: `@media print { 
-      body { font-family: Arial, sans-serif; margin: 20mm; width: 100%; max-width: 1000px; } 
-      .print-header { margin-bottom: 30px; position: relative; padding-bottom: 10px; border-bottom: 1px solid #ddd; } 
-      .print-header h2 { text-align: center; font-size: 24px; margin-bottom: 10px; color: #333; } 
-      .print-header .header-details { display: flex; justify-content: space-between; align-items: center; font-size: 14px; color: #666; margin-top: 5px; } 
-      .print-header .icon { font-size: 24px; position: absolute; top: 0; right: 0; } 
-      h3 { text-align: center; margin: 20px 0; font-size: 18px; color: #333; } 
-      .stats { display: flex; justify-content: space-around; margin-top: 20px; page-break-inside: avoid; padding: 20px; background: #f9f9f9; border-radius: 8px; } 
-      canvas { max-width: 100%; max-height: 400px; page-break-inside: avoid; } 
-      .no-print { display: none !important; } 
-      .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; } 
-    }`,
-  });
-
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-gray-50">
       <Sidebar />
@@ -346,7 +288,7 @@ const Reports = () => {
           <Button variant="outline-primary" onClick={prevMonth} className="mx-2">&lt;</Button>
           <span 
             onClick={() => setShowCalendarModal(true)} 
-            className={`mx-4 cursor-pointer text-lg font-semibold ${hasDataInMonth ? 'text-gray-900' : 'text-gray-400'}`}
+            className={`mx-4 cursor-pointer text-lg font-bold text-gray-900 text-gray-400`}
           >
             {monthName}
           </span>
@@ -358,7 +300,7 @@ const Reports = () => {
           <Modal.Header closeButton>
             <Modal.Title>Select Month/Year</Modal.Title>
           </Modal.Header>
-          <Modal.Body>
+          <Modal.Body className="flex justify-center items-center">
             <Calendar
               onChange={handleCalendarChange}
               value={selectedDate}
@@ -395,14 +337,7 @@ const Reports = () => {
               onClick={() => setKey("pendingRequests")}
               className="flex-1 min-w-[150px]"
             >
-              Pending Requests
-            </Button>
-            <Button 
-              variant={key === "conversationMetrics" ? "primary" : "outline-primary"} 
-              onClick={() => setKey("conversationMetrics")}
-              className="flex-1 min-w-[150px]"
-            >
-              Conversation Metrics
+              Shipment Requests
             </Button>
           </div>
         </div>
@@ -552,42 +487,6 @@ const Reports = () => {
               </Table>
             </div>
             <Button variant="primary" onClick={handlePrintPendingRequests} className="mt-6 w-full md:w-auto bg-blue-600 hover:bg-blue-700 no-print">
-              Print Report
-            </Button>
-          </div>
-        )}
-
-        {/* Conversation Metrics Tab Content */}
-        {key === "conversationMetrics" && (
-          <div ref={conversationMetricsRef} className="bg-white shadow-lg rounded-xl p-6 print-section">
-            <div className="print-header hidden print:block">
-              <h2 className="text-2xl font-bold text-gray-900">Francess Logistic Conversation Metrics Report</h2>
-              <span className="icon">💬</span>
-              <div className="header-details">
-                <span>Prepared by: {adminName} | Prepared for: Francess Logistic</span>
-                <span>{reportPeriod}</span>
-                <span>Date: {currentDate}</span>
-              </div>
-            </div>
-            <h3 className="text-xl font-semibold text-gray-800 mb-6 text-center">Conversation Metrics Report</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              <div className="bg-gray-50 p-4 rounded-lg shadow-md stats">
-                <p className="text-lg"><strong>Approved Conversations:</strong> {conversationMetrics.approved}</p>
-                <p className="text-lg"><strong>Pending Conversations:</strong> {conversationMetrics.pending}</p>
-              </div>
-              <div className="bg-gray-50 p-4 rounded-lg shadow-md chart-container" style={{ height: '300px' }}>
-                <Line
-                  data={conversationMetrics.volumeData}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { position: "top" }, title: { display: true, text: "Conversation Volume Over Time", font: { size: 16 } } },
-                    scales: { y: { beginAtZero: true } },
-                  }}
-                />
-              </div>
-            </div>
-            <Button variant="primary" onClick={handlePrintConversationMetrics} className="mt-6 w-full md:w-auto bg-blue-600 hover:bg-blue-700 no-print">
               Print Report
             </Button>
           </div>

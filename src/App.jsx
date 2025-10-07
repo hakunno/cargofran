@@ -8,8 +8,6 @@ import Services from "./pages/Services";
 import OurCommitment from "./pages/OurCommitment";
 import Contact from "./pages/Contact";
 import TrackPackage from "./pages/TrackPackage";
-import UserDashboard from "./pages/UserDashboard";
-import FaqChat from "./pages/FaqChat";
 import Messages from "./pages/Messages";
 import ChatWidget from "./component/ChatWidget";
 import ShippingInquiry from "./pages/ShippingInquiry";
@@ -51,11 +49,23 @@ const App = () => {
         <Route path="/OurCommitment" element={<OurCommitment />} />
         <Route path="/Contact" element={<Contact />} />
         <Route path="/TrackPackage" element={<TrackPackage />} />
-        <Route path="/UserDashboard" element={<UserDashboard />} />
-        <Route path="/ChatHelp" element={<FaqChat />} />
         <Route path="/Messages" element={<Messages />} />
-        <Route path="/ShippingInquiry" element={<ShippingInquiry/>} />
-        <Route path="/MyShipments" element={<MyShipments/>} />
+        <Route
+          path="/ShippingInquiry"
+          element={
+            <ProtectedRoute requiredRoles={["user"]}>
+              <ShippingInquiry />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/MyShipments"
+          element={
+            <ProtectedRoute requiredRoles={["user"]}>
+              <MyShipments />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/TermsAndConditions" element={<TermsAndConditions/>} />
 
         {/* Protected Routes for Admin and Staff */}

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, forwardRef, useImperativeHandle } from "react";
 import { useNavigate } from "react-router-dom";
 import { Modal, Button, Form } from "react-bootstrap";
 import { 
@@ -20,7 +20,7 @@ import {
   getDocs
  } from "firebase/firestore";
 
-function LoginModal({ setIsOpen }) {
+const LoginModal = forwardRef(({ setIsOpen, hideTrigger = false }, ref) => {  // Add hideTrigger prop with default false
   const [show, setShow] = useState(false);
   const [view, setView] = useState("login");
   const [firstName, setFirstName] = useState("");
@@ -30,14 +30,23 @@ function LoginModal({ setIsOpen }) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [redirectAfterLogin, setRedirectAfterLogin] = useState(null);
 
   const navigate = useNavigate();
+
+  useImperativeHandle(ref, () => ({
+    openModal: (redirect) => {
+      if (redirect) setRedirectAfterLogin(redirect);
+      setShow(true);
+    },
+  }));
 
   const handleClose = () => {
     setShow(false);
     setView("login");
     setError(""); 
     setSuccessMessage(""); 
+    setRedirectAfterLogin(null);
   };
 
   const changeView = (newView) => {
@@ -66,14 +75,9 @@ function LoginModal({ setIsOpen }) {
       if (userDoc.exists()) {
         const userData = userDoc.data();
   
-        // Redirect based on user role
-        if (userData.role === "admin") {
-          navigate("/AdminDashboard");
-        } else if (userData.role === "staff") {
-          navigate("/AdminDashboard");
-        } else {
-          navigate("/");
-        }
+        // Redirect based on redirect prop or user role
+        const targetPath = redirectAfterLogin || (userData.role === "admin" || userData.role === "staff" ? "/AdminDashboard" : "/");
+        navigate(targetPath);
   
         // Show verification warning if needed
         if (!userData.verified) {
@@ -173,180 +177,182 @@ function LoginModal({ setIsOpen }) {
 
   return (
     <>
-      <div
-        className="lexend text-xl drop-shadow-[2px_2px_2px_rgba(0,0,0,0.8)] font-bold relative block py-2 px-0 no-underline transition-all duration-200 transform hover:scale-110 active:scale-95 
-                  after:content-[''] after:absolute after:left-0 after:bottom-0 after:w-0 after:h-[2px] after:bg-black/90 after:transition-all after:duration-300 
-                  hover:after:w-full text-white/100 hover:text-green-400 cursor-pointer"
-        onClick={handleShow}
-      >
-        Log In / Sign Up
-      </div>
+      {!hideTrigger && (  // Conditionally render the trigger based on hideTrigger prop
+        <div
+          className="lexend text-xl drop-shadow-[2px_2px_2px_rgba(0,0,0,0.8)] font-bold relative block py-2 px-0 no-underline transition-all duration-200 transform hover:scale-110 active:scale-95 
+                    after:content-[''] after:absolute after:left-0 after:bottom-0 after:w-0 after:h-[2px] after:bg-black/90 after:transition-all after:duration-300 
+                    hover:after:w-full text-white/100 hover:text-green-400 cursor-pointer"
+          onClick={handleShow}
+        >
+          Log In / Sign Up
+        </div>
+      )}
 
       <Modal show={show} onHide={handleClose} centered>
-      <Modal.Header closeButton>
-        <Modal.Title className="lexend">
-          {view === "login" && "Log In"}
-          {view === "signup" && "Sign Up"}
-          {view === "forgotPassword" && "Reset Password"}
-        </Modal.Title>
-      </Modal.Header>
+        <Modal.Header closeButton>
+          <Modal.Title className="lexend">
+            {view === "login" && "Log In"}
+            {view === "signup" && "Sign Up"}
+            {view === "forgotPassword" && "Reset Password"}
+          </Modal.Title>
+        </Modal.Header>
 
-      <Modal.Body>
-        {error && <p className="text-danger text-center">{error}</p>}
-        {successMessage && <p className="text-success text-center">{successMessage}</p>}
+        <Modal.Body>
+          {error && <p className="text-danger text-center">{error}</p>}
+          {successMessage && <p className="text-success text-center">{successMessage}</p>}
 
-        {/* Forgot Password Form */}
-        {view === "forgotPassword" && (
-          <Form onSubmit={handleForgotPassword}>
-            <Form.Group className="mb-3">
-              <Form.Label htmlFor="forgot-email">Email Address</Form.Label>
-              <Form.Control
-                type="email"
-                id="forgot-email"
-                name="email"
-                placeholder="Enter your email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-              />
-            </Form.Group>
-            <Button variant="primary" type="submit" className="w-100">
-              Send Reset Link
-            </Button>
-            <div className="mt-3 text-center">
-              <a href="#" onClick={(e) => { e.preventDefault(); changeView("login"); }}>
-                Back to Login
-              </a>
-            </div>
-          </Form>
-        )}
-
-        {/* Login Form */}
-        {view === "login" && (
-          <Form onSubmit={handleLogin}>
-            <Form.Group className="mb-3">
-              <Form.Label htmlFor="login-email">Email</Form.Label>
-              <Form.Control
-                type="email"
-                id="login-email"
-                name="email"
-                placeholder="Enter your email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-              />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label htmlFor="login-password">Password</Form.Label>
-              <Form.Control
-                type="password"
-                id="login-password"
-                name="password"
-                placeholder="Enter password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-              />
-              <div className="lexend text-end mt-2">
-                <a href="#" onClick={(e) => { e.preventDefault(); changeView("forgotPassword"); }}>
-                  Forgot Password?
+          {/* Forgot Password Form */}
+          {view === "forgotPassword" && (
+            <Form onSubmit={handleForgotPassword}>
+              <Form.Group className="mb-3">
+                <Form.Label htmlFor="forgot-email">Email Address</Form.Label>
+                <Form.Control
+                  type="email"
+                  id="forgot-email"
+                  name="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                />
+              </Form.Group>
+              <Button variant="primary" type="submit" className="w-100">
+                Send Reset Link
+              </Button>
+              <div className="mt-3 text-center">
+                <a href="#" onClick={(e) => { e.preventDefault(); changeView("login"); }}>
+                  Back to Login
                 </a>
               </div>
-            </Form.Group>
-            <Button variant="primary" type="submit" className="lexend w-100">
-              Log In
-            </Button>
-            <div className="lexend mt-3 text-center">
-              <a href="#" onClick={(e) => { e.preventDefault(); changeView("signup"); }}>
-                First time? Sign up
-              </a>
-            </div>
-          </Form>
-        )}
+            </Form>
+          )}
 
-        {/* Signup Form */}
-        {view === "signup" && (
-          <Form onSubmit={handleSignup}>
-            <Form.Group className="mb-3">
-              <Form.Label htmlFor="signup-first-name">First Name</Form.Label>
-              <Form.Control
-                type="text"
-                id="signup-first-name"
-                name="firstName"
-                placeholder="Enter first name"
-                value={firstName}
-                onChange={(e) => setFirstName(toTitleCase(e.target.value))}
-                required
-              />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label htmlFor="signup-last-name">Last Name</Form.Label>
-              <Form.Control
-                type="text"
-                id="signup-last-name"
-                name="lastName"
-                placeholder="Enter last name"
-                value={lastName}
-                onChange={(e) => setLastName(toTitleCase(e.target.value))}
-                required
-              />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label htmlFor="signup-email">Email</Form.Label>
-              <Form.Control
-                type="email"
-                id="signup-email"
-                name="email"
-                placeholder="Enter email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-              />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label htmlFor="signup-password">Password</Form.Label>
-              <Form.Control
-                type="password"
-                id="signup-password"
-                name="password"
-                placeholder="Enter password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="new-password"
-              />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label htmlFor="signup-confirm-password">Confirm Password</Form.Label>
-              <Form.Control
-                type="password"
-                id="signup-confirm-password"
-                name="confirmPassword"
-                placeholder="Confirm password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                autoComplete="new-password"
-              />
-            </Form.Group>
-            <Button variant="primary" type="submit" className="w-100">
-              Sign Up
-            </Button>
-            <div className="mt-3 lexend text-center">
-              <a href="#" onClick={(e) => { e.preventDefault(); changeView("login"); }}>
-                Back to Login
-              </a>
-            </div>
-          </Form>
-        )}
-      </Modal.Body>
-    </Modal>
+          {/* Login Form */}
+          {view === "login" && (
+            <Form onSubmit={handleLogin}>
+              <Form.Group className="mb-3">
+                <Form.Label htmlFor="login-email">Email</Form.Label>
+                <Form.Control
+                  type="email"
+                  id="login-email"
+                  name="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                />
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label htmlFor="login-password">Password</Form.Label>
+                <Form.Control
+                  type="password"
+                  id="login-password"
+                  name="password"
+                  placeholder="Enter password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                />
+                <div className="lexend text-end mt-2">
+                  <a href="#" onClick={(e) => { e.preventDefault(); changeView("forgotPassword"); }}>
+                    Forgot Password?
+                  </a>
+                </div>
+              </Form.Group>
+              <Button variant="primary" type="submit" className="lexend w-100">
+                Log In
+              </Button>
+              <div className="lexend mt-3 text-center">
+                <a href="#" onClick={(e) => { e.preventDefault(); changeView("signup"); }}>
+                  First time? Sign up
+                </a>
+              </div>
+            </Form>
+          )}
+
+          {/* Signup Form */}
+          {view === "signup" && (
+            <Form onSubmit={handleSignup}>
+              <Form.Group className="mb-3">
+                <Form.Label htmlFor="signup-first-name">First Name</Form.Label>
+                <Form.Control
+                  type="text"
+                  id="signup-first-name"
+                  name="firstName"
+                  placeholder="Enter first name"
+                  value={firstName}
+                  onChange={(e) => setFirstName(toTitleCase(e.target.value))}
+                  required
+                />
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label htmlFor="signup-last-name">Last Name</Form.Label>
+                <Form.Control
+                  type="text"
+                  id="signup-last-name"
+                  name="lastName"
+                  placeholder="Enter last name"
+                  value={lastName}
+                  onChange={(e) => setLastName(toTitleCase(e.target.value))}
+                  required
+                />
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label htmlFor="signup-email">Email</Form.Label>
+                <Form.Control
+                  type="email"
+                  id="signup-email"
+                  name="email"
+                  placeholder="Enter email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                />
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label htmlFor="signup-password">Password</Form.Label>
+                <Form.Control
+                  type="password"
+                  id="signup-password"
+                  name="password"
+                  placeholder="Enter password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete="new-password"
+                />
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label htmlFor="signup-confirm-password">Confirm Password</Form.Label>
+                <Form.Control
+                  type="password"
+                  id="signup-confirm-password"
+                  name="confirmPassword"
+                  placeholder="Confirm password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  autoComplete="new-password"
+                />
+              </Form.Group>
+              <Button variant="primary" type="submit" className="w-100">
+                Sign Up
+              </Button>
+              <div className="mt-3 lexend text-center">
+                <a href="#" onClick={(e) => { e.preventDefault(); changeView("login"); }}>
+                  Back to Login
+                </a>
+              </div>
+            </Form>
+          )}
+        </Modal.Body>
+      </Modal>
     </>
   );
-}
+});
 
 export default LoginModal;

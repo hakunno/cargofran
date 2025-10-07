@@ -19,11 +19,13 @@ const storage = getStorage();
 const ShipmentInquiryRequests = () => {
   const [inquiries, setInquiries] = useState([]);
   const [previewUrls, setPreviewUrls] = useState({});
+  const [businessPreviewUrls, setBusinessPreviewUrls] = useState({});
   const [selectedInquiry, setSelectedInquiry] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAcceptModalOpen, setIsAcceptModalOpen] = useState(false);
   const [packageNumberInput, setPackageNumberInput] = useState('');
   const [inquiryToAccept, setInquiryToAccept] = useState(null); 
+  const [zoomedImage, setZoomedImage] = useState(null);
 
   useEffect(() => {
     const fetchInquiries = async () => {
@@ -43,32 +45,54 @@ const ShipmentInquiryRequests = () => {
 
   useEffect(() => {
     const fetchPreviewUrls = async () => {
-      const newPreviews = {};
+      const newPackagePreviews = {};
+      const newBusinessPreviews = {};
       await Promise.all(
         inquiries.map(async (inquiry) => {
-          const urls = [];
+          const packageUrls = [];
           if (inquiry.packages && Array.isArray(inquiry.packages)) {
             await Promise.all(
               inquiry.packages.map(async (pkg) => {
+                let url = null;
                 if (pkg.image) {
-                  try {
-                    const fileRef = ref(storage, `shipRequests/${inquiry.id}/${pkg.image}`);
-                    const url = await getDownloadURL(fileRef);
-                    urls.push(url);
-                  } catch (error) {
-                    console.error('Error fetching image for package', error);
-                    urls.push(null);
+                  if (pkg.image.startsWith('https://')) {
+                    url = pkg.image; // Already a URL
+                  } else {
+                    // Legacy: Fetch by name
+                    try {
+                      const fileRef = ref(storage, `shipRequests/${inquiry.id}/${pkg.image}`);
+                      url = await getDownloadURL(fileRef);
+                    } catch (error) {
+                      console.error('Error fetching package image:', error);
+                    }
                   }
-                } else {
-                  urls.push(null);
                 }
+                packageUrls.push(url);
               })
             );
           }
-          newPreviews[inquiry.id] = urls;
+          newPackagePreviews[inquiry.id] = packageUrls;
+
+          // Business permit
+          let businessUrl = null;
+          if (inquiry.businessPermitImage) {
+            if (inquiry.businessPermitImage.startsWith('https://')) {
+              businessUrl = inquiry.businessPermitImage; // Already a URL
+            } else {
+              // Legacy: Fetch by name
+              try {
+                const fileRef = ref(storage, `shipRequests/${inquiry.id}/businessPermitImage/${inquiry.businessPermitImage}`);
+                businessUrl = await getDownloadURL(fileRef);
+              } catch (error) {
+                console.error('Error fetching business permit image:', error);
+              }
+            }
+          }
+          newBusinessPreviews[inquiry.id] = businessUrl;
         })
       );
-      setPreviewUrls(newPreviews);
+      setPreviewUrls(newPackagePreviews);
+      setBusinessPreviewUrls(newBusinessPreviews);
     };
     if (inquiries.length > 0) {
       fetchPreviewUrls();
@@ -317,7 +341,8 @@ const ShipmentInquiryRequests = () => {
                           <img
                             src={previewUrls[selectedInquiry.id][idx]}
                             alt={`Package ${idx + 1} Image`}
-                            className="w-64 h-auto object-contain border border-gray-300 rounded"
+                            className="w-64 h-auto object-contain border border-gray-300 rounded cursor-pointer"
+                            onClick={() => setZoomedImage(previewUrls[selectedInquiry.id][idx])}
                           />
                         </div>
                       )}
@@ -326,6 +351,22 @@ const ShipmentInquiryRequests = () => {
                 })
               ) : (
                 <p>No packages available.</p>
+              )}
+
+              <hr className="my-4" />
+
+              <h4 className="text-lg font-semibold">Business Permit Image:</h4>
+              {businessPreviewUrls[selectedInquiry.id] ? (
+                <div className="mt-2">
+                  <img
+                    src={businessPreviewUrls[selectedInquiry.id]}
+                    alt="Business Permit Image"
+                    className="w-64 h-auto object-contain border border-gray-300 rounded cursor-pointer"
+                    onClick={() => setZoomedImage(businessPreviewUrls[selectedInquiry.id])}
+                  />
+                </div>
+              ) : (
+                <p>None</p>
               )}
 
               <p>
@@ -358,6 +399,19 @@ const ShipmentInquiryRequests = () => {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {zoomedImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80 cursor-pointer"
+          onClick={() => setZoomedImage(null)}
+        >
+          <img
+            src={zoomedImage}
+            alt="Zoomed Image"
+            className="max-w-[90vw] max-h-[90vh] object-contain"
+          />
         </div>
       )}
 

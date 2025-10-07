@@ -139,7 +139,7 @@ const UserShipmentHistory = () => {
   const getAcceptanceStatus = (e) => {
     if (!e || !e.collection) return "Unknown";
     if (e.collection === "Packages") return "Accepted";
-    if (e.status === "Processing") return "Pending";
+    if (e.status === "Processing" || !e.status) return "Pending";
     if (e.status === "Rejected") return "Rejected";
     if (e.status === "Accepted") return "Accepted"; // in case kept
     return "Unknown";
@@ -241,7 +241,12 @@ const UserShipmentHistory = () => {
                 <div>
                   <h6>Request Details</h6>
                   {getAcceptanceStatus(currentEntry) === "Pending" ? (
-                    <p>Request on process</p>
+                    <p>Request is pending processing.</p>
+                  ) : getAcceptanceStatus(currentEntry) === "Rejected" ? (
+                    <>
+                      <p>This request was rejected.</p>
+                      <pre style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(currentEntry, null, 2)}</pre>
+                    </>
                   ) : (
                     <pre style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(currentEntry, null, 2)}</pre>
                   )}

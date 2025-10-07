@@ -18,9 +18,14 @@ import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 import AddressSelector from '../AddressSelector';
 import { logActivity } from "../../modals/StaffActivity.jsx"; // Adjust path to where ActivityModal/logActivity is exported
+import { getStorage, ref, getDownloadURL } from 'firebase/storage';
+
+const storage = getStorage();
 
 const Shipments = () => {
   const [shipments, setShipments] = useState([]);
+  const [previewUrls, setPreviewUrls] = useState({});
+  const [businessPreviewUrls, setBusinessPreviewUrls] = useState({});
   const [showModal, setShowModal] = useState(false);
   const [editModal, setEditModal] = useState(false);
   const [infoModal, setInfoModal] = useState(false); // new Info modal state
@@ -79,6 +84,8 @@ const Shipments = () => {
     ],
   };
 
+  const [zoomedImage, setZoomedImage] = useState(null);
+
   // Fetch countries from Firebase
   useEffect(() => {
     const fetchCountries = async () => {
@@ -113,6 +120,62 @@ const Shipments = () => {
     };
     fetchShipments();
   }, []);
+
+  useEffect(() => {
+    const fetchPreviewUrls = async () => {
+      const newPackagePreviews = {};
+      const newBusinessPreviews = {};
+      await Promise.all(
+        shipments.map(async (shipment) => {
+          const packageUrls = [];
+          if (shipment.packages && Array.isArray(shipment.packages)) {
+            await Promise.all(
+              shipment.packages.map(async (pkg) => {
+                let url = null;
+                if (pkg.image) {
+                  if (pkg.image.startsWith('https://')) {
+                    url = pkg.image; // Already a URL
+                  } else {
+                    // Legacy: Fetch by name (assuming path is shipRequests/originalId, but since we don't have originalId, assume it's under Packages/docId)
+                    try {
+                      const fileRef = ref(storage, `shipRequests/${shipment.docId}/${pkg.image}`); // Adjust if path differs
+                      url = await getDownloadURL(fileRef);
+                    } catch (error) {
+                      console.error('Error fetching package image:', error);
+                    }
+                  }
+                }
+                packageUrls.push(url);
+              })
+            );
+          }
+          newPackagePreviews[shipment.docId] = packageUrls;
+
+          // Business permit
+          let businessUrl = null;
+          if (shipment.businessPermitImage) {
+            if (shipment.businessPermitImage.startsWith('https://')) {
+              businessUrl = shipment.businessPermitImage; // Already a URL
+            } else {
+              // Legacy: Fetch by name
+              try {
+                const fileRef = ref(storage, `shipRequests/${shipment.docId}/businessPermitImage/${shipment.businessPermitImage}`);
+                businessUrl = await getDownloadURL(fileRef);
+              } catch (error) {
+                console.error('Error fetching business permit image:', error);
+              }
+            }
+          }
+          newBusinessPreviews[shipment.docId] = businessUrl;
+        })
+      );
+      setPreviewUrls(newPackagePreviews);
+      setBusinessPreviewUrls(newBusinessPreviews);
+    };
+    if (shipments.length > 0) {
+      fetchPreviewUrls();
+    }
+  }, [shipments]);
 
   const fetchAdminDetails = async () => {
     const currentAdmin = auth.currentUser;
@@ -393,12 +456,6 @@ const Shipments = () => {
       // Add the shipment to the Packages collection
       const docRef = await addDoc(collection(db, "Packages"), newShipment);
 
-      // Create the initial status entry in the statusHistory subcollection
-      await addDoc(collection(db, "Packages", docRef.id, "statusHistory"), {
-        status: formData.packageStatus,
-        timestamp: serverTimestamp(),
-      });
-
       // Log the activity
       await logActivity(adminFullName, `Added new shipment ${newCustomId}`);
 
@@ -457,6 +514,21 @@ const Shipments = () => {
         try {
           const { adminFirstName, adminLastName } = await fetchAdminDetails();
           const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
+
+          // Detect changes
+          const changes = [];
+          if (formData.packageStatus !== currentShipment.packageStatus) {
+            changes.push(`Status changed from ${currentShipment.packageStatus} to ${formData.packageStatus}`);
+          }
+          if (formData.airwayBill !== currentShipment.airwayBill) {
+            changes.push(`Way Bill# changed from ${currentShipment.airwayBill || 'N/A'} to ${formData.airwayBill || 'N/A'}`);
+          }
+          if (formData.email !== currentShipment.email) {
+            changes.push(`Email changed from ${currentShipment.email || 'N/A'} to ${formData.email || 'N/A'}`);
+          }
+          if (formData.paid !== currentShipment.paid) {
+            changes.push(`Paid status changed to ${formData.paid ? 'Yes' : 'No'}`);
+          }
 
           // Check if the status has changed to record a status history entry
           const statusChanged =
@@ -573,6 +645,62 @@ const Shipments = () => {
         console.error("Error canceling shipment:", error);
         alert("Failed to cancel shipment. Please try again.");
       }
+    }
+  };
+
+  const handleSetPaid = async (shipment, paid) => {
+    const confirmSet = window.confirm(`Are you sure you want to set paid to ${paid ? 'Yes' : 'No'}?`);
+    if (!confirmSet) return;
+
+    try {
+      const { adminFirstName, adminLastName } = await fetchAdminDetails();
+      const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
+
+      const updatedData = {
+        paid,
+        updatedTime: serverTimestamp(),
+      };
+
+      await updateDoc(doc(db, "Packages", shipment.docId), updatedData);
+
+      // Log the activity
+      await logActivity(adminFullName, `Set paid to ${paid ? 'Yes' : 'No'} for shipment ${shipment.packageNumber || shipment.customId}`);
+
+      setShipments((prev) =>
+        prev.map((s) =>
+          s.docId === shipment.docId ? { ...s, ...updatedData } : s
+        )
+      );
+    } catch (error) {
+      console.error("Error setting paid status:", error);
+      alert("Failed to set paid status. Please try again.");
+    }
+  };
+
+  const handleAction = (shipment, action) => {
+    switch (action) {
+      case 'info':
+        openInfoModal(shipment);
+        break;
+      case 'update':
+        setCurrentShipment(shipment);
+        setFormData(shipment);
+        setEditModal(true);
+        break;
+      case 'mark_delivered':
+        handleDoneShipment(shipment);
+        break;
+      case 'cancel':
+        handleCancelShipment(shipment);
+        break;
+      case 'set_paid_yes':
+        handleSetPaid(shipment, true);
+        break;
+      case 'set_paid_no':
+        handleSetPaid(shipment, false);
+        break;
+      default:
+        break;
     }
   };
 
@@ -730,10 +858,7 @@ const Shipments = () => {
                 <th className="p-2 border border-gray-300">Sender Country</th>
                 <th className="p-2 border border-gray-300">Destination Country</th>
                 <th className="p-2 border border-gray-300">Transport Mode</th>
-                <th className="p-2 border border-gray-300">Shipment Direction</th>
-                <th className="p-2 border border-gray-300">Load Type</th>
                 <th className="p-2 border border-gray-300">Status</th>
-                <th className="p-2 border border-gray-300">Way Bill#</th>
                 <th className="p-2 border border-gray-300">Paid</th>
                 <th className="p-2 border border-gray-300">Date Started</th>
                 <th className="p-2 border border-gray-300">Actions</th>
@@ -758,10 +883,7 @@ const Shipments = () => {
                     <td className="p-2 border border-gray-300">{shipment.senderCountry || "N/A"}</td>
                     <td className="p-2 border border-gray-300">{shipment.destinationCountry || "N/A"}</td>
                     <td className="p-2 border border-gray-300">{shipment.transportMode || "N/A"}</td>
-                    <td className="p-2 border border-gray-300">{shipment.shipmentDirection || "N/A"}</td>
-                    <td className="p-2 border border-gray-300">{shipment.loadType || "N/A"}</td>
                     <td className="p-2 border border-gray-300">{shipment.packageStatus}</td>
-                    <td className="p-2 border border-gray-300">{shipment.airwayBill || "N/A"}</td>
                     <td className={`p-2 border border-gray-300 ${shipment.paid ? "bg-green-200" : "bg-red-200"}`}>
                       {shipment.paid ? "Yes" : "No"}
                     </td>
@@ -771,44 +893,24 @@ const Shipments = () => {
                         : "N/A"}
                     </td>
                     <td className="p-2 border border-gray-300">
-                      {(isCanceled || isDelivered) ? (
-                        <span className={`${isCanceled ? "text-gray-500" : "text-green-500"} font-semibold`}>
-                          {isDelivered ? "Delivered" : "Canceled"}
-                        </span>
-                      ) : (
-                        <div className="flex flex-col md:flex-row gap-2 justify-center">
-                          {/* Info button (green) - fetches status history */}
-                          <button
-                            className="bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded text-xs"
-                            onClick={() => openInfoModal(shipment)}
-                          >
-                            Info
-                          </button>
-
-                          <button
-                            className="bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-1 rounded text-xs"
-                            onClick={() => {
-                              setCurrentShipment(shipment);
-                              setFormData(shipment);
-                              setEditModal(true);
-                            }}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            className="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs"
-                            onClick={() => handleDoneShipment(shipment)}
-                          >
-                            Done
-                          </button>
-                          <button
-                            className="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs"
-                            onClick={() => handleCancelShipment(shipment)}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      )}
+                      <select
+                        onChange={(e) => {
+                          const action = e.target.value;
+                          if (action) {
+                            handleAction(shipment, action);
+                          }
+                          e.target.value = '';
+                        }}
+                        className="bg-white border border-gray-300 rounded px-2 py-1 text-xs w-full"
+                      >
+                        <option value="">Manage Shipment</option>
+                        <option value="info">Info</option>
+                        {!isCanceled && !isDelivered && <option value="update">Update</option>}
+                        {!isCanceled && !isDelivered && <option value="mark_delivered">Mark as Delivered</option>}
+                        {!isCanceled && !isDelivered && <option value="cancel">Cancel</option>}
+                        {isDelivered && <option value="set_paid_yes">Set Paid to Yes</option>}
+                        {isDelivered && <option value="set_paid_no">Set Paid to No</option>}
+                      </select>
                     </td>
                   </tr>
                 );
@@ -1199,7 +1301,7 @@ const Shipments = () => {
         {editModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
             <div className="bg-white rounded-lg shadow-lg w-11/12 max-w-md p-6">
-              <h3 className="text-xl font-bold mb-4">Edit Shipment</h3>
+              <h3 className="text-xl font-bold mb-4">Update Shipment</h3>
               <form>
                 <div className="flex flex-col mb-3">
                   <label className="mb-1 font-medium text-gray-700">Package Number</label>
@@ -1363,11 +1465,35 @@ const Shipments = () => {
                             <p>Total Weight: {pkg.weight || 'N/A'} kg</p>
                           )}
                           <p>Contents: {pkg.contents || 'N/A'}</p>
+                          {previewUrls[currentShipment.docId]?.[idx] && (
+                            <div className="mt-2">
+                              <img
+                                src={previewUrls[currentShipment.docId][idx]}
+                                alt={`Package ${idx + 1} Image`}
+                                className="w-64 h-auto object-contain border border-gray-300 rounded cursor-pointer"
+                                onClick={() => setZoomedImage(previewUrls[currentShipment.docId][idx])}
+                              />
+                            </div>
+                          )}
                         </div>
                       );
                     })
                   ) : (
                     <p>No packages available.</p>
+                  )}
+                  <hr className="my-4" />
+                  <h6 className="text-lg font-semibold">Business Permit Image:</h6>
+                  {businessPreviewUrls[currentShipment.docId] ? (
+                    <div className="mt-2">
+                      <img
+                        src={businessPreviewUrls[currentShipment.docId]}
+                        alt="Business Permit Image"
+                        className="w-64 h-auto object-contain border border-gray-300 rounded cursor-pointer"
+                        onClick={() => setZoomedImage(businessPreviewUrls[currentShipment.docId])}
+                      />
+                    </div>
+                  ) : (
+                    <p>None</p>
                   )}
                   <hr className="my-4" />
                   <p>
@@ -1417,6 +1543,19 @@ const Shipments = () => {
                 </button>
               </div>
             </div>
+          </div>
+        )}
+
+        {zoomedImage && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80 cursor-pointer"
+            onClick={() => setZoomedImage(null)}
+          >
+            <img
+              src={zoomedImage}
+              alt="Zoomed Image"
+              className="max-w-[90vw] max-h-[90vh] object-contain"
+            />
           </div>
         )}
 

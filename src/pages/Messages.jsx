@@ -440,7 +440,7 @@ const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMo
           <p className="text-center text-gray-500">
             {conversationStatus === "ended"
               ? "This conversation has ended."
-              : "Send a message to start conversation."}
+              : "Please tell us your concern!"}
           </p>
         )}
         <div ref={messagesEndRef} />
