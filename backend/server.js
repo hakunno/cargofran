@@ -93,41 +93,11 @@ const deleteOrphanedConversations = async () => {
   }
 };
 
-const deleteCanceledPackages = async () => {
-  try {
-    // Calculate timestamp for 24 hours ago 24 * 60 * 60 * 1000
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-
-    // Query for packages with canceled true and createdAt <= 24 hours ago
-    const snapshot = await db
-      .collection("Packages")
-      .where("canceled", "==", true)
-      .where("createdTime", "<=", twentyFourHoursAgo)
-      .get();
-
-    if (snapshot.empty) {
-      console.log("No canceled packages older than 24 hours found.");
-      return;
-    }
-
-    const batch = db.batch();
-    snapshot.forEach((doc) => {
-      batch.delete(doc.ref);
-    });
-
-    await batch.commit();
-    console.log(`Deleted ${snapshot.size} canceled packages older than 24 hours.`);
-  } catch (error) {
-    console.error("Error deleting canceled packages:", error);
-  }
-};
+// --- REMOVED: deleteCanceledPackages function and interval ---
 
 // Run deletion every minute
 setInterval(deleteExpiredConversations, 60 * 1000);
 setInterval(deleteOrphanedConversations, 60 * 1000);
-
-// Run every hour (3600000 milliseconds, 1 mins for now)
-setInterval(deleteCanceledPackages, 60 * 1000);
 
 // Create a new user without logging them in
 app.post("/createUser", async (req, res) => {
@@ -175,6 +145,40 @@ app.delete("/deleteUser/:uid", async (req, res) => {
     }
   });
   
+// === ADD THIS AFTER YOUR OTHER ROUTES ===
+
+// Establish new session (single device login) — NO revokeRefreshTokens
+app.post("/revokeOtherSessions", async (req, res) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "No token" });
+  }
+
+  const idToken = authHeader.split("Bearer ")[1];
+
+  try {
+    const decodedToken = await auth.verifyIdToken(idToken);
+    const uid = decodedToken.uid;
+
+    // Generate new session ID
+    const sessionId = require("crypto").randomUUID();
+
+    // Update Firestore with the new session ID
+    await db.collection("Users").doc(uid).update({
+      currentSessionId: sessionId,
+      forceLogout: null,
+      lastLoginAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    console.log(`✅ New session created for ${uid} → ${sessionId}`);
+
+    res.status(200).json({ success: true, sessionId });
+  } catch (error) {
+    console.error("Session error:", error);
+    res.status(401).json({ error: "Invalid token" });
+  }
+});
 
 // Start the server
 const PORT = process.env.PORT || 5000;

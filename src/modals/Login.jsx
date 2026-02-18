@@ -1,26 +1,23 @@
 import React, { useState, forwardRef, useImperativeHandle } from "react";
 import { useNavigate } from "react-router-dom";
 import { Modal, Button, Form } from "react-bootstrap";
+import { toast } from "react-toastify"; 
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   setPersistence,
   browserLocalPersistence,
-  fetchSignInMethodsForEmail 
+  signOut
 } from "firebase/auth";
 import { auth, db } from "../jsfile/firebase"; 
 import { 
   doc, 
   setDoc, 
-  getDoc, 
-  collection, 
-  query, 
-  where, 
-  getDocs
- } from "firebase/firestore";
+  getDoc
+} from "firebase/firestore";
 
-const LoginModal = forwardRef(({ setIsOpen, hideTrigger = false }, ref) => {  // Add hideTrigger prop with default false
+const LoginModal = forwardRef(({ setIsOpen, hideTrigger = false }, ref) => {
   const [show, setShow] = useState(false);
   const [view, setView] = useState("login");
   const [firstName, setFirstName] = useState("");
@@ -28,11 +25,21 @@ const LoginModal = forwardRef(({ setIsOpen, hideTrigger = false }, ref) => {  //
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  
   const [error, setError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
   const [redirectAfterLogin, setRedirectAfterLogin] = useState(null);
 
   const navigate = useNavigate();
+
+  // Detect incognito mode
+  const isIncognito = async () => {
+    return new Promise((resolve) => {
+      if (typeof window === "undefined") return resolve(false);
+      const fs = window.RequestFileSystem || window.webkitRequestFileSystem;
+      if (!fs) return resolve(false);
+      fs(window.TEMPORARY, 100, () => resolve(false), () => resolve(true));
+    });
+  };
 
   useImperativeHandle(ref, () => ({
     openModal: (redirect) => {
@@ -45,110 +52,116 @@ const LoginModal = forwardRef(({ setIsOpen, hideTrigger = false }, ref) => {  //
     setShow(false);
     setView("login");
     setError(""); 
-    setSuccessMessage(""); 
     setRedirectAfterLogin(null);
   };
 
   const changeView = (newView) => {
     setView(newView);
     setError("");          
-    setSuccessMessage(""); 
   };
 
-  const handleShow = () => setShow(true);
+  // === UPDATED: BLOCK INCOGNITO + SINGLE DEVICE LOGIN ===
+ const handleLogin = async (e) => {
+  e.preventDefault();
+  setError("");
 
-  // Handle Login
-  const handleLogin = async (e) => {
-    setIsOpen(false)
-    e.preventDefault();
-    setError("");
-  
-    try {
-      await setPersistence(auth, browserLocalPersistence);
-  
-      // ✅ Attempt to sign in
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-  
-      // ✅ Fetch user role from Firestore
-      const userDoc = await getDoc(doc(db, "Users", user.uid));
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-  
-        // Redirect based on redirect prop or user role
-        const targetPath = redirectAfterLogin || (userData.role === "admin" || userData.role === "staff" ? "/AdminDashboard" : "/");
-        navigate(targetPath);
-  
-        // Show verification warning if needed
-        if (!userData.verified) {
-          setSuccessMessage("Your account is not verified yet. Some features may be restricted.");
-        }
-      } else {
-        setError("User role not found in database.");
-        return;
+  // Block incognito
+  const incognito = await isIncognito();
+  if (incognito) {
+    setError("Login is not allowed in incognito/private mode.");
+    toast.error("Login is not allowed in incognito mode.");
+    return;
+  }
+
+  try {
+    await setPersistence(auth, browserLocalPersistence);
+
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
+
+    const idToken = await user.getIdToken();
+
+    const res = await fetch("http://localhost:5000/revokeOtherSessions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${idToken}`,
+        "Content-Type": "application/json"
       }
-  
-      handleClose();
-    } catch (error) {
-      // ✅ Properly handling Firebase authentication errors
-      if (error.code === "auth/invalid-credential") {
-        setError("Invalid email or password. Please try again.");
-      } else if (error.code === "auth/too-many-requests") {
-        setError("Too many failed attempts. Please try again later or reset your password.");
-      } else if (error.code === "auth/network-request-failed") {
-        setError("Network error. Check your connection and try again.");
-      } else {
-        setError("Login failed. Please check your credentials and try again.");
-      }
+    });
+
+    if (!res.ok) throw new Error("Session setup failed");
+
+    const { sessionId } = await res.json();
+
+    localStorage.setItem("sessionId", sessionId);
+
+    await setDoc(doc(db, "Users", user.uid), { forceLogout: null }, { merge: true });
+
+    // Get user data
+    const userDoc = await getDoc(doc(db, "Users", user.uid));
+    if (!userDoc.exists()) {
+      setError("User role not found.");
+      return;
     }
-  };
-  
-  
 
+    const userData = userDoc.data();
+    const targetPath = redirectAfterLogin || 
+      (userData.role === "admin" || userData.role === "staff" ? "/AdminDashboard" : "/");
 
-  // Handle Signup (No Verification Required)
+    toast.success(`Welcome back, ${userData.firstName || "User"}!`);
+
+    handleClose();
+
+    // 🔥 FULL RELOAD = fixes "only footer" + role loading delay + clean state
+    window.location.href = targetPath;
+
+  } catch (error) {
+    console.error(error);
+    setError("Login failed. Please try again.");
+    toast.error("Login failed.");
+  }
+};
+  
+  // Signup (unchanged)
   const handleSignup = async (e) => {
     e.preventDefault();
     setError("");
-    setSuccessMessage("");
 
     if (password !== confirmPassword) {
       setError("Passwords do not match");
+      toast.error("Passwords do not match!");
       return;
     }
 
     try {
-      // Create User in Firebase Authentication
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      const uid = user.uid; // ✅ Get the UID
+      const uid = user.uid; 
 
-      // Store User Data in Firestore with UID
       const userDocRef = doc(db, "Users", uid);
       await setDoc(userDocRef, {
-        uid, // ✅ Save UID in Firestore
+        uid, 
         firstName,
         lastName,
         email,
-        role: "user", // Default role
-        verified: false, // ✅ Newly registered users are NOT verified
+        role: "user", 
+        verified: false, 
         createdAt: new Date(),
       });
 
-      setSuccessMessage("Account created! You can now log in.");
-      setView("login"); // Redirect to login page
+      toast.success("Account created! Please log in.");
+      setView("login"); 
 
     } catch (error) {
       setError(error.message);
+      toast.error("Error creating account. Please try again.");
     }
   };
 
-
-  //  Handle Forgot Password
+  // Forgot password (unchanged)
   const handleForgotPassword = async (e) => {
     e.preventDefault();
     setError("");
-    setSuccessMessage("");
   
     if (!email) {
       setError("Please enter your email address.");
@@ -158,16 +171,18 @@ const LoginModal = forwardRef(({ setIsOpen, hideTrigger = false }, ref) => {  //
     try {
       const formattedEmail = email.trim().toLowerCase();
   
-      // Directly send password reset email without Firestore query
       await sendPasswordResetEmail(auth, formattedEmail);
-      setSuccessMessage("Password reset link sent to your email.");
-      setEmail(""); 
+      
+      toast.success("Password reset link sent to your email!");
+      
+      setEmail("");
+      changeView("login"); 
     } catch (error) {
       setError("Failed to send reset link. Please try again later.");
+      toast.error("Failed to send reset link.");
       console.error("Reset Password Error:", error);
     }
   };
-  
 
   const toTitleCase = (str) => {
     return str
@@ -177,12 +192,12 @@ const LoginModal = forwardRef(({ setIsOpen, hideTrigger = false }, ref) => {  //
 
   return (
     <>
-      {!hideTrigger && (  // Conditionally render the trigger based on hideTrigger prop
+      {!hideTrigger && ( 
         <div
           className="lexend text-xl drop-shadow-[2px_2px_2px_rgba(0,0,0,0.8)] font-bold relative block py-2 px-0 no-underline transition-all duration-200 transform hover:scale-110 active:scale-95 
                     after:content-[''] after:absolute after:left-0 after:bottom-0 after:w-0 after:h-[2px] after:bg-black/90 after:transition-all after:duration-300 
                     hover:after:w-full text-white/100 hover:text-green-400 cursor-pointer"
-          onClick={handleShow}
+          onClick={() => setShow(true)}
         >
           Log In / Sign Up
         </div>
@@ -199,7 +214,6 @@ const LoginModal = forwardRef(({ setIsOpen, hideTrigger = false }, ref) => {  //
 
         <Modal.Body>
           {error && <p className="text-danger text-center">{error}</p>}
-          {successMessage && <p className="text-success text-center">{successMessage}</p>}
 
           {/* Forgot Password Form */}
           {view === "forgotPassword" && (
@@ -352,6 +366,55 @@ const LoginModal = forwardRef(({ setIsOpen, hideTrigger = false }, ref) => {  //
         </Modal.Body>
       </Modal>
     </>
+  );
+});
+
+// === UPDATED LOGOUT MODAL (same file) ===
+export const LogoutModal = forwardRef((props, ref) => {
+  const [show, setShow] = useState(false);
+  const navigate = useNavigate();
+
+  useImperativeHandle(ref, () => ({
+    openModal: () => {
+      setShow(true);
+    },
+  }));
+
+  const handleClose = () => {
+    setShow(false);
+  };
+
+const handleLogout = async () => {
+  try {
+    localStorage.removeItem("sessionId");   // ← This was already there, good
+
+    await signOut(auth);
+    toast.success("Logged out successfully!");
+    navigate("/");
+  } catch (error) {
+    toast.error("Error logging out.");
+  } finally {
+    handleClose();
+  }
+};
+
+  return (
+    <Modal show={show} onHide={handleClose} centered>
+      <Modal.Header closeButton>
+        <Modal.Title className="lexend">Confirm Logout</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        <p className="text-center">Are you sure you want to log out?</p>
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={handleClose}>
+          Cancel
+        </Button>
+        <Button variant="primary" onClick={handleLogout}>
+          Yes, Log Out
+        </Button>
+      </Modal.Footer>
+    </Modal>
   );
 });
 

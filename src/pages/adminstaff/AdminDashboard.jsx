@@ -1,6 +1,8 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Sidebar from "../../component/adminstaff/Sidebar";
+import { auth } from "../../jsfile/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 import {
   collection,
   query,
@@ -8,8 +10,8 @@ import {
   orderBy,
   limit,
   onSnapshot,
-  addDoc,
-  serverTimestamp,
+  doc,
+  getDoc
 } from "firebase/firestore";
 import { db } from "../../jsfile/firebase";
 import {
@@ -20,615 +22,578 @@ import {
   Title,
   Tooltip,
   Legend,
+  ArcElement,
 } from 'chart.js';
-import { Bar } from 'react-chartjs-2';
+import { Bar, Doughnut } from 'react-chartjs-2';
+import { 
+  FaBoxOpen, 
+  FaShippingFast, 
+  FaExclamationTriangle, 
+  FaClipboardList, 
+  FaCommentDots, 
+  FaComments,
+  FaCheckCircle,
+  FaArrowRight
+} from "react-icons/fa";
 
 // Register Chart.js components
 ChartJS.register(
   CategoryScale,
   LinearScale,
   BarElement,
+  ArcElement,
   Title,
   Tooltip,
   Legend
 );
 
 const AdminDashboard = () => {
-  const [totalShipments, setTotalShipments] = useState(0);
-  const [activeShipments, setActiveShipments] = useState(0);
-  const [recentShipments, setRecentShipments] = useState([]);
-  const [statusCounts, setStatusCounts] = useState({});
+  // --- User State ---
+  const [userRole, setUserRole] = useState(null);
+
+  // --- Metrics State ---
+  const [kpiData, setKpiData] = useState({
+    totalPackages: 0,
+    activePackages: 0,
+    delayedPackages: 0,
+    deliveredToday: 0,
+    shipmentRequests: 0,
+    messageRequests: 0,
+    activeMessages: 0
+  });
+
+  // --- Chart & List State ---
+  const [volumeFilter, setVolumeFilter] = useState('week'); // Preset filter
+  const [filterMode, setFilterMode] = useState('preset'); // 'preset' or 'custom'
+  const [fromDate, setFromDate] = useState(null); // For custom range
+  const [toDate, setToDate] = useState(null); // For custom range
+  const [shipmentVolumeData, setShipmentVolumeData] = useState({ labels: [], datasets: [] });
+  const [statusDistributionData, setStatusDistributionData] = useState({ labels: [], datasets: [] });
+  
+  // Data Lists
+  const [delayedShipments, setDelayedShipments] = useState([]);
+  const [pendingShipmentRequests, setPendingShipmentRequests] = useState([]);
+  const [recentBookings, setRecentBookings] = useState([]); // List for the restored card
+  const [pendingMessages, setPendingMessages] = useState([]);
+  const [activeMessages, setActiveMessages] = useState([]);
   const [recentUpdates, setRecentUpdates] = useState([]);
-  const [allUpdates, setAllUpdates] = useState([]);
-  const [showAllModal, setShowAllModal] = useState(false);
 
-  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
-  const [recentRequests, setRecentRequests] = useState([]);
-
-  const [pendingConvosCount, setPendingConvosCount] = useState(0);
-  const [approvedConvosCount, setApprovedConvosCount] = useState(0);
-  const [recentPendingConvos, setRecentPendingConvos] = useState([]);
-
-  const prevDocsRef = useRef(new Map());
-  const initializedRef = useRef(false);
-  const prevReqsRef = useRef(new Map());
-  const initializedReqRef = useRef(false);
-  const prevConvosRef = useRef(new Map());
-  const initializedConvosRef = useRef(false);
-
-  const serializeDoc = (doc) => {
-    const copy = {};
-    for (const [key, value] of Object.entries(doc)) {
-      if (value && typeof value === 'object' && typeof value.toDate === 'function') {
-        copy[key] = value.toDate().toISOString();
-      } else if (Array.isArray(value)) {
-        copy[key] = value.map(v =>
-          v && typeof v === 'object' && typeof v.toDate === 'function' ? v.toDate().toISOString() :
-          typeof v === 'object' && v !== null ? serializeDoc(v) : v
-        );
-      } else if (typeof value === 'object' && value !== null) {
-        copy[key] = serializeDoc(value);
-      } else {
-        copy[key] = value;
-      }
-    }
-    return JSON.stringify(copy);
+  // --- Helpers ---
+  const getStartOfDay = () => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    return now;
   };
 
-  const getDocTime = (data, type) => {
-    let ts;
-    if (type === "added") {
-      ts = data.createdTime || data.dateStarted || data.requestTime || data.createdAt;
-    } else {
-      ts = data.updatedTime || data.createdTime || data.dateStarted || data.requestTime || data.createdAt;
-    }
-    if (!ts) return new Date();
-    if (ts.toDate) return ts.toDate();
-    return new Date(ts);
+  const formatDate = (ts) => {
+    if (!ts) return "N/A";
+    const date = ts.toDate ? ts.toDate() : new Date(ts);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' });
   };
 
-  // Log update to Firestore
-  const logUpdate = async (type, details, source) => {
-    try {
-      await addDoc(collection(db, "recentUpdates"), {
-        type,
-        details,
-        source,
-        timestamp: serverTimestamp(),
-      });
-    } catch (error) {
-      console.error("Error logging update:", error);
-    }
-  };
-
+  // --- 1. Fetch User Role ---
   useEffect(() => {
-    // Fetch recent updates (latest 5)
-    const recentQ = query(
-      collection(db, "recentUpdates"),
-      orderBy("timestamp", "desc"),
-      limit(5)
-    );
-    const unsubRecent = onSnapshot(recentQ, (snap) => {
-      setRecentUpdates(snap.docs.map((d) => {
-        const data = d.data();
-        return {
-          id: d.id,
-          ...data,
-          time: data.timestamp ? data.timestamp.toDate() : new Date()  // Add time as Date for consistency
-        };
-      }));
-    }, (error) => {
-      console.error("Error in recentUpdates snapshot:", error);
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          const userDoc = await getDoc(doc(db, "Users", user.uid));
+          if (userDoc.exists()) setUserRole(userDoc.data().role);
+        } catch (error) {
+          console.error("Error fetching role:", error);
+        }
+      } else {
+        setUserRole(null);
+      }
     });
-
-    // Fetch all updates
-    const allQ = query(
-      collection(db, "recentUpdates"),
-      orderBy("timestamp", "desc")
-    );
-    const unsubAll = onSnapshot(allQ, (snap) => {
-      setAllUpdates(snap.docs.map((d) => {
-        const data = d.data();
-        return {
-          id: d.id,
-          ...data,
-          time: data.timestamp ? data.timestamp.toDate() : new Date()  // Add time as Date for consistency
-        };
-      }));
-    }, (error) => {
-      console.error("Error in allUpdates snapshot:", error);
-    });
-
-    return () => {
-      unsubRecent();
-      unsubAll();
-    };
+    return () => unsubscribe();
   }, []);
 
+  // --- 2. Main Data Listeners ---
   useEffect(() => {
-    // Packages: total count + active (status not Delivered / not canceled) + recent 3
+    // --- A. PACKAGES ---
     const packagesRef = collection(db, "Packages");
+    const unsubPackages = onSnapshot(packagesRef, (snapshot) => {
+      const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      
+      const startOfDay = getStartOfDay();
+      let delayedCount = 0;
+      let deliveredTodayCount = 0;
+      let activeCount = 0;
+      const statusCounts = {};
 
-    const unsubAll = onSnapshot(packagesRef, (snapshot) => {
-      const docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setTotalShipments(docs.length);
+      docs.forEach(doc => {
+        const status = (doc.packageStatus || "Unknown");
+        const statusLower = status.toLowerCase();
+        
+        statusCounts[status] = (statusCounts[status] || 0) + 1;
 
-      const active = docs.filter(
-        (p) => !p.canceled && (p.packageStatus || "").toLowerCase() !== "delivered"
-      );
-      setActiveShipments(active.length);
+        if (!doc.canceled && statusLower !== 'delivered' && statusLower !== 'returned') {
+          activeCount++;
+        }
 
-      const counts = docs.reduce((acc, p) => {
-        const status = (p.packageStatus || "unknown").toLowerCase();
-        acc[status] = (acc[status] || 0) + 1;
-        return acc;
-      }, {});
-      setStatusCounts(counts);
-
-      // Change detection for recent updates
-      const currentMap = new Map(docs.map((d) => [d.id, d]));
-      if (initializedRef.current) {
-        const prevMap = prevDocsRef.current;
-        // const updates = []; // Removed local updates to avoid inconsistency; rely on Firestore listener
-        // Check for new and modified
-        docs.forEach((doc) => {
-          const prevDoc = prevMap.get(doc.id);
-          if (!prevDoc) {
-            // New shipment
-            logUpdate("new_shipment", {
-              packageNumber: doc.packageNumber || `#${doc.id.slice(-6)}`,
-              shipperName: doc.shipperName || "Unknown",
-            }, "package");
-            // updates.push({ id: doc.id, type: "added", data: doc, time: getDocTime(doc, "added"), source: "package" });
-          } else if (serializeDoc(prevDoc) !== serializeDoc(doc)) {
-            // Edited shipment
-            const changes = {};
-            Object.keys(doc).forEach(key => {
-              if (serializeDoc(prevDoc[key]) !== serializeDoc(doc[key])) {
-                changes[key] = { old: prevDoc[key], new: doc[key] };
-              }
-            });
-            logUpdate("shipment_edited", {
-              packageNumber: doc.packageNumber || `#${doc.id.slice(-6)}`,
-              changes,
-            }, "package");
-            // updates.push({ id: doc.id, type: "edited", data: doc, time: getDocTime(doc, "edited"), source: "package" });
+        if (statusLower === 'delivered') {
+          const completionTime = doc.updatedTime ? doc.updatedTime.toDate() : null;
+          if (completionTime && completionTime >= startOfDay) {
+            deliveredTodayCount++;
           }
-        });
-        // if (updates.length > 0) {
-        //   setRecentUpdates((prev) => [...updates, ...prev].sort((a, b) => b.time.getTime() - a.time.getTime()).slice(0, 5));
-        // }
-      } else {
-        initializedRef.current = true;
-      }
-      prevDocsRef.current = currentMap;
-    }, (error) => {
-      console.error("Error in packages snapshot:", error);
+        }
+
+        if (statusLower.includes('delayed') || statusLower.includes('exception') || statusLower.includes('hold')) {
+          delayedCount++;
+        }
+      });
+
+      setKpiData(prev => ({
+        ...prev,
+        totalPackages: docs.length,
+        activePackages: activeCount,
+        delayedPackages: delayedCount,
+        deliveredToday: deliveredTodayCount
+      }));
+
+      // Store full objects for delayed items
+      setDelayedShipments(docs.filter(d => {
+        const s = (d.packageStatus || "").toLowerCase();
+        return s.includes('delayed') || s.includes('exception') || s.includes('hold');
+      }));
+
+      processChartData(docs, volumeFilter, fromDate, toDate);
+      processStatusChart(statusCounts);
     });
 
-    // recent shipments (ordered by createdTime desc) - separate listener for ordered query
-    const recentQ = query(packagesRef, orderBy("createdTime", "desc"), limit(3));
-    const unsubRecent = onSnapshot(recentQ, (snap) => {
-      setRecentShipments(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    }, (error) => {
-      console.error("Error in recent shipments snapshot:", error);
+    // --- B. SHIPMENT REQUESTS ---
+    const reqRef = query(collection(db, "shipRequests"), orderBy("requestTime", "desc"));
+    const unsubRequests = onSnapshot(reqRef, (snapshot) => {
+      const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      const pending = docs.filter(r => (r.status || "").toLowerCase() !== 'accepted');
+      
+      setKpiData(prev => ({ ...prev, shipmentRequests: pending.length }));
+      setPendingShipmentRequests(pending);
+      setRecentBookings(docs.slice(0, 10)); // Take top 10 for "Recent Bookings" list
     });
 
-    return () => {
-      unsubAll();
-      unsubRecent();
-    };
-  }, []);
-
-  useEffect(() => {
-    // Shipment requests (collection name: shipRequests in your code)
-    const reqRef = collection(db, "shipRequests");
-
-    // Count pending requests (status !== 'Accepted' or missing -> show as pending)
-    const unsubReqAll = onSnapshot(reqRef, (snapshot) => {
-      const docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-      const pending = docs.filter((r) => (r.status || "").toLowerCase() !== "accepted");
-      setPendingRequestsCount(pending.length);
-
-      // Change detection for recent updates
-      const currentMap = new Map(docs.map((d) => [d.id, d]));
-      if (initializedReqRef.current) {
-        const prevMap = prevReqsRef.current;
-        // const updates = []; // Removed local updates to avoid inconsistency; rely on Firestore listener
-        // Check for new and modified
-        docs.forEach((doc) => {
-          const prevDoc = prevMap.get(doc.id);
-          if (!prevDoc) {
-            // New request
-            logUpdate("new_request", {
-              name: doc.name || "Unknown",
-              email: doc.email || "Unknown",
-            }, "request");
-            // updates.push({ id: doc.id, type: "added", data: doc, time: getDocTime(doc, "added"), source: "request" });
-          } else if (serializeDoc(prevDoc) !== serializeDoc(doc)) {
-            const prevStatus = prevDoc.status || "";
-            const newStatus = doc.status || "";
-            if (newStatus.toLowerCase() === "accepted" && prevStatus.toLowerCase() !== "accepted") {
-              // Request accepted
-              logUpdate("request_accepted", {
-                name: doc.name || "Unknown",
-                packageNumber: doc.packageNumber || "N/A",
-              }, "request");
-            } else if (newStatus.toLowerCase() === "rejected" && prevStatus.toLowerCase() !== "rejected") {
-              // Request rejected
-              logUpdate("request_rejected", {
-                name: doc.name || "Unknown",
-              }, "request");
-            }
-            // updates.push({ id: doc.id, type: "edited", data: doc, time: getDocTime(doc, "edited"), source: "request" });
-          }
-        });
-        // if (updates.length > 0) {
-        //   setRecentUpdates((prev) => [...updates, ...prev].sort((a, b) => b.time.getTime() - a.time.getTime()).slice(0, 5));
-        // }
-      } else {
-        initializedReqRef.current = true;
-      }
-      prevReqsRef.current = currentMap;
-    }, (error) => {
-      console.error("Error in shipRequests snapshot:", error);
-    });
-
-    // recent requests - order by requestTime if it exists, fallback to document order
-    const recentReqQ = query(reqRef, orderBy("requestTime", "desc"), limit(3));
-    const unsubRecentReq = onSnapshot(recentReqQ, (snap) => {
-      setRecentRequests(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    }, (error) => {
-      console.error("Error in recent requests snapshot:", error);
-    });
-
-    return () => {
-      unsubReqAll();
-      unsubRecentReq();
-    };
-  }, []);
-
-  useEffect(() => {
-    // Conversations: pending (request sent & status pending) and approved counts
+    // --- C. MESSAGES (Conversations) ---
     const convRef = collection(db, "conversations");
+    const unsubConvos = onSnapshot(convRef, (snapshot) => {
+        const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        
+        const pending = docs.filter(c => c.status === 'pending' && c.request === 'sent');
+        const active = docs.filter(c => c.status === 'approved');
 
-    const qPending = query(convRef, where("status", "==", "pending"), where("request", "==", "sent"), orderBy("createdAt", "desc"));
-    const unsubPending = onSnapshot(qPending, (snap) => {
-      setPendingConvosCount(snap.docs.length);
-      setRecentPendingConvos(snap.docs.slice(0, 3).map((d) => ({ id: d.id, ...d.data() })));
-    }, (error) => {
-      console.error("Error in pending conversations snapshot:", error);
+        setPendingMessages(pending);
+        setActiveMessages(active);
+
+        setKpiData(prev => ({ 
+            ...prev, 
+            messageRequests: pending.length,
+            activeMessages: active.length 
+        }));
     });
 
-    const qApproved = query(convRef, where("status", "==", "approved"));
-    const unsubApproved = onSnapshot(qApproved, (snap) => {
-      setApprovedConvosCount(snap.docs.length);
-    }, (error) => {
-      console.error("Error in approved conversations snapshot:", error);
-    });
-
-    // Separate listener for change detection on all conversations
-    const unsubConvAll = onSnapshot(convRef, (snapshot) => {
-      const docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-      const currentMap = new Map(docs.map((d) => [d.id, d]));
-      if (initializedConvosRef.current) {
-        const prevMap = prevConvosRef.current;
-        // const updates = []; // Removed local updates to avoid inconsistency; rely on Firestore listener
-        // Check for new and modified
-        docs.forEach((doc) => {
-          const prevDoc = prevMap.get(doc.id);
-          if (!prevDoc) {
-            // New convo request
-            logUpdate("new_convo_request", {
-              user: doc.userFullName || doc.userEmail || "Unknown",
-            }, "conversation");
-            // updates.push({ id: doc.id, type: "added", data: doc, time: getDocTime(doc, "added"), source: "conversation" });
-          } else if (serializeDoc(prevDoc) !== serializeDoc(doc)) {
-            const prevStatus = prevDoc.status || "";
-            const newStatus = doc.status || "";
-            if (newStatus === "approved" && prevStatus !== "approved") {
-              // Convo approved
-              logUpdate("convo_approved", {
-                user: doc.userFullName || doc.userEmail || "Unknown",
-              }, "conversation");
-            } else if (newStatus === "rejected" && prevStatus !== "rejected") {
-              // Convo rejected
-              logUpdate("convo_rejected", {
-                user: doc.userFullName || doc.userEmail || "Unknown",
-              }, "conversation");
-            }
-            // updates.push({ id: doc.id, type: "edited", data: doc, time: getDocTime(doc, "edited"), source: "conversation" });
-          }
-        });
-        // if (updates.length > 0) {
-        //   setRecentUpdates((prev) => [...updates, ...prev].sort((a, b) => b.time.getTime() - a.time.getTime()).slice(0, 5));
-        // }
-      } else {
-        initializedConvosRef.current = true;
-      }
-      prevConvosRef.current = currentMap;
-    }, (error) => {
-      console.error("Error in conversations snapshot:", error);
+    // --- D. ACTIVITY LOGS ---
+    const updatesRef = query(collection(db, "recentUpdates"), orderBy("timestamp", "desc"), limit(6));
+    const unsubUpdates = onSnapshot(updatesRef, (snapshot) => {
+      setRecentUpdates(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
     return () => {
-      unsubPending();
-      unsubApproved();
-      unsubConvAll();
+      unsubPackages();
+      unsubRequests();
+      unsubConvos();
+      unsubUpdates();
     };
-  }, []);
+  }, [volumeFilter, fromDate, toDate]);
 
-  // Chart data for bar graph
-  const chartData = {
-    labels: Object.keys(statusCounts).map(status => status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')),
-    datasets: [
-      {
-        label: 'Shipments',
-        data: Object.values(statusCounts),
-        backgroundColor: 'rgba(75, 192, 192, 0.6)',
-        borderColor: 'rgba(75, 192, 192, 1)',
-        borderWidth: 1,
-      },
-    ],
-  };
+  // --- Chart Processing ---
+  const processChartData = (docs, filter, from = null, to = null) => {
+    const today = new Date();
+    let startDate, endDate;
+    let labels = [];
+    let data = [];
 
-  const chartOptions = {
-    responsive: true,
-    plugins: {
-      legend: {
-        position: 'top',
-      },
-      title: {
-        display: true,
-        text: 'Package Status Distribution',
-      },
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-      },
-    },
-  };
-
-  // Helpers
-  const shortText = (s, n = 40) => (s ? (s.length > n ? s.slice(0, n) + "..." : s) : "—");
-  const formatDate = (tsOrIso) => {
-    if (!tsOrIso) return "N/A";
-    try {
-      if (tsOrIso instanceof Date) return tsOrIso.toLocaleString();
-      // Firestore Timestamp
-      if (tsOrIso.toDate) return tsOrIso.toDate().toLocaleString();
-      // ISO string
-      const d = new Date(tsOrIso);
-      if (!isNaN(d.getTime())) return d.toLocaleString();
-    } catch (e) {}
-    return String(tsOrIso);
-  };
-
-  const formatUpdateText = (update) => {
-    const time = formatDate(update.time || update.timestamp);
-    let text = "";
-    switch (update.type) {
-      case "new_shipment":
-        text = `New shipment ${update.details.packageNumber} added by ${update.details.shipperName}`;
-        break;
-      case "shipment_edited":
-        text = `Shipment ${update.details.packageNumber} edited (changes: ${JSON.stringify(update.details.changes)})`;
-        break;
-      case "new_request":
-        text = `New shipment request from ${update.details.name}`;
-        break;
-      case "request_accepted":
-        text = `Shipment request from ${update.details.name} accepted (Package: ${update.details.packageNumber})`;
-        break;
-      case "request_rejected":
-        text = `Shipment request from ${update.details.name} rejected`;
-        break;
-      case "new_convo_request":
-        text = `New conversation request from ${update.details.user}`;
-        break;
-      case "convo_approved":
-        text = `Conversation with ${update.details.user} approved`;
-        break;
-      case "convo_rejected":
-        text = `Conversation with ${update.details.user} rejected`;
-        break;
-      default:
-        text = "Update logged";
+    if (filterMode === 'custom' && from && to) {
+      startDate = new Date(from);
+      endDate = new Date(to);
+      endDate.setHours(23, 59, 59, 999); // End of day
+    } else {
+      endDate = today;
+      if (filter === 'week') {
+        startDate = new Date(today);
+        startDate.setDate(today.getDate() - 6); // Last 7 days
+      } else if (filter === 'month') {
+        startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+      } else if (filter === 'year') {
+        startDate = new Date(today.getFullYear(), 0, 1);
+      } else if (filter === 'last30') {
+        startDate = new Date(today);
+        startDate.setDate(today.getDate() - 29); // Last 30 days
+      } else if (filter === 'last90') {
+        startDate = new Date(today);
+        startDate.setDate(today.getDate() - 89); // Last 90 days
+      }
     }
-    return `${text} at ${time}`;
+
+    if (!startDate || !endDate) return;
+
+    // Determine granularity based on range
+    const rangeDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+    let granularity = 'day';
+    if (rangeDays > 90) granularity = 'month'; // Monthly for >3 months
+    else if (rangeDays > 365) granularity = 'year'; // Yearly for >1 year
+
+    // Generate labels and counts
+    const counts = {};
+    if (granularity === 'day') {
+      for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+        const key = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        labels.push(key);
+        counts[key] = 0;
+      }
+    } else if (granularity === 'month') {
+      for (let m = startDate.getMonth(); m <= endDate.getMonth() || startDate.getFullYear() < endDate.getFullYear(); m++) {
+        const year = startDate.getFullYear();
+        const key = new Date(year, m, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+        labels.push(key);
+        counts[key] = 0;
+        if (m === 11) startDate.setFullYear(year + 1, 0, 1); // Next year
+      }
+    } else if (granularity === 'year') {
+      for (let y = startDate.getFullYear(); y <= endDate.getFullYear(); y++) {
+        const key = y.toString();
+        labels.push(key);
+        counts[key] = 0;
+      }
+    }
+
+    docs.forEach(doc => {
+      const created = doc.createdTime ? doc.createdTime.toDate() : new Date();
+      if (created >= startDate && created <= endDate) {
+        let key;
+        if (granularity === 'day') {
+          key = created.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        } else if (granularity === 'month') {
+          key = created.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+        } else if (granularity === 'year') {
+          key = created.getFullYear().toString();
+        }
+        if (key) counts[key]++;
+      }
+    });
+
+    data = labels.map(label => counts[label] || 0);
+
+    setShipmentVolumeData({
+      labels,
+      datasets: [{ label: 'Packages', data, backgroundColor: '#3B82F6', borderRadius: 4 }]
+    });
   };
+
+  const processStatusChart = (counts) => {
+    setStatusDistributionData({
+      labels: Object.keys(counts),
+      datasets: [{
+        data: Object.values(counts),
+        backgroundColor: ['#10B981', '#F59E0B', '#3B82F6', '#EF4444', '#6366F1', '#8B5CF6'],
+        borderWidth: 0,
+      }]
+    });
+  };
+
+  // --- 3. CONSOLIDATE "ATTENTION REQUIRED" LIST ---
+  const getAttentionItems = () => {
+    const items = [];
+
+    // Priority 1: Message Requests
+    pendingMessages.forEach(m => items.push({
+      id: m.id, type: 'msg_req', 
+      title: `Message Request: ${m.userFullName || 'Guest'}`, 
+      sub: 'Waiting for agent approval',
+      link: '/MessageRequest',
+      icon: <FaCommentDots className="text-indigo-600 dark:text-indigo-400" />,
+      color: 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-800'
+    }));
+
+    // Priority 2: Shipment Requests (Grouped)
+    if (pendingShipmentRequests.length > 0) {
+      const count = pendingShipmentRequests.length;
+      items.push({
+        id: 'shipment_requests_summary',
+        type: 'ship_req_summary',
+        title: count === 1 ? 'Shipment Request' : 'Shipment Requests',
+        sub: `${count} new booking${count === 1 ? '' : 's'} pending approval`,
+        link: '/ShipmentRequest',
+        icon: <FaClipboardList className="text-amber-600 dark:text-amber-400" />,
+        color: 'bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800'
+      });
+    }
+
+    // Priority 3: Delayed Shipments
+    delayedShipments.forEach(s => items.push({
+      id: s.id, type: 'delayed',
+      title: `Delayed: ${s.packageNumber}`,
+      sub: s.packageStatus,
+      link: `/Shipments/${s.id}`,
+      icon: <FaExclamationTriangle className="text-red-600 dark:text-red-400" />,
+      color: 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800'
+    }));
+
+    // Priority 4: Active Messages
+    activeMessages.forEach(m => items.push({
+      id: m.id, type: 'active_chat',
+      title: `Active Chat: ${m.userFullName}`,
+      sub: 'Live conversation',
+      link: '/AdminMessages',
+      icon: <FaComments className="text-emerald-600 dark:text-emerald-400" />,
+      color: 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800'
+    }));
+
+    return items;
+  };
+
+  const attentionItems = getAttentionItems();
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen bg-gray-50">
+    <div className="flex flex-col md:flex-row min-h-screen bg-slate-50 dark:bg-gray-900">
       <Sidebar />
-      <main className="flex-1 p-6 md:ml-64">
-        <h1 className="text-2xl font-semibold mb-6">Dashboard</h1>
-
-        {/* Top summary cards */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <SummaryCard title="Total Shipments" value={totalShipments} link="/Shipments" />
-          <SummaryCard title="Active Shipments" value={activeShipments} link="/Shipments?view=active" />
-          <SummaryCard title="Shipment Requests" value={pendingRequestsCount} link="/ShipmentRequest" />
-          <SummaryCard title="Active Conversations" value={approvedConvosCount} link="/AdminMessages" />
-        </section>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Recent Shipments */}
-          <div className="bg-white rounded-lg shadow p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold">Recent Shipments</h2>
-              <Link to="/Shipments" className="text-sm text-blue-600">View all</Link>
-            </div>
-
-            {recentShipments.length === 0 ? (
-              <p className="text-sm text-gray-500">No shipments yet.</p>
-            ) : (
-              <ul className="space-y-2 text-sm">
-                {recentShipments.map((s) => (
-                  <li key={s.id} className="border-b pb-2">
-                    <div className="flex justify-between">
-                      <div>
-                        <div className="font-medium">{s.packageNumber || `#${s.customId || s.id}`}</div>
-                        <div className="text-gray-500">{s.shipperName || "—"}</div>
-                      </div>
-                      <div className="text-right text-xs text-gray-500">
-                        <div>{s.packageStatus || "—"}</div>
-                        <div>{formatDate(s.createdTime || s.dateStarted)}</div>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
+      
+      <main className="flex-1 p-4 md:p-8 md:ml-64">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800 dark:text-gray-200 oswald">DASHBOARD</h1>
           </div>
-
-          {/* Recent Requests */}
-          <div className="bg-white rounded-lg shadow p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold">Recent Shipment Requests</h2>
-              <Link to="/ShipmentRequest" className="text-sm text-blue-600">View all</Link>
-            </div>
-            {recentRequests.length === 0 ? (
-              <p className="text-sm text-gray-500">No requests found.</p>
-            ) : (
-              <ul className="space-y-2 text-sm">
-                {recentRequests.map((r) => (
-                  <li key={r.id} className="border-b pb-2">
-                    <div className="flex justify-between">
-                      <div>
-                        <div className="font-medium">{r.name || r.email || `Request ${r.id}`}</div>
-                        <div className="text-gray-500">{r.serviceType || "—"}</div>
-                      </div>
-                      <div className="text-right text-xs text-gray-500">
-                        <div>{r.status || "Pending"}</div>
-                        <div>{formatDate(r.requestTime)}</div>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          {/* Pending Conversations */}
-          <div className="bg-white rounded-lg shadow p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold">Pending Conversations</h2>
-              <Link to="/MessageRequest" className="text-sm text-blue-600">Manage</Link>
-            </div>
-
-            {recentPendingConvos.length === 0 ? (
-              <p className="text-sm text-gray-500">No pending conversations.</p>
-            ) : (
-              <ul className="space-y-2 text-sm">
-                {recentPendingConvos.map((c) => (
-                  <li key={c.id} className="border-b pb-2">
-                    <div className="flex justify-between">
-                      <div>
-                        <div className="font-medium">{c.userFullName || c.userEmail || `User ${c.id}`}</div>
-                        <div className="text-gray-500">{shortText(c.message || c.intro || "")}</div>
-                      </div>
-                      <div className="text-right text-xs text-gray-500">{formatDate(c.createdAt)}</div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
+          <div className="text-right hidden md:block">
+             <span className="bg-white dark:bg-gray-800 px-4 py-2 rounded-lg shadow-sm text-sm font-medium text-slate-600 dark:text-gray-300">
+               {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+             </span>
           </div>
         </div>
 
-        {/* Footer area for updates and graph */}
-        <section className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white rounded-lg shadow p-4">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="font-semibold">Recent Updates</h3>
-              <button 
-                onClick={() => setShowAllModal(true)}
-                className="text-sm text-blue-600 hover:underline"
-              >
-                View All
-              </button>
+        {/* --- KPI CARDS --- */}
+        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 lexend">
+          <KpiCard 
+            title="Active Shipments" value={kpiData.activePackages} 
+            icon={<FaShippingFast className="text-blue-600 dark:text-blue-400 text-xl" />} color="bg-blue-50 dark:bg-blue-900/30"
+            link="/Shipments?view=active"
+          />
+          <KpiCard 
+            title="Pending Requests" value={kpiData.shipmentRequests} 
+            icon={<FaClipboardList className="text-amber-600 dark:text-amber-400 text-xl" />} color="bg-amber-50 dark:bg-amber-900/30"
+            link="/ShipmentRequest"
+          />
+          <KpiCard 
+            title="Active Chats" value={kpiData.activeMessages} 
+            icon={<FaComments className="text-emerald-600 dark:text-emerald-400 text-xl" />} color="bg-emerald-50 dark:bg-emerald-900/30"
+            link="/AdminMessages"
+          />
+          <KpiCard 
+            title="Message Requests" value={kpiData.messageRequests} 
+            icon={<FaCommentDots className="text-indigo-600 dark:text-indigo-400 text-xl" />} color="bg-indigo-50 dark:bg-indigo-900/30"
+            link="/MessageRequest"
+          />
+        </section>
+
+        {/* --- CHARTS --- */}
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8 lexend">
+          {/* Volume Chart */}
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-gray-700 lg:col-span-2">
+
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+              <h3 className="font-bold text-slate-700 dark:text-gray-200">Shipping Volume</h3>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full md:w-auto">
+                <select 
+                  value={filterMode}
+                  onChange={(e) => setFilterMode(e.target.value)}
+                  className="text-sm border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800 rounded-md text-slate-600 dark:text-gray-300 focus:ring-blue-500"
+                >
+                  <option value="preset">Preset</option>
+                  <option value="custom">Custom Range</option>
+                </select>
+                {filterMode === 'preset' ? (
+                  <select 
+                    value={volumeFilter}
+                    onChange={(e) => setVolumeFilter(e.target.value)}
+                    className="text-sm border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800 rounded-md text-slate-600 dark:text-gray-300 focus:ring-blue-500"
+                  >
+                    <option value="week">Last 7 Days</option>
+                    <option value="last30">Last 30 Days</option>
+                    <option value="last90">Last 90 Days</option>
+                    <option value="month">This Month</option>
+                    <option value="year">This Year</option>
+                  </select>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={fromDate || ''}
+                      onChange={(e) => setFromDate(e.target.value)}
+                      className="text-sm border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800 rounded-md text-slate-600 dark:text-gray-300 focus:ring-blue-500 px-2 py-1"
+                    />
+                    <span className="text-slate-500 dark:text-gray-400">to</span>
+                    <input
+                      type="date"
+                      value={toDate || ''}
+                      onChange={(e) => setToDate(e.target.value)}
+                      className="text-sm border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800 rounded-md text-slate-600 dark:text-gray-300 focus:ring-blue-500 px-2 py-1"
+                    />
+                  </div>
+                )}
+              </div>
             </div>
-            {recentUpdates.length === 0 ? (
-              <p className="text-sm text-gray-500">No recent updates.</p>
-            ) : (
-              <ul className="space-y-2">
-                {recentUpdates.map((u) => (
-                  <li key={u.id} className="text-sm border-b pb-2 last:border-b-0">
-                    <div className="font-medium text-gray-900">{formatUpdateText(u)}</div>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <div className="h-64 w-full">
+              <Bar 
+                data={shipmentVolumeData} 
+                options={{
+                  responsive: true, maintainAspectRatio: false,
+                  plugins: { legend: { display: false } },
+                  scales: { 
+                    y: { 
+                      beginAtZero: true, 
+                      grid: { borderDash: [4, 4], color: 'rgba(148, 163, 184, 0.2)' } // slate-400/20 for light/dark
+                    }, 
+                    x: { grid: { display: false } } 
+                  }
+                }} 
+              />
+            </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-4">
-            <h3 className="font-semibold mb-2">Package Status Distribution</h3>
-            {totalShipments === 0 ? (
-              <p className="text-sm text-gray-500">No data available.</p>
-            ) : (
-              <div style={{ height: '300px' }}>
-                <Bar data={chartData} options={chartOptions} />
+          {/* Status Doughnut */}
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-gray-700">
+
+            <h3 className="font-bold text-slate-700 dark:text-gray-200 mb-4 lexend">Status Breakdown</h3>
+            <div className="h-48 relative flex justify-center">
+              <Doughnut 
+                data={statusDistributionData} 
+                options={{
+                  responsive: true, maintainAspectRatio: false, cutout: '70%',
+                  plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, usePointStyle: true } } }
+                }} 
+              />
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="text-center">
+                  <span className="block text-2xl font-bold text-slate-800 dark:text-gray-200">{kpiData.totalPackages}</span>
+                </div>
               </div>
-            )}
+            </div>
           </div>
         </section>
 
-        {/* Modal for All Updates */}
-        {showAllModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-            <div className="bg-white rounded-lg shadow-lg w-11/12 max-w-4xl p-6 max-h-[80vh] overflow-y-auto">
-              <h3 className="text-xl font-bold mb-4">All Updates</h3>
-              {allUpdates.length === 0 ? (
-                <p>No updates available.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full border-collapse border border-gray-300">
-                    <thead className="bg-gray-200">
-                      <tr>
-                        <th className="p-2 border border-gray-300">Type</th>
-                        <th className="p-2 border border-gray-300">Details</th>
-                        <th className="p-2 border border-gray-300">Source</th>
-                        <th className="p-2 border border-gray-300">Timestamp</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {allUpdates.map((u) => (
-                        <tr key={u.id}>
-                          <td className="p-2 border border-gray-300">{u.type}</td>
-                          <td className="p-2 border border-gray-300">{JSON.stringify(u.details)}</td>
-                          <td className="p-2 border border-gray-300">{u.source}</td>
-                          <td className="p-2 border border-gray-300">{formatDate(u.time || u.timestamp)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+        {/* --- OPERATIONAL LISTS --- */}
+        <section className={`grid grid-cols-1 gap-6 ${userRole === 'admin' ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
+          
+          {/* 1. ACTION REQUIRED */}
+          <div className="lexend bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-slate-100 dark:border-gray-700 flex flex-col h-[400px]">
+            <div className="p-4 border-b border-slate-100 dark:border-gray-700 flex justify-between items-center">
+              <h3 className="font-bold text-slate-700 dark:text-gray-200 flex items-center gap-2">
+                <FaExclamationTriangle className="text-red-500" /> Action Required
+              </h3>
+              <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 px-2 py-0.5 rounded-full font-bold">
+                {attentionItems.length}
+              </span>
+            </div>
+            <div className="flex-1 p-3 overflow-y-auto custom-scrollbar space-y-2">
+              {attentionItems.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-slate-400 dark:text-gray-500">
+                  <FaCheckCircle className="text-4xl mb-3 text-emerald-100 dark:text-emerald-900/50" />
+                  <p>All clear! No urgent items.</p>
                 </div>
+              ) : (
+                attentionItems.map((item, index) => (
+                  <div key={`${item.type}-${item.id}-${index}`} className={`flex items-center justify-between p-3 rounded-lg border ${item.color} bg-opacity-30`}>
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-white dark:bg-gray-700 rounded-full shadow-sm">
+                        {item.icon}
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-semibold text-slate-800 dark:text-gray-200">{item.title}</h4>
+                        <p className="text-xs text-slate-500 dark:text-gray-400">{item.sub}</p>
+                      </div>
+                    </div>
+                    <Link to={item.link} className="text-xs px-3 py-1.5 bg-white dark:bg-gray-700 border border-slate-200 dark:border-gray-600 rounded hover:bg-slate-50 dark:hover:bg-gray-600 text-slate-600 dark:text-gray-300 flex items-center gap-1 shadow-sm">
+                      View <FaArrowRight size={10} />
+                    </Link>
+                  </div>
+                ))
               )}
-              <div className="flex justify-end mt-4">
-                <button
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-                  onClick={() => setShowAllModal(false)}
-                >
-                  Close
-                </button>
-              </div>
             </div>
           </div>
-        )}
+
+          {/* 2. RECENT BOOKINGS (Restored) */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-slate-100 dark:border-gray-700 flex flex-col h-[400px]">
+            <div className="p-4 border-b border-slate-100 dark:border-gray-700 flex justify-between items-center">
+              <h3 className="font-bold text-slate-700 dark:text-gray-200 flex items-center gap-2 lexend">
+                <FaClipboardList className="text-blue-500" /> Recent Bookings
+              </h3>
+              <Link to="/ShipmentRequest" className="text-xs text-blue-600 dark:text-blue-400 font-medium hover:underline">View All</Link>
+            </div>
+            <div className="flex-1 p-2 overflow-y-auto custom-scrollbar">
+              {recentBookings.length === 0 ? (
+                 <div className="h-full flex flex-col items-center justify-center text-slate-400 dark:text-gray-500">
+                    <p className="text-sm">No recent bookings</p>
+                 </div>
+              ) : (
+                <ul className="space-y-1">
+                  {recentBookings.map(r => (
+                    <li key={r.id} className="p-3 hover:bg-slate-50 dark:hover:bg-gray-700 rounded-lg transition-colors flex justify-between items-start">
+                      <div>
+                        <div className="font-medium text-slate-700 dark:text-gray-200 text-sm">{r.name || "Unknown Sender"}</div>
+                        <div className="text-xs text-slate-400 dark:text-gray-500">{r.serviceType || "Standard"} • {formatDate(r.requestTime)}</div>
+                      </div>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                        (r.status || "").toLowerCase() === 'accepted' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-600'
+                      }`}>
+                        {r.status || "Pending"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          {/* 3. ACTIVITY LOG (ADMIN ONLY) */}
+          {userRole === 'admin' && (
+            <div className="lexend bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-slate-100 dark:border-gray-700 flex flex-col h-[400px]">
+              <div className="p-4 border-b border-slate-100 dark:border-gray-700 flex justify-between items-center">
+                <h3 className="font-bold text-slate-700 dark:text-gray-200 flex items-center gap-2">
+                  <FaBoxOpen className="text-slate-400 dark:text-gray-500" /> System Activity
+                </h3>
+              </div>
+              <div className="flex-1 p-2 overflow-y-auto custom-scrollbar">
+                <ul className="space-y-1">
+                  {recentUpdates.map(u => (
+                    <li key={u.id} className="p-3 text-xs border-l-2 border-slate-200 dark:border-gray-700 ml-2 hover:border-blue-500 dark:hover:border-blue-400 transition-colors">
+                      <p className="text-slate-600 dark:text-gray-300 mb-1">
+                        <span className="font-semibold text-slate-800 dark:text-gray-200">
+                          {u.type ? u.type.replace(/_/g, " ").toUpperCase() : "UPDATE"}
+                        </span>
+                      </p>
+                      <p className="text-slate-400 dark:text-gray-500">{formatDate(u.timestamp)}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+        </section>
       </main>
     </div>
   );
 };
 
-const SummaryCard = ({ title, value, link }) => {
-  return (
-    <Link to={link} className="block bg-white p-4 rounded-lg shadow hover:shadow-md transition">
-      <div className="text-sm text-gray-500">{title}</div>
-      <div className="mt-2 text-2xl font-bold">{value}</div>
-    </Link>
-  );
-};
+// --- Sub-Component ---
+const KpiCard = ({ title, value, icon, color, link }) => (
+  <Link to={link || "#"} className="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-gray-700 hover:shadow-md transition-shadow flex items-start justify-between">
+    <div>
+      <p className="text-slate-500 dark:text-gray-400 text-sm font-medium mb-1">{title}</p>
+      <h3 className="text-3xl font-bold text-slate-800 dark:text-gray-200">{value}</h3>
+    </div>
+    <div className={`p-3 rounded-lg ${color}`}>
+      {icon}
+    </div>
+  </Link>
+);
 
 export default AdminDashboard;

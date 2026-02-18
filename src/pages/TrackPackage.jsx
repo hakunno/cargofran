@@ -57,12 +57,12 @@ const TrackPackage = () => {
 
   return (
     <div className="max-w-4xl mx-auto mt-5 p-10 bg-gray-50 rounded-lg mb-10 drop-shadow-[0px_2px_5px_rgba(0,0,0,1)] shadow-xl">
-      <h2 className="text-2xl font-semibold text-gray-800 mb-4">Package Status</h2>
+      <h2 className="text-2xl font-semibold text-gray-800 mb-4">Shipment Status</h2>
 
       <div className="flex flex-col sm:flex-row items-center mb-10 gap-4 mb-6">
         <input
           type="text"
-          placeholder="Enter Package Number"
+          placeholder="Enter Shipment Number"
           value={packageNumber}
           onChange={(e) => setPackageNumber(e.target.value)}
           className="w-full sm:flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -83,7 +83,7 @@ const TrackPackage = () => {
           <h3 className="text-xl font-medium text-gray-700 mb-4">Package Details</h3>
 
           <div className="space-y-2 mb-6">
-            <p><span className="font-semibold">Package Number:</span> {shipment.packageNumber}</p>
+            <p><span className="font-semibold">Shipment Number:</span> {shipment.packageNumber}</p>
             <p><span className="font-semibold">From:</span> {shipment.senderCountry || 'N/A'}</p>
             <p><span className="font-semibold">To:</span> {shipment.destinationCountry || 'N/A'}</p>
             <p><span className="font-semibold">Current Status:</span> {shipment.packageStatus}</p>

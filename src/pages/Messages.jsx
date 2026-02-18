@@ -5,506 +5,722 @@ import {
   collection,
   doc,
   addDoc,
-  getDoc,
   updateDoc,
   query,
   orderBy,
+  where,
+  getDocs,
   onSnapshot,
-  serverTimestamp,
 } from "firebase/firestore";
 
-// Import helper functions and constants
+// Helper imports
 import { fetchUserData } from "../helpers/AuthHelpers";
-import { createNewConversation, updateConversationStatus, stopConversation } from "../helpers/ConversationHelpers";
-import { faqStep1Options, faqFollowUp } from "../helpers/FaqHelpers";
+import { 
+  createNewConversation, 
+  updateConversationStatus, 
+  archiveConversation 
+} from "../helpers/ConversationHelpers";
+import { faqStep1Options, faqFollowUp } from "../helpers/FaqHelpers"; 
 import { sendMessage } from "../helpers/MessageHelpers";
 
-// Import the LoginModal component
+// Import your Login Modal
 import LoginModal from "../modals/Login";
 
-const ChatWindow = ({ conversationId: propConversationId, conversation, widgetMode = false }) => {
-  // State variables...
+const ChatWindow = ({ 
+  conversationId: propConversationId, 
+  widgetMode = false,
+  isReadOnly = false, 
+  archivedData = null,
+  role: propRole = "user" 
+}) => {
+  
+  // --- State ---
   const [authUser, setAuthUser] = useState(null);
-  const [role, setRole] = useState(null); // "admin", "staff", or "user"
+  const [role, setRole] = useState(propRole); 
   const [userData, setUserData] = useState(null);
-  const [conversationData, setConversationData] = useState(null);
+  
+  // Conversation State
   const [localConversationId, setLocalConversationId] = useState(
     propConversationId || localStorage.getItem("conversationId") || null
   );
+  const [conversationData, setConversationData] = useState(null);
   const [conversationStatus, setConversationStatus] = useState(null);
   const [messages, setMessages] = useState([]);
+  
+  // Input & UI State
   const [newMessage, setNewMessage] = useState("");
-  const [notification, setNotification] = useState("");
-  const [inputDisabled, setInputDisabled] = useState(false);
-  const [countdown, setCountdown] = useState(0);
+  const [isPreChat, setIsPreChat] = useState(!localConversationId); 
   const messagesEndRef = useRef(null);
+  
+  // Ref for the Login Modal
+  const loginModalRef = useRef(null);
 
-  // FAQ flow state
-  const [faqStep, setFaqStep] = useState(0);
+  // FAQ State
+  const [faqStep, setFaqStep] = useState(0); 
   const [selectedCategory, setSelectedCategory] = useState(null);
-  // New state to control showing the LoginModal
-  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showMoreQuestionPrompt, setShowMoreQuestionPrompt] = useState(false);
 
-  // --- Utility Functions ---
-  const formatTime = (seconds) => {
-    const m = Math.floor(seconds / 60).toString().padStart(2, "0");
-    const s = (seconds % 60).toString().padStart(2, "0");
-    return `${m}:${s}`;
-  };
+  // Tracking State
+  const [isTrackingInput, setIsTrackingInput] = useState(false);
+  const [trackingPackageNumber, setTrackingPackageNumber] = useState('');
+  const [trackingAction, setTrackingAction] = useState(null);
+  const [searchLoading, setSearchLoading] = useState(false);
 
-  const getNotificationClasses = () => {
-    if (conversationStatus === "approved") return "bg-green-100 text-green-700";
-    if (conversationStatus === "rejected" || conversationStatus === "ended") return "bg-red-100 text-red-700";
-    return "bg-gray-100 text-gray-700";
-  };
-
-  // --- Auth and User Data ---
+  // --- Auth Listener ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setAuthUser(user);
         const data = await fetchUserData(db, user);
         setUserData(data);
-        setRole(data?.role || "user");
+        if (propRole === "user") {
+            setRole(data?.role || "user");
+        }
       } else {
-        // When user logs out, clear conversation state
         setAuthUser(null);
-        setRole(null);
-        setLocalConversationId(null);
-        setConversationData(null);
-        setConversationStatus(null);
-        setMessages([]);
-        localStorage.removeItem("conversationId");
+        if (propRole === "user") setRole(null);
+        setUserData(null);
       }
     });
     return () => unsubscribe();
-  }, []);
+  }, [propRole]);
 
-  // --- Listen for Conversation Changes ---
+  // --- Data Listener ---
   useEffect(() => {
+    if (isReadOnly && archivedData) {
+      setMessages(archivedData.messages || []);
+      setConversationData(archivedData);
+      setConversationStatus('ended');
+      setIsPreChat(false);
+      return; 
+    }
+
     if (!localConversationId) {
-      setConversationStatus(null);
-      setConversationData(null);
+      setIsPreChat(true);
       return;
     }
-    const convoDocRef = doc(db, "conversations", localConversationId);
-    const unsubscribe = onSnapshot(convoDocRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setConversationStatus(data.status);
-        setConversationData(data);
-      }
-    });
-    return () => unsubscribe();
-  }, [localConversationId]);
 
-  // --- Listen for Messages ---
-  useEffect(() => {
-    if (!localConversationId || conversationStatus === "ended") return;
+    setIsPreChat(false);
+
+    const convoDocRef = doc(db, "conversations", localConversationId);
+    const unsubConvo = onSnapshot(convoDocRef, (docSnap) => {
+      if (!docSnap.exists()) {
+        resetChat();
+        return;
+      }
+      const data = docSnap.data();
+      setConversationStatus(data.status);
+      setConversationData(data);
+      
+      if(data.status === 'faqchat') setFaqStep(1); 
+    });
+
     const messagesRef = collection(db, "conversations", localConversationId, "messages");
     const q = query(messagesRef, orderBy("timestamp", "asc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubMessages = onSnapshot(q, (snapshot) => {
       const msgs = snapshot.docs.map((docSnap) => ({
         id: docSnap.id,
         ...docSnap.data(),
       }));
       setMessages(msgs);
     });
-    return () => unsubscribe();
-  }, [localConversationId, conversationStatus]);
 
-  // --- Persist Conversation ID ---
+    return () => {
+      unsubConvo();
+      unsubMessages();
+    };
+  }, [localConversationId, isReadOnly, archivedData]);
+
+  // --- Auto Scroll ---
   useEffect(() => {
-    if (localConversationId) localStorage.setItem("conversationId", localConversationId);
-  }, [localConversationId]);
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, faqStep, isPreChat, showMoreQuestionPrompt]);
 
-  // --- Auto-scroll when messages update ---
-  useEffect(() => {
-    if (messagesEndRef.current) messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  // --- Handle Rejected / Ended Conversation ---
-  useEffect(() => {
-    if (role === "user" && conversationStatus === "rejected") {
-      setNotification("Your conversation request has been rejected. Please try again after 5 minutes.");
-      setInputDisabled(true);
-      const timer = setTimeout(() => {
-        setInputDisabled(false);
-        setNotification("");
-      }, 10 * 60 * 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [conversationStatus, role]);
-
-  useEffect(() => {
-    if (role === "user" && conversationStatus === "ended") {
-      const savedEndTimestamp = localStorage.getItem("conversationEndTimestamp");
-      let endTime;
-      if (savedEndTimestamp) {
-        endTime = parseInt(savedEndTimestamp);
-      } else {
-        endTime = Date.now();
-        localStorage.setItem("conversationEndTimestamp", endTime.toString());
-      }
-      const elapsedSeconds = Math.floor((Date.now() - endTime) / 1000);
-      const remaining = 300 - elapsedSeconds;
-      if (remaining > 0) {
-        setCountdown(remaining);
-        setNotification("This conversation has ended. You can create a new conversation in");
-        setInputDisabled(true);
-        const interval = setInterval(() => {
-          setCountdown((prev) => {
-            if (prev <= 1) {
-              clearInterval(interval);
-              setInputDisabled(false);
-              setNotification("");
-              setLocalConversationId(null);
-              localStorage.removeItem("conversationId");
-              localStorage.removeItem("conversationEndTimestamp");
-              return 0;
-            }
-            setNotification("This conversation has ended. You can create a new conversation in");
-            return prev - 1;
-          });
-        }, 1000);
-        return () => clearInterval(interval);
-      } else {
-        setInputDisabled(false);
-        setNotification("");
-        setLocalConversationId(null);
-        localStorage.removeItem("conversationId");
-        localStorage.removeItem("conversationEndTimestamp");
-      }
-    }
-  }, [conversationStatus, role]);
-
-  const conversationIsActive = localConversationId && conversationStatus !== "ended";
-
-  // --- Helpers for Message Display ---
-  const getMessageClasses = (msgSenderId) => {
-    if (msgSenderId === "system") return "self-end bg-yellow-200";
-    return msgSenderId === authUser?.uid ? "self-end bg-blue-100" : "self-start bg-gray-100";
+  const resetChat = () => {
+    setLocalConversationId(null);
+    localStorage.removeItem("conversationId");
+    setConversationStatus(null);
+    setConversationData(null);
+    setMessages([]);
+    setIsPreChat(true);
+    setFaqStep(0);
+    setShowMoreQuestionPrompt(false);
+    setIsTrackingInput(false);
+    setTrackingPackageNumber('');
+    setTrackingAction(null);
   };
 
-  const getSenderName = (msgSenderId) => {
-    if (msgSenderId === "system") return "Automatic Chat";
-    if (role === "admin" || role === "staff") {
-      if (msgSenderId === authUser?.uid) {
-        return conversationData?.adminFirstName || conversationData?.adminLastName
-          ? `${conversationData.adminFirstName || ""} ${conversationData.adminLastName || ""}`.trim()
-          : "Admin";
-      }
-      return conversationData?.userFirstName || conversationData?.userLastName
-        ? `${conversationData.userFirstName || ""} ${conversationData.userLastName || ""}`.trim()
-        : "User";
-    } else {
-      return msgSenderId === authUser?.uid
-        ? userData
-          ? `${userData.firstName || ""} ${userData.lastName || ""}`.trim()
-          : "You"
-        : conversationData?.adminFirstName || conversationData?.adminLastName
-        ? `${conversationData.adminFirstName || ""} ${conversationData.adminLastName || ""}`.trim()
-        : "Admin";
-    }
-  };
-
-  useEffect(() => {
-    if (role === "user" && conversationStatus === "approved") {
-      setNotification("You are currently chatting with an admin");
-      const timer = setTimeout(() => setNotification(""), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [conversationStatus, role]);
-
-  // Listen for conversation deletion
-  useEffect(() => {
-    if (!localConversationId) {
-      setConversationStatus(null);
-      setConversationData(null);
-      return;
-    }
-    const convoDocRef = doc(db, "conversations", localConversationId);
-    const unsubscribe = onSnapshot(convoDocRef, (docSnap) => {
-      if (!docSnap.exists()) {
-        setLocalConversationId(null);
-        localStorage.removeItem("conversationId");
-        setConversationStatus(null);
-        setConversationData(null);
-        setMessages([]);
-        return;
-      }
-      const data = docSnap.data();
-      setConversationStatus(data.status);
-      setConversationData(data);
-    });
-    return () => unsubscribe();
-  }, [localConversationId]);
-
-  // --- FAQ Option Handlers ---
-  const handleFAQOptionStep1 = async (option) => {
-    if (!localConversationId) return;
+  // --- Tracking Search Function ---
+  const handleTrackSearch = async (pkgNum) => {
+    setSearchLoading(true);
     try {
-      // Record user's FAQ selection
       await addDoc(collection(db, "conversations", localConversationId, "messages"), {
-        text: option.text,
-        senderId: authUser.uid,
+        text: "Searching for your package...",
+        senderId: "system",
         timestamp: new Date(),
         status: "faqchat",
       });
-      await updateConversationStatus(db, localConversationId, "faqchat");
-      setSelectedCategory(option.id);
-      setFaqStep(2);
-      const followUpMessage = faqFollowUp[option.id]?.message;
-      if (followUpMessage) {
+
+      const q = query(
+        collection(db, "Packages"),
+        where("packageNumber", "==", pkgNum)
+      );
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
         await addDoc(collection(db, "conversations", localConversationId, "messages"), {
-          text: followUpMessage,
+          text: "Package not found. Please check the package number and try again.",
+          senderId: "system",
+          timestamp: new Date(),
+          status: "faqchat",
+        });
+        return false;
+      }
+
+      const docSnap = querySnapshot.docs[0];
+      const packageData = { id: docSnap.id, ...docSnap.data() };
+
+      // Package Details
+      let detailsText = `Package Details:\n`;
+      detailsText += `- Package Number: ${packageData.packageNumber}\n`;
+      detailsText += `- From: ${packageData.senderCountry || 'N/A'}\n`;
+      detailsText += `- To: ${packageData.destinationCountry || 'N/A'}\n`;
+      detailsText += `- Current Status: ${packageData.packageStatus || 'N/A'}\n`;
+      if (packageData.airwayBill) detailsText += `- Airway Bill: ${packageData.airwayBill}\n`;
+
+      await addDoc(collection(db, "conversations", localConversationId, "messages"), {
+        text: detailsText,
+        senderId: "system",
+        timestamp: new Date(),
+        status: "faqchat",
+      });
+
+      // Status History
+      const historyQuery = query(
+        collection(db, "Packages", docSnap.id, "statusHistory"),
+        orderBy("timestamp", "asc")
+      );
+      const historySnapshot = await getDocs(historyQuery);
+      let historyText = "Status History:\n";
+      if (historySnapshot.empty) {
+        historyText += "No status history available.";
+      } else {
+        historySnapshot.docs.forEach((doc) => {
+          const entry = { id: doc.id, ...doc.data() };
+          const time = entry.timestamp?.toDate ? entry.timestamp.toDate().toLocaleString() : 'Pending';
+          historyText += `- ${entry.status} (${time})\n`;
+        });
+      }
+
+      await addDoc(collection(db, "conversations", localConversationId, "messages"), {
+        text: historyText,
+        senderId: "system",
+        timestamp: new Date(),
+        status: "faqchat",
+      });
+
+      // Action-specific messages
+      if (trackingAction === 'delivery_when') {
+        let lastStatus = packageData.packageStatus || 'Unknown';
+        if (!historySnapshot.empty) {
+          const lastDoc = historySnapshot.docs[historySnapshot.docs.length - 1];
+          const lastEntry = { ...lastDoc.data() };
+          lastStatus = lastEntry.status || lastStatus;
+        }
+        const excuseText = `Note: We are unable to provide an approximate delivery time due to variable factors such as customs processing, weather conditions, transit delays, and other unforeseen circumstances. Your shipment's current status and location is ${lastStatus}.`;
+        await addDoc(collection(db, "conversations", localConversationId, "messages"), {
+          text: excuseText,
+          senderId: "system",
+          timestamp: new Date(),
+          status: "faqchat",
+        });
+      } else if (trackingAction === 'tracking_update') {
+        const excuseText = "If there are no recent updates, it may be due to delays in the system, transit issues, or pending scans.";
+        await addDoc(collection(db, "conversations", localConversationId, "messages"), {
+          text: excuseText,
           senderId: "system",
           timestamp: new Date(),
           status: "faqchat",
         });
       }
-    } catch (error) {
-      console.error("Error in FAQ step 1:", error);
+
+      // Prompt for more questions
+      await addDoc(collection(db, "conversations", localConversationId, "messages"), {
+        text: "Do you have another question?",
+        senderId: "system",
+        timestamp: new Date(),
+        status: "faqchat",
+      });
+      setShowMoreQuestionPrompt(true);
+
+      return true;
+    } catch (err) {
+      console.error(err);
+      await addDoc(collection(db, "conversations", localConversationId, "messages"), {
+        text: "Error retrieving package data. Please try again.",
+        senderId: "system",
+        timestamp: new Date(),
+        status: "faqchat",
+      });
+      return false;
+    } finally {
+      setSearchLoading(false);
     }
   };
 
-  const handleFAQOptionStep2 = async (option) => {
-    if (!localConversationId) return;
+  // --- ACTIONS ---
+  const startFaqChat = async () => {
     try {
-      // If the user selects "Contact admin" and their role is undefined,
-      // prompt them to log in / sign up using the LoginModal
-      if (option.id === "contact") {
-        if (!role || role === "undefined") {
-          // Show the login modal instead of sending a message
-          setShowLoginModal(true);
-          return;
-        } else {
-          // Otherwise, update the conversation to indicate a contact request
-          await updateDoc(doc(db, "conversations", localConversationId), {
-            request: "sent",
-            updatedAt: new Date().toISOString(),
-            status: "pending",
-          });
-        }
-      } else {
-        // Record the FAQ selection for other options
-        await addDoc(collection(db, "conversations", localConversationId, "messages"), {
-          text: option.text,
-          senderId: authUser.uid,
-          timestamp: new Date(),
-        });
-      }
-      // End FAQ flow
-      setFaqStep(0);
-      setSelectedCategory(null);
+      const currentUser = authUser || {
+        uid: `guest_${Date.now()}`, 
+        displayName: "Guest",
+        email: "guest@example.com",
+        isAnonymous: true
+      };
+
+      const convoId = await createNewConversation(db, currentUser, userData, "Started FAQ Session");
+      await updateConversationStatus(db, convoId, "faqchat");
+
+      setLocalConversationId(convoId);
+      localStorage.setItem("conversationId", convoId);
+
+      await addDoc(collection(db, "conversations", convoId, "messages"), {
+        text: "Hello! I am your automated assistant. Please select a topic below:",
+        senderId: "system",
+        timestamp: new Date(),
+        status: "faqchat",
+      });
+
+      setFaqStep(1);
     } catch (error) {
-      console.error("Error in FAQ step 2:", error);
+      console.error("Error starting FAQ:", error);
     }
   };
 
-  // --- Handle Sending a New Message ---
-  const handleSendMessage = async () => {
+  const requestLiveAgent = async () => {
     if (!authUser) {
-      alert("Please log in to send messages.");
-      return;
-    }
-    if (!newMessage.trim()) return;
-    const currentUserId = authUser.uid;
-
-    // If no active conversation, create a new one
-    if ((!conversationIsActive || conversationStatus === "ended") && role !== "admin" && role !== "staff") {
-      try {
-        const convoId = await createNewConversation(db, authUser, userData, newMessage);
-        setLocalConversationId(convoId);
-        localStorage.setItem("conversationId", convoId);
-        // Auto-send FAQ step 1 prompt
-        await addDoc(collection(db, "conversations", convoId, "messages"), {
-          text: "Please select a topic from the options below:",
-          senderId: "system",
-          timestamp: new Date(),
-        });
-        setFaqStep(1);
-        setNewMessage("");
-      } catch (error) {
-        console.error("Error creating conversation:", error);
+      if(loginModalRef.current) {
+        loginModalRef.current.openModal(); 
       }
       return;
     }
 
-    if (conversationIsActive) {
-      try {
-        await sendMessage(db, localConversationId, newMessage, currentUserId);
-        setNewMessage("");
-      } catch (error) {
-        console.error("Error sending message:", error);
-      }
-    }
-  };
-
-  // --- Admin/Staff Stop Conversation ---
-  const handleStopConversation = async () => {
-    if (!localConversationId) return;
-    const confirmStop = window.confirm("Are you sure you want to stop this conversation?");
-    if (!confirmStop) return;
     try {
-      await stopConversation(db, localConversationId);
+      const convoId = await createNewConversation(db, authUser, userData, "I would like to speak to an agent.");
+      await updateDoc(doc(db, "conversations", convoId), {
+        status: "pending",
+        request: "sent",
+        updatedAt: new Date().toISOString()
+      });
+
+      setLocalConversationId(convoId);
+      localStorage.setItem("conversationId", convoId);
+      setFaqStep(0); 
+      setShowMoreQuestionPrompt(false);
     } catch (error) {
-      console.error("Error stopping conversation:", error);
+      console.error("Error requesting agent:", error);
     }
   };
 
-  // --- Determine Header Title ---
-  const getHeaderTitle = () => {
-    if (!conversationData) return "Message:";
-    if (role === "admin" || role === "staff") {
-      const first = conversationData.userFirstName || "";
-      const last = conversationData.userLastName || "";
-      return `Conversation: ${`${first} ${last}`.trim() || "Unknown User"}`;
+  const handleEndChat = async () => {
+    if (!localConversationId) return;
+    const confirm = window.confirm("Are you sure you want to end this chat?");
+    if (!confirm) return;
+
+    const success = await archiveConversation(db, localConversationId);
+    if (success) {
+      resetChat();
     } else {
-      if (conversationData.adminFirstName || conversationData.adminLastName) {
-        const adminFirst = conversationData.adminFirstName || "";
-        const adminLast = conversationData.adminLastName || "";
-        return `Chatting with: ${`${adminFirst} ${adminLast}`.trim()} (Admin)`;
-      }
-      return `FLS Automatic Chat`;
+      alert("Failed to archive chat. Please try again.");
     }
   };
 
-  const headerTitle = getHeaderTitle();
+  const handleFaqSelection = async (option, step) => {
+    if (!localConversationId) return;
 
-  const handleOpenNavbar = () => {
-    window.dispatchEvent(new CustomEvent("openOffCanvas"));
+    await addDoc(collection(db, "conversations", localConversationId, "messages"), {
+      text: option.text,
+      senderId: authUser?.uid || "guest",
+      timestamp: new Date(),
+      status: "faqchat",
+    });
+
+    if (option.id === "contact" || option.value === "contact") {
+      await requestLiveAgent();
+      return;
+    }
+
+    let responseText = '';
+    let shouldPromptMoreQuestions = false;
+
+    if (step === 1) {
+      const responseData = faqFollowUp[option.id];
+      if (responseData && responseData.message) {
+        responseText = responseData.message;
+        setSelectedCategory(option.id);
+        setFaqStep(2);
+      }
+    } else if (step === 2) {
+      const category = selectedCategory;
+      const subId = option.id;
+      switch (category) {
+        case 'delivery':
+          switch (subId) {
+            case 'when':
+              responseText = "To check when your package will arrive, please enter your package number below.";
+              setIsTrackingInput(true);
+              setTrackingAction('delivery_when');
+              break;
+            case 'delay':
+              responseText = "Possible reasons for delays that cannot be controlled include severe weather conditions, natural disasters, port congestions, and other unforeseen events.";
+              shouldPromptMoreQuestions = true;
+              break;
+            case 'done':
+              responseText = "Done! If you need more help, select another topic.";
+              setFaqStep(1);
+              return;
+            case 'contact':
+              await requestLiveAgent();
+              return;
+          }
+          break;
+        case 'tracking':
+          switch (subId) {
+            case 'how':
+              responseText = "To track your package, please enter your package number below.";
+              setIsTrackingInput(true);
+              setTrackingAction('tracking_how');
+              break;
+            case 'update':
+              responseText = "If you're not seeing updates, please enter your package number to check the current status.";
+              setIsTrackingInput(true);
+              setTrackingAction('tracking_update');
+              break;
+            case 'done':
+              responseText = "Done! If you need more help, select another topic.";
+              setFaqStep(1);
+              return;
+            case 'contact':
+              await requestLiveAgent();
+              return;
+          }
+          break;
+        case 'shipping':
+          switch (subId) {
+            case 'cost':
+              responseText = "Shipping costs depend on the package weight, dimensions, origin, destination, and selected transport mode (Air, Sea, Road). For an accurate quote, please provide more details or contact us.";
+              shouldPromptMoreQuestions = true;
+              break;
+            case 'free':
+              responseText = "Free shipping is available for orders over a certain amount or during special promotions. Check our website for current offers or contact support for details.";
+              shouldPromptMoreQuestions = true;
+              break;
+            case 'done':
+              responseText = "Done! If you need more help, select another topic.";
+              setFaqStep(1);
+              return;
+            case 'contact':
+              await requestLiveAgent();
+              return;
+          }
+          break;
+        case 'other':
+          switch (subId) {
+            case 'general':
+              responseText = "For general inquiries, please provide more details, or type your question to request a live agent.";
+              setFaqStep(0);
+              return;
+            case 'done':
+              responseText = "Done! If you need more help, select another topic.";
+              setFaqStep(1);
+              return;
+            case 'contact':
+              await requestLiveAgent();
+              return;
+          }
+          break;
+        default:
+          break;
+      }
+    }
+
+    if (responseText) {
+      await addDoc(collection(db, "conversations", localConversationId, "messages"), {
+        text: responseText,
+        senderId: "system",
+        timestamp: new Date(),
+        status: "faqchat",
+      });
+    }
+
+    if (shouldPromptMoreQuestions) {
+      await addDoc(collection(db, "conversations", localConversationId, "messages"), {
+        text: "Do you have another question?",
+        senderId: "system",
+        timestamp: new Date(),
+        status: "faqchat",
+      });
+      setShowMoreQuestionPrompt(true);
+    }
   };
 
-  // In FAQ mode, disable the text input so users can't type messages.
-  const isInputDisabled = conversationStatus === "ended" ||
-    conversationStatus === "rejected" ||
-    inputDisabled ||
-    (conversationStatus === "faqchat");
+  const handleMoreQuestions = async (wantsMore) => {
+    setShowMoreQuestionPrompt(false);
+    if (wantsMore) {
+      setFaqStep(1);
+    } else {
+      await addDoc(collection(db, "conversations", localConversationId, "messages"), {
+        text: "Thank you for using our FAQ assistant. If you need further assistance, feel free to chat with a live agent.",
+        senderId: "system",
+        timestamp: new Date(),
+        status: "faqchat",
+      });
+      setFaqStep(0);
+    }
+  };
 
-  const containerHeightClass = widgetMode
-    ? "h-full text-sm"
-    : role === "admin" || role === "staff"
-    ? "h-screen md:h-full"
-    : "h-screen";
+  const handleSendMessage = async () => {
+    if (isTrackingInput) {
+      if (!trackingPackageNumber.trim()) return;
+      const success = await handleTrackSearch(trackingPackageNumber);
+      if (success) {
+        setTrackingPackageNumber('');
+        setIsTrackingInput(false);
+        setTrackingAction(null);
+      }
+      return;
+    }
 
-  const basePadding = widgetMode ? "p-2" : "p-4";
+    if (!authUser) {
+      if(loginModalRef.current) {
+        loginModalRef.current.openModal();
+      }
+      return;
+    }
 
-  const sendButtonText = conversationIsActive && messages.length === 0 ? "Start" : "Send";
-  const noMessagesText = conversationIsActive && messages.length === 0 ? "Start a conversation" : "No messages yet.";
+    if (!newMessage.trim()) return;
+
+    if (conversationStatus === "faqchat") {
+      await requestLiveAgent();
+    }
+
+    if (localConversationId) {
+      await sendMessage(db, localConversationId, newMessage, authUser.uid);
+      setNewMessage("");
+    }
+  };
+
+  // --- Logic for Admin/Staff ---
+  const isAdminOrStaff = role === 'admin' || role === 'staff';
+  
+  const isInputDisabled = 
+    conversationStatus === "ended" || 
+    conversationStatus === "rejected" || 
+    (conversationStatus === "pending" && !isAdminOrStaff); 
+
+  let inputPlaceholder = "Type your message...";
+  if (!authUser) inputPlaceholder = "Log in to chat...";
+  else if (conversationStatus === 'faqchat' && !isTrackingInput) inputPlaceholder = "Type to request an agent...";
+  else if (conversationStatus === 'pending' && !isAdminOrStaff) inputPlaceholder = "Waiting for an agent to accept...";
+  else if (isTrackingInput) inputPlaceholder = "Enter your package number";
+  
+  const renderMessage = (msg) => {
+    const isSystem = msg.senderId === "system";
+    const isMe = msg.senderId === authUser?.uid || msg.senderId === "guest";
+    
+    return (
+      <div key={msg.id} className={`flex flex-col mb-3 ${isSystem ? 'items-center' : (isMe ? 'items-end' : 'items-start')}`}>
+        <div className={`
+          max-w-[80%] p-3 rounded-lg text-sm break-words shadow-sm
+          ${isSystem ? "bg-gray-100 text-gray-800 border border-gray-200 text-center italic" : ""}
+          ${isMe && !isSystem ? "bg-blue-600 text-white rounded-br-none" : ""}
+          ${!isMe && !isSystem ? "bg-white border border-gray-200 text-gray-800 rounded-bl-none" : ""}
+        `}>
+          {msg.text}
+        </div>
+        {!isSystem && (
+          <span className="text-[10px] text-gray-400 mt-1 px-1">
+            {msg.timestamp?.seconds 
+              ? new Date(msg.timestamp.seconds * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+              : "Just now"}
+          </span>
+        )}
+      </div>
+    );
+  };
 
   return (
-    <div className={`flex flex-col w-full ${containerHeightClass}`}>
-      {/* Header */}
-      <div className={`${basePadding} bg-blue-200 border-b-2 flex items-center justify-between flex-shrink-0`}>
-        <h4 className="text-lg font-semibold">{headerTitle}</h4>
-        <button onClick={handleOpenNavbar} className={`${role === "admin" ? "md:hidden" : ""} p-2 text-gray-700 hover:text-gray-900`}>
-          <svg xmlns="http://www.w3.org/2000/svg" className="md:hidden h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
-        {(role === "admin" || role === "staff") && conversationIsActive && (
-          <button className="p-2 bg-red-500 text-white rounded" onClick={handleStopConversation}>
-            Stop
-          </button>
-        )}
-      </div>
-
-      {/* Notification */}
-      {(notification || (conversationIsActive && conversationStatus === "pending" && role !== "admin" && role !== "staff")) && (
-        <div className={`p-2 text-center ${getNotificationClasses()}`}>
-          {notification || "Waiting for an admin to accept your request..."}{" "}
-          {conversationStatus === "ended" && `(${formatTime(countdown)})`}
-        </div>
-      )}
-
-      {/* Messages Area */}
-      <div className={`flex-1 overflow-y-auto ${basePadding} bg-white flex flex-col`}>
-        {conversationIsActive ? (
-          messages.length > 0 ? (
-            messages.map((msg) => (
-              <div key={msg.id} className={`mb-2 p-2 rounded max-w-xs break-words ${getMessageClasses(msg.senderId)}`}>
-                <p className="text-xs text-gray-600 mb-1">{getSenderName(msg.senderId)}</p>
-                <p>{msg.text}</p>
-                <small className="text-gray-500">
-                  {msg.timestamp && msg.timestamp.seconds
-                    ? new Date(msg.timestamp.seconds * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                    : new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                </small>
-              </div>
-            ))
-          ) : (
-            <p className="text-center text-gray-500">{noMessagesText}</p>
-          )
-        ) : (
-          <p className="text-center text-gray-500">
-            {conversationStatus === "ended"
-              ? "This conversation has ended."
-              : "Please tell us your concern!"}
-          </p>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* FAQ Options */}
-      {conversationIsActive && role === "user" && faqStep > 0 && (
-        <div className={`${basePadding} bg-gray-50 flex flex-wrap gap-2`}>
-          {faqStep === 1 &&
-            faqStep1Options.map((option) => (
-              <button
-                key={option.id}
-                className="p-2 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
-                onClick={() => handleFAQOptionStep1(option)}
-              >
-                {option.text}
-              </button>
-            ))}
-          {faqStep === 2 &&
-            selectedCategory &&
-            faqFollowUp[selectedCategory] &&
-            faqFollowUp[selectedCategory].options.map((option) => (
-              <button
-                key={option.id}
-                className="p-2 bg-green-100 text-green-700 rounded hover:bg-green-200"
-                onClick={() => handleFAQOptionStep2(option)}
-              >
-                {option.text}
-              </button>
-            ))}
-        </div>
-      )}
-
-      {/* Input Area */}
-      {conversationIsActive && conversationStatus === "ended" ? (
-        <div className="p-2 text-center text-red-500">
-          This conversation has ended. You cannot send more messages.
-        </div>
-      ) : (
-        <div className={`${basePadding} border-t bg-gray-50 flex flex-shrink-0`}>
-          <input
-            type="text"
-            className="flex-1 p-2 border rounded"
-            placeholder="Type your message..."
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                handleSendMessage();
+    <div className={`flex flex-col w-full bg-gray-50 ${widgetMode ? "h-full" : "h-screen md:h-full"}`}>
+      
+      {/* --- HEADER --- */}
+      {!isAdminOrStaff && (
+        <div className="p-4 bg-white border-b border-gray-200 flex items-center justify-between shadow-sm z-10">
+          <div>
+            <h4 className="font-bold text-gray-800 text-lg">Support Chat</h4>
+            <p className="text-xs text-gray-500">
+              {isReadOnly 
+                ? `Archived • Duration: ${conversationData?.duration || 'N/A'}` 
+                : (conversationStatus === 'approved' ? 'Live with Agent' : 'Automated Support')
               }
-            }}
-            disabled={isInputDisabled}
-          />
-          <button className="ml-2 p-2 bg-blue-500 text-white rounded" onClick={handleSendMessage} disabled={isInputDisabled}>
-            {sendButtonText}
-          </button>
+            </p>
+          </div>
         </div>
       )}
 
-      {/* Render the LoginModal if needed */}
-      {showLoginModal && (
-        <LoginModal setIsOpen={() => setShowLoginModal(false)} />
+      {/* --- BODY --- */}
+      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-4">
+        {isPreChat && (
+          <div className="flex flex-col items-center justify-center h-full space-y-6">
+            <div className="text-center">
+              <h3 className="text-xl font-bold text-gray-700 mb-2">How can we help?</h3>
+              <p className="text-sm text-gray-500 max-w-xs mx-auto">
+                Select an option to get started instantly.
+              </p>
+            </div>
+
+            <div className="w-full max-w-xs space-y-3">
+              <button 
+                onClick={startFaqChat}
+                className="w-full p-4 bg-white border border-blue-200 rounded-xl shadow-sm hover:shadow-md hover:bg-blue-50 transition flex items-center gap-3 group"
+              >
+                <div className="p-2 bg-blue-100 text-blue-600 rounded-full group-hover:bg-blue-600 group-hover:text-white transition">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </div>
+                <div className="text-left">
+                  <p className="font-semibold text-gray-800">Browse FAQs</p>
+                  <p className="text-xs text-gray-500">Get instant answers</p>
+                </div>
+              </button>
+
+              <button 
+                onClick={requestLiveAgent}
+                className="w-full p-4 bg-white border border-green-200 rounded-xl shadow-sm hover:shadow-md hover:bg-green-50 transition flex items-center gap-3 group"
+              >
+                <div className="p-2 bg-green-100 text-green-600 rounded-full group-hover:bg-green-600 group-hover:text-white transition">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"></path></svg>
+                </div>
+                <div className="text-left">
+                  <p className="font-semibold text-gray-800">
+                     {authUser ? "Chat with Support" : "Log in to Chat"}
+                  </p>
+                  <p className="text-xs text-gray-500">Talk to a human agent</p>
+                </div>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!isPreChat && (
+          <>
+            {messages.map((msg) => renderMessage(msg))}
+            
+            {!isReadOnly && conversationStatus === 'pending' && (
+              <div className="text-center py-2">
+                <span className="bg-yellow-100 text-yellow-800 text-xs px-3 py-1 rounded-full animate-pulse">
+                  Waiting for an agent to join...
+                </span>
+              </div>
+            )}
+
+            {isReadOnly && (
+              <div className="text-center py-4">
+                <span className="text-gray-400 text-xs italic bg-gray-100 px-3 py-1 rounded-full border border-gray-200">
+                  Conversation Ended • {conversationData?.duration}
+                </span>
+              </div>
+            )}
+
+            <div ref={messagesEndRef} />
+          </>
+        )}
+      </div>
+
+      {/* --- FOOTER / CONTROLS --- */}
+      {!isPreChat && !isReadOnly && (
+        <div className="p-3 bg-white border-t border-gray-200">
+          
+          {conversationStatus === 'faqchat' && faqStep > 0 && !isTrackingInput && !showMoreQuestionPrompt && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {faqStep === 1 && faqStep1Options && faqStep1Options.map((opt) => (
+                <button
+                  key={opt.id}
+                  onClick={() => handleFaqSelection(opt, 1)}
+                  className="px-4 py-2 bg-blue-50 text-blue-600 text-sm font-medium rounded-full border border-blue-200 hover:bg-blue-600 hover:text-white transition"
+                >
+                  {opt.text}
+                </button>
+              ))}
+
+              {faqStep === 2 && selectedCategory && faqFollowUp[selectedCategory]?.options && (
+                <>
+                  {faqFollowUp[selectedCategory].options.map((opt) => (
+                    <button
+                      key={opt.id}
+                      onClick={() => handleFaqSelection(opt, 2)}
+                      className="px-4 py-2 bg-green-50 text-green-600 text-sm font-medium rounded-full border border-green-200 hover:bg-green-600 hover:text-white transition"
+                    >
+                      {opt.text}
+                    </button>
+                  ))}
+                  <button 
+                    onClick={() => setFaqStep(1)} 
+                    className="px-3 py-2 text-gray-500 text-sm hover:text-gray-700 underline"
+                  >
+                    Back to Topics
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
+          {conversationStatus === 'faqchat' && showMoreQuestionPrompt && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              <button
+                onClick={() => handleMoreQuestions(true)}
+                className="px-4 py-2 bg-green-50 text-green-600 text-sm font-medium rounded-full border border-green-200 hover:bg-green-600 hover:text-white transition"
+              >
+                Yes, another question
+              </button>
+              <button
+                onClick={() => handleMoreQuestions(false)}
+                className="px-4 py-2 bg-gray-50 text-gray-600 text-sm font-medium rounded-full border border-gray-200 hover:bg-gray-600 hover:text-white transition"
+              >
+                No, I'm done
+              </button>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <input
+              type="text"
+              className={`flex-1 p-2.5 bg-gray-100 border-transparent focus:bg-white focus:border-blue-500 border rounded-lg text-sm outline-none transition
+                ${isInputDisabled || (isTrackingInput && searchLoading) ? 'opacity-50 cursor-not-allowed' : ''}
+              `}
+              placeholder={inputPlaceholder}
+              value={isTrackingInput ? trackingPackageNumber : newMessage}
+              onChange={(e) => isTrackingInput ? setTrackingPackageNumber(e.target.value) : setNewMessage(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+              disabled={isInputDisabled || (isTrackingInput && searchLoading)}
+            />
+            <button 
+              onClick={handleSendMessage}
+              disabled={isInputDisabled || (isTrackingInput && searchLoading)}
+              className={`px-4 py-2 rounded-lg text-white font-medium transition shadow-sm
+                ${(isInputDisabled || (isTrackingInput && searchLoading)) ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 active:scale-95'}
+              `}
+            >
+              {searchLoading ? 'Searching...' : (isTrackingInput ? 'Track' : 'Send')}
+            </button>
+          </div>
+        </div>
       )}
+
+      <LoginModal 
+        ref={loginModalRef} 
+        hideTrigger={true} 
+        isOpen={false} 
+        setIsOpen={() => {}} 
+      />
     </div>
   );
 };

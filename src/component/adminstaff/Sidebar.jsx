@@ -1,19 +1,43 @@
-import React from "react";
-import { FaTruck, FaInbox, FaTachometerAlt, FaSignOutAlt } from "react-icons/fa";
+import React, { useRef, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import Logo from "../../assets/logo2.png";
 import { useAuth } from "../../utils/AuthContext";
 import ManageUsers from "../../modals/ManageUsers";
+import StaffActivityModal from "../../modals/StaffActivity";
 import { auth } from "../../jsfile/firebase";
 import { signOut } from "firebase/auth";
-import { HiOutlineDocumentReport } from "react-icons/hi";
-import StaffActivityModal from "../../modals/StaffActivity";
 
-const Sidebar = () => {
+// Icons
+import { 
+  FaSignOutAlt, 
+  FaTimes, 
+  FaTachometerAlt, 
+  FaBoxOpen, 
+  FaClipboardList, 
+  FaEnvelope, 
+  FaChartBar, 
+  FaUsers, 
+  FaHistory,
+  FaCommentDots
+} from "react-icons/fa";
+
+const Sidebar = ({ mobileOpen, setMobileOpen }) => { 
   const location = useLocation();
   const { user, role, loading } = useAuth();
-  const [manageUsersShow, setManageUsersShow] = React.useState(false);
-  const [showStaffActivityModal, setShowStaffActivityModal] = React.useState(false); // New state
+  
+  const [manageUsersShow, setManageUsersShow] = useState(false);
+  const [showStaffActivityModal, setShowStaffActivityModal] = useState(false);
+  
+  // Local state fallback
+  const [localOpen, setLocalOpen] = useState(false);
+  const isSidebarOpen = mobileOpen !== undefined ? mobileOpen : localOpen;
+  
+  const toggleSidebar = (state) => {
+    if (setMobileOpen) setMobileOpen(state);
+    else setLocalOpen(state);
+  };
+
+  const navRef = useRef(null);
 
   const handleLogout = async () => {
     try {
@@ -23,82 +47,180 @@ const Sidebar = () => {
     }
   };
 
-  // While we’re checking auth state, don’t render anything:
-  if (loading) return null;
+  // Scroll Persistence Logic
+  useEffect(() => {
+    if (navRef.current) {
+      navRef.current.scrollTop = parseInt(localStorage.getItem('sidebarScroll') || '0', 10);
+    }
+  }, []);
 
-  // Only show sidebar to authenticated staff/admin:
+  useEffect(() => {
+    const handleScroll = () => {
+      if (navRef.current) {
+        localStorage.setItem('sidebarScroll', navRef.current.scrollTop);
+      }
+    };
+    const navElement = navRef.current;
+    navElement?.addEventListener('scroll', handleScroll);
+    return () => navElement?.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  if (loading) return null;
   if (!user || (role !== "admin" && role !== "staff")) return null;
 
   return (
-    <div className="hidden md:flex flex-col w-64 min-w-[250px] h-screen bg-blue-200 border-r-2 p-5 fixed top-0 left-0">
-      <div className="relative mb-10">
-        <img
-          src={Logo}
-          className="absolute top-[-20px] left-1/2 transform -translate-x-1/2 w-220 max-w-[220px] h-30 object-contain z-10"
-          alt="FCL"
-        />
-      </div>
+    <>
+      {/* Mobile Overlay */}
+      <div
+        onClick={() => toggleSidebar(false)}
+        className={`fixed inset-0 z-30 bg-slate-900/60 backdrop-blur-sm transition-opacity duration-300 md:hidden ${
+          isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+      />
 
-      <nav className="flex flex-col m-auto space-y-6 text-2xl mt-50flex-1 overflow-y-auto">
-        <Link to="/AdminDashboard" className={navLink(location, "/AdminDashboard")}>
-          <FaTachometerAlt className="mr-3" /> Dashboard
-        </Link>
-        <Link to="/Shipments" className={navLink(location, "/Shipments")}>
-          <FaTruck className="mr-3" /> Shipments
-        </Link>
-        <Link to="/ShipmentRequest" className={navLink(location, "/ShipmentRequest")}>
-          <FaTruck className="mr-3" /> Shipment Request
-        </Link>
-        <Link to="/MessageRequest" className={navLink(location, "/MessageRequest")}>
-          <FaInbox className="mr-3" /> Messages Request
-        </Link>
-        <Link to="/AdminMessages" className={navLink(location, "/AdminMessages")}>
-          <FaInbox className="mr-3" /> Messages
-        </Link>
-        <Link to="/Reports" className={navLink(location, "/Reports")}>
-          <HiOutlineDocumentReport className="mr-3" /> Reports
-        </Link>
-      </nav>
+      {/* Sidebar Container - KEPT w-64 TO MATCH YOUR ORIGINAL LAYOUT */}
+      <aside
+        className={`fixed top-0 left-0 z-40 w-64 h-screen bg-white border-r border-slate-200 flex flex-col shadow-2xl md:shadow-none transition-transform duration-300 ease-in-out ${
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } md:translate-x-0`}
+      >
+        {/* --- HEADER --- */}
+        <div className="flex flex-col items-center justify-center py-5 border-b border-slate-100 relative">
+          <button
+            onClick={() => toggleSidebar(false)}
+            className="md:hidden absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            <FaTimes size={20} />
+          </button>
+          
+          <div className="w-full px-6 flex justify-center mb-2">
+              <img
+                src={Logo}
+                className="h-14 w-auto object-contain drop-shadow-sm" 
+                alt="Company Logo"
+              />
+          </div>
+          
+          <div className="px-3 py-0.5 bg-teal-50 text-teal-700 rounded-full text-[10px] font-bold tracking-widest uppercase border border-teal-100">
+            {role === 'admin' ? 'Administrator' : 'Staff Portal'}
+          </div>
+        </div>
 
-      <div className="absolute bottom-5 left-5 flex flex-col space-y-3">
-        {role === "admin" && (
-          <>
-            <button
-              onClick={() => setShowStaffActivityModal(true)} // New button
-              className="lexend flex items-center bg-yellow-400 border-2 mb-2 text-black px-3 py-2 rounded hover:bg-yellow-600"
-            >
-              Staff Activity
-            </button>
-            <button
-              onClick={() => setManageUsersShow(true)}
-              className="lexend flex items-center bg-green-400 border-2 mb-2 text-black px-3 py-2 rounded hover:bg-green-600"
-            >
-              Manage Users
-            </button>
-          </>
-        )}
-        <button
-          onClick={handleLogout}
-          className="lexend flex items-center bg-red-500 text-white border-2 border-black px-3 py-2 rounded transition-colors duration-300 hover:bg-red-900"
+        {/* --- NAVIGATION --- */}
+        <nav 
+          ref={navRef} 
+          className="flex-1 overflow-y-auto px-3 py-4 space-y-5 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent"
         >
-          <FaSignOutAlt className="mr-2" /> Log Out
-        </button>
-      </div>
+          {/* Group 1: Overview */}
+          <div>
+            <p className="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+              Overview
+            </p>
+            <div className="space-y-1">
+              <NavItem to="/AdminDashboard" icon={<FaTachometerAlt />} label="Dashboard" location={location} />
+              <NavItem to="/Reports" icon={<FaChartBar />} label="Reports" location={location} />
+            </div>
+          </div>
 
+          {/* Group 2: Operations */}
+          <div>
+            <p className="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+              Operations
+            </p>
+            <div className="space-y-1">
+              <NavItem to="/Shipments" icon={<FaBoxOpen />} label="Shipments" location={location} />
+              <NavItem to="/ShipmentRequest" icon={<FaClipboardList />} label="Requests" location={location} />
+            </div>
+          </div>
+
+          {/* Group 3: Communication */}
+          <div>
+            <p className="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+              Communication
+            </p>
+            <div className="space-y-1">
+              <NavItem to="/MessageRequest" icon={<FaEnvelope />} label="Inbox" location={location} />
+              <NavItem to="/AdminMessages" icon={<FaCommentDots />} label="Live Chats" location={location} />
+            </div>
+          </div>
+
+          {/* Group 4: Admin Tools (Conditional) */}
+          {role === "admin" && (
+            <div>
+              <p className="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                Admin
+              </p>
+              <div className="space-y-1">
+                <button
+                  onClick={() => setManageUsersShow(true)}
+                  className="w-full flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 text-slate-600 hover:bg-teal-50 hover:text-teal-700 group"
+                >
+                  <FaUsers className="w-4 h-4 mr-3 text-slate-400 group-hover:text-teal-600 transition-colors" />
+                  Manage Users
+                </button>
+
+                <button
+                  onClick={() => setShowStaffActivityModal(true)}
+                  className="w-full flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 text-slate-600 hover:bg-teal-50 hover:text-teal-700 group"
+                >
+                  <FaHistory className="w-4 h-4 mr-3 text-slate-400 group-hover:text-teal-600 transition-colors" />
+                  Staff Activity
+                </button>
+              </div>
+            </div>
+          )}
+        </nav>
+
+        {/* --- FOOTER --- */}
+        <div className="p-3 border-t border-slate-100 bg-slate-50/50">
+          <div className="flex items-center gap-2 mb-3 px-1">
+            <div className="w-8 h-8 rounded-full bg-teal-600 flex items-center justify-center text-white font-bold text-xs shadow-md ring-2 ring-teal-100">
+              {user.email?.charAt(0).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-slate-700 truncate">{user.email}</p>
+              <p className="text-[10px] text-slate-500 capitalize">{role}</p>
+            </div>
+          </div>
+          
+          <button
+            onClick={handleLogout}
+            className="w-full group flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all duration-200 shadow-sm"
+          >
+            <FaSignOutAlt className="group-hover:-translate-x-1 transition-transform" />
+            <span>Sign Out</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* Modals */}
       <ManageUsers show={manageUsersShow} onHide={() => setManageUsersShow(false)} />
-      <StaffActivityModal show={showStaffActivityModal} onHide={() => setShowStaffActivityModal(false)} /> {/* New modal */}
-    </div>
+      <StaffActivityModal show={showStaffActivityModal} onHide={() => setShowStaffActivityModal(false)} />
+    </>
   );
 };
 
-// helper to apply the active classes
-const navLink = (location, path) => {
-  const isActive = location.pathname === path;
-  return `flex items-center p-3 rounded transition-all duration-300 transform ${
-    isActive
-      ? "bg-gray-800 text-white scale-105 shadow-lg"
-      : "text-black hover:bg-gray-700 hover:text-white hover:scale-105"
-  }`;
+// --- Nav Item Component ---
+const NavItem = ({ to, icon, label, location }) => {
+  const isActive = location.pathname === to || location.pathname.startsWith(`${to}/`);
+  
+  return (
+    <Link
+      to={to}
+      className={`relative flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 group ${
+        isActive
+          ? "bg-teal-600 text-white shadow-md shadow-teal-200/50"
+          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+      }`}
+    >
+      <span className={`flex items-center justify-center w-4 h-4 mr-3 transition-colors ${
+        isActive ? "text-teal-100" : "text-slate-400 group-hover:text-slate-600"
+      }`}>
+        {icon}
+      </span>
+      <span>{label}</span>
+    </Link>
+  );
 };
 
 export default Sidebar;

@@ -7,6 +7,8 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import AddressSelector from './AddressSelector';
 import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const storage = getStorage(); // Added
 
@@ -373,7 +375,7 @@ export default function ShippingServiceRequestForm() {
       // Update the document with uploaded packages and images
       await updateDoc(docRef, updates);
 
-      alert('Shipping Service Request Submitted!');
+      toast.success('Shipping Service Request Submitted!');
 
       // keep email and name if locked, reset others
       setFormData((prev) => ({
@@ -785,9 +787,9 @@ export default function ShippingServiceRequestForm() {
               )}
             </div>
 
-            {/* Packages */}
+            {/* Shipment */}
             <div className="mt-4">
-              <h3 className="text-xl font-semibold mb-4">Packages</h3>
+              <h3 className="text-xl font-semibold mb-4">Shipment</h3>
               {formData.packages.map((pkg, index) => (
                 <div key={index} className="border border-gray-300 p-4 mb-4 rounded-md relative">
                   {!isFullLoad ? (
@@ -944,7 +946,7 @@ export default function ShippingServiceRequestForm() {
               <p><strong>Destination Address:</strong> {formData.destinationAddress}</p>
               <p><strong>Pickup Address:</strong> {formData.shipmentDirection === 'Import' ? `${formData.pickupDetailedAddress} (in ${formData.senderCountry})` : `${formData.pickupDetailedAddress}, ${formData.pickupBarangay}, ${formData.pickupCity}, ${formData.pickupProvince}, ${formData.pickupRegion}`}</p>
               <p><strong>Additional Services:</strong> {Object.keys(formData.additionalServices).filter(key => formData.additionalServices[key]).join(', ') || 'None'}</p>
-              <h4 className="text-lg font-semibold mt-4">Packages:</h4>
+              <h4 className="text-lg font-semibold mt-4">Shipment:</h4>
               {formData.packages.map((pkg, index) => {
                 const isFullLoad = formData.loadType === 'FCL' || formData.loadType === 'FTL';
                 return (
@@ -1012,6 +1014,7 @@ export default function ShippingServiceRequestForm() {
           />
         </div>
       )}
+      <ToastContainer />
     </div>
   );
 }

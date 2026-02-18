@@ -66,8 +66,8 @@ function ManageUsers({ show, onHide }) {
         ...doc.data(),
       }));
 
-      // Sort users by createdAt (ascending)
-      userList.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+      // Sort users by createdAt (descending - newest first)
+      userList.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
       setUsers(userList);
     };
@@ -171,7 +171,6 @@ function ManageUsers({ show, onHide }) {
               email: newUserEmail,
               role: newUserRole,
               createdAt,
-              verified: false,
             },
           ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
         );
@@ -255,7 +254,7 @@ function ManageUsers({ show, onHide }) {
         <Modal.Body style={{ maxHeight: "70vh", overflowY: "auto" }}>
           <Form.Control
             type="text"
-            placeholder="Search by email..."
+            placeholder="Search by name, email, or role..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="mb-3"
@@ -265,21 +264,25 @@ function ManageUsers({ show, onHide }) {
               <thead>
                 <tr className="bg-gray-200">
                   <th className="p-2 border">Email</th>
+                  <th className="p-2 border">Name</th>
                   <th className="p-2 border">Role</th>
                   <th className="p-2 border"></th>
-                  <th className="p-2 border">Verified</th>
-                  <th className="p-2 border"></th>
                   <th className="p-2 border">Reset Password</th>
+                  <th className="p-2 border">Delete</th>
                 </tr>
               </thead>
               <tbody className="max-h-[300px] overflow-y-auto">
                 {users
-                  .filter((user) =>
-                    user.email.toLowerCase().includes(search.toLowerCase())
-                  )
+                  .filter((user) => {
+                    const fullName = `${user.firstName || ''} ${user.lastName || ''}`.toLowerCase();
+                    return fullName.includes(search.toLowerCase()) || 
+                           user.email.toLowerCase().includes(search.toLowerCase()) ||
+                           user.role.toLowerCase().includes(search.toLowerCase());
+                  })
                   .map((user) => (
                     <tr key={user.id} className="text-center">
                       <td className="p-2 border">{user.email}</td>
+                      <td className="p-2 border">{user.firstName} {user.lastName}</td>
                       <td className="p-2 border">{user.role}</td>
                       <td className="p-2 border">
                         <Button
@@ -300,17 +303,6 @@ function ManageUsers({ show, onHide }) {
                         </Button>
                       </td>
                       <td className="p-2 border">
-                        {user.verified ? "Yes" : "No"}
-                      </td>
-                      <td className="p-2 border">
-                        <Button
-                          variant={user.verified ? "danger" : "success"}
-                          onClick={() => handleToggleVerification(user.id, user.verified)}
-                        >
-                          {user.verified ? "Unverify" : "Verify"}
-                        </Button>
-                      </td>
-                      <td className="p-2 border">
                         <Button
                           variant="warning"
                           onClick={() => handleResetPassword(user.email)}
@@ -320,6 +312,16 @@ function ManageUsers({ show, onHide }) {
                             ? `Wait (${resetCooldown[user.email]}s)`
                             : "Send Reset Email"}
                         </Button>
+                      </td>
+                      <td className="p-2 border">
+                        {role === "admin" && user.role !== "admin" && (
+                          <Button
+                            variant="danger"
+                            onClick={() => handleDeleteUser(user.id)}
+                          >
+                            Delete
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -388,6 +390,18 @@ function ManageUsers({ show, onHide }) {
                 onChange={(e) => setNewUserPassword(e.target.value)}
               />
             </Form.Group>
+            {role === "admin" && (
+              <Form.Group className="mb-3">
+                <Form.Label>Role</Form.Label>
+                <Form.Select
+                  value={newUserRole}
+                  onChange={(e) => setNewUserRole(e.target.value)}
+                >
+                  <option value="user">User</option>
+                  <option value="staff">Staff</option>
+                </Form.Select>
+              </Form.Group>
+            )}
           </Form>
         </Modal.Body>
         <Modal.Footer className="flex justify-between w-full">
