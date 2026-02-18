@@ -22,7 +22,6 @@ import { getStorage, ref, getDownloadURL } from 'firebase/storage';
 import { useReactToPrint } from 'react-to-print';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-
 import {
   Chart as ChartJS,
   ArcElement,
@@ -30,25 +29,21 @@ import {
   Legend,
 } from "chart.js";
 import { Pie } from "react-chartjs-2";
-
 ChartJS.register(ArcElement, Tooltip, Legend);
-
 const storage = getStorage();
-
 const Shipments = () => {
   const [shipments, setShipments] = useState([]);
   const [previewUrls, setPreviewUrls] = useState({});
   const [businessPreviewUrls, setBusinessPreviewUrls] = useState({});
-  
+ 
   // Modals
   const [showModal, setShowModal] = useState(false);
   const [editModal, setEditModal] = useState(false);
   const [infoModal, setInfoModal] = useState(false);
   const [archiveModal, setArchiveModal] = useState(false); // New Archive Modal
   const [showAddCountryModal, setShowAddCountryModal] = useState(false);
-
   const [currentShipment, setCurrentShipment] = useState(null);
-  
+ 
   // Form Data
   const [formData, setFormData] = useState({
     packageNumber: "",
@@ -85,24 +80,20 @@ const Shipments = () => {
     paid: false,
     airwayBill: "",
   });
-
   // Filtering & Sorting State
   const [searchQuery, setSearchQuery] = useState("");
   const [startDate, setStartDate] = useState(""); // Main Date Filter
-  const [endDate, setEndDate] = useState("");   // Main Date Filter
+  const [endDate, setEndDate] = useState(""); // Main Date Filter
   const [sortField, setSortField] = useState("customId");
   const [sortOrder, setSortOrder] = useState("asc");
   const [view, setView] = useState("all");
-
   // Archive Specific Filtering
   const [archiveSearch, setArchiveSearch] = useState("");
   const [archiveStartDate, setArchiveStartDate] = useState("");
   const [archiveEndDate, setArchiveEndDate] = useState("");
-
   const [adminName, setAdminName] = useState('');
   const location = useLocation();
   const [countries, setCountries] = useState([]);
-
   const LOAD_OPTIONS = {
     Sea: [
       { value: 'FCL', label: 'Full Container Load (FCL)' },
@@ -113,9 +104,7 @@ const Shipments = () => {
       { value: 'LTL', label: 'Less than Truckload (LTL)' },
     ],
   };
-
   const tableRef = useRef();
-
   // Fetch countries
   useEffect(() => {
     const fetchCountries = async () => {
@@ -128,16 +117,13 @@ const Shipments = () => {
     };
     fetchCountries();
   }, []);
-
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     setView(params.get('view') || 'all');
   }, [location]);
-
   // Info modal data
   const [infoHistory, setInfoHistory] = useState([]);
   const [infoLoading, setInfoLoading] = useState(false);
-
   useEffect(() => {
     const fetchShipments = async () => {
       const querySnapshot = await getDocs(collection(db, "Packages"));
@@ -150,13 +136,11 @@ const Shipments = () => {
     };
     fetchShipments();
   }, []);
-
   // Image Preview Logic
   useEffect(() => {
     const fetchPreviewUrls = async () => {
       const newPackagePreviews = {};
       const newBusinessPreviews = {};
-
       await Promise.all(
         shipments.map(async (shipment) => {
           const packageUrls = [];
@@ -181,7 +165,6 @@ const Shipments = () => {
             );
           }
           newPackagePreviews[shipment.docId] = packageUrls;
-
           let businessUrl = null;
           if (shipment.businessPermitImage) {
             if (shipment.businessPermitImage.startsWith('https://')) {
@@ -198,16 +181,13 @@ const Shipments = () => {
           newBusinessPreviews[shipment.docId] = businessUrl;
         })
       );
-
       setPreviewUrls(newPackagePreviews);
       setBusinessPreviewUrls(newBusinessPreviews);
     };
-
     if (shipments.length > 0) {
       fetchPreviewUrls();
     }
   }, [shipments]);
-
   // Admin Details
   const fetchAdminDetails = async () => {
     const currentAdmin = auth.currentUser;
@@ -217,7 +197,6 @@ const Shipments = () => {
     }
     let adminFirstName = "";
     let adminLastName = "";
-
     if (currentAdmin.displayName) {
       const nameParts = currentAdmin.displayName.split(" ");
       adminFirstName = nameParts[0];
@@ -233,7 +212,6 @@ const Shipments = () => {
     }
     return { adminFirstName, adminLastName };
   };
-
   useEffect(() => {
     const fetchAdmin = async () => {
       const { adminFirstName, adminLastName } = await fetchAdminDetails();
@@ -241,7 +219,6 @@ const Shipments = () => {
     };
     fetchAdmin();
   }, []);
-
   // Form Logic Effects
   useEffect(() => {
     if (formData.senderCountry === formData.destinationCountry && formData.senderCountry !== '') {
@@ -253,14 +230,12 @@ const Shipments = () => {
       setFormData((prev) => ({ ...prev, transportMode: '' }));
     }
   }, [formData.senderCountry, formData.destinationCountry]);
-
   useEffect(() => {
     if (!formData.transportMode) return;
     if (!LOAD_OPTIONS[formData.transportMode] && formData.loadType !== '') {
       setFormData((prev) => ({ ...prev, loadType: '' }));
     }
   }, [formData.transportMode]);
-
   useEffect(() => {
     if (formData.transportMode === 'Road') {
       setFormData((prev) => ({
@@ -275,7 +250,6 @@ const Shipments = () => {
       }));
     }
   }, [formData.transportMode]);
-
   useEffect(() => {
     const isFullLoad = formData.loadType === 'FCL' || formData.loadType === 'FTL';
     if (isFullLoad && formData.packages.length > 1) {
@@ -292,7 +266,6 @@ const Shipments = () => {
       }));
     }
   }, [formData.loadType]);
-
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
@@ -300,7 +273,6 @@ const Shipments = () => {
       [name]: type === 'checkbox' ? checked : value,
     }));
   };
-
   const handleAdditionalServiceChange = (e) => {
     const { name, checked } = e.target;
     setFormData((prev) => ({
@@ -311,7 +283,6 @@ const Shipments = () => {
       },
     }));
   };
-
   const updatePackage = (index, field, value) => {
     setFormData((prev) => {
       const packages = [...prev.packages];
@@ -319,7 +290,6 @@ const Shipments = () => {
       return { ...prev, packages };
     });
   };
-
   const handlePackageFileChange = (index, file) => {
     if (file && file.size > 5 * 1024 * 1024) {
       toast.warning('File size must be less than 5MB');
@@ -327,7 +297,6 @@ const Shipments = () => {
     }
     updatePackage(index, 'image', file);
   };
-
   const addPackage = () => {
     setFormData((prev) => ({
       ...prev,
@@ -337,14 +306,12 @@ const Shipments = () => {
       ],
     }));
   };
-
   const removePackage = (index) => {
     setFormData((prev) => ({
       ...prev,
       packages: prev.packages.filter((_, i) => i !== index),
     }));
   };
-
   const handlePickupAddressSelect = ({ region, province, city, barangay }) => {
     setFormData((prev) => ({
       ...prev,
@@ -354,13 +321,11 @@ const Shipments = () => {
       pickupBarangay: barangay,
     }));
   };
-
   const isDomestic = formData.senderCountry === formData.destinationCountry && formData.senderCountry !== '';
   const availableTransportModes = isDomestic ? ['Air', 'Sea', 'Road'] : ['Air', 'Sea'];
   const isLoadTypeVisible = formData.transportMode === 'Sea' || formData.transportMode === 'Road';
   const isFullLoad = formData.loadType === 'FCL' || formData.loadType === 'FTL';
   const isRoad = formData.transportMode === 'Road';
-
   const handleSort = (field) => {
     if (sortField === field) {
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -369,12 +334,10 @@ const Shipments = () => {
       setSortOrder("asc");
     }
   };
-
   // --- FILTER LOGIC (Main Table) ---
   const filteredShipments = shipments.filter((shipment) => {
     // Exclude archived from main view
     if (shipment.isArchived) return false;
-
     const queryLower = searchQuery.toLowerCase();
     const matchesSearch =
       (shipment.packageNumber || "").toLowerCase().includes(queryLower) ||
@@ -383,7 +346,6 @@ const Shipments = () => {
       (shipment.destinationCountry || "").toLowerCase().includes(queryLower) ||
       (shipment.transportMode || "").toLowerCase().includes(queryLower) ||
       (shipment.packageStatus || "").toLowerCase().includes(queryLower);
-
     // Date Filtering
     let matchesDate = true;
     if (startDate) {
@@ -397,7 +359,6 @@ const Shipments = () => {
       const shipDate = new Date(shipment.dateStarted);
       matchesDate = matchesDate && shipDate <= end;
     }
-
     if (view === "active") {
       return matchesSearch && matchesDate && shipment.packageStatus !== "Delivered" && !shipment.canceled;
     } else if (view === "canceled") {
@@ -409,7 +370,6 @@ const Shipments = () => {
       return matchesSearch && matchesDate;
     }
   });
-
   const sortedShipments = filteredShipments.sort((a, b) => {
     const aVal = a[sortField] || "";
     const bVal = b[sortField] || "";
@@ -417,7 +377,6 @@ const Shipments = () => {
     if (aVal > bVal) return sortOrder === "asc" ? 1 : -1;
     return 0;
   });
-
   // --- FILTER LOGIC (Archive Modal) ---
   const archivedShipments = shipments.filter((s) => s.isArchived).filter((shipment) => {
     const queryLower = archiveSearch.toLowerCase();
@@ -425,7 +384,6 @@ const Shipments = () => {
       (shipment.packageNumber || "").toLowerCase().includes(queryLower) ||
       (shipment.shipperName || "").toLowerCase().includes(queryLower) ||
       (shipment.packageStatus || "").toLowerCase().includes(queryLower);
-
     // Archive Date Filtering
     let matchesDate = true;
     if (archiveStartDate) {
@@ -444,8 +402,6 @@ const Shipments = () => {
      // Default sort by date desc for archives
      return new Date(b.dateStarted) - new Date(a.dateStarted);
   });
-
-
   const handleAddShipment = async () => {
     if (
       !formData.packageNumber ||
@@ -482,18 +438,15 @@ const Shipments = () => {
         return;
       }
     }
-
     const confirmAdd = window.confirm(
       "Are you sure you want to add this shipment?"
     );
     if (!confirmAdd) return;
-
     const maxId = shipments.reduce(
       (acc, s) => Math.max(acc, s.customId || 0),
       0
     );
     const newCustomId = maxId + 1;
-
     const newShipment = {
       packageNumber: formData.packageNumber,
       shipperName: formData.shipperName,
@@ -529,7 +482,6 @@ const Shipments = () => {
       createdTime: serverTimestamp(),
       isArchived: false,
     };
-
     try {
       const { adminFirstName, adminLastName } = await fetchAdminDetails();
       const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
@@ -581,7 +533,6 @@ const Shipments = () => {
       toast.error("Failed to add shipment. Please try again.");
     }
   };
-
   const handleEditShipment = async () => {
     if (currentShipment) {
       const confirmEdit = window.confirm(
@@ -591,7 +542,6 @@ const Shipments = () => {
         try {
           const { adminFirstName, adminLastName } = await fetchAdminDetails();
           const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
-
           const changes = [];
           if (formData.packageStatus !== currentShipment.packageStatus) {
             changes.push(`Status changed from ${currentShipment.packageStatus} to ${formData.packageStatus}`);
@@ -601,9 +551,7 @@ const Shipments = () => {
             ...formData,
             updatedTime: serverTimestamp(),
           };
-
           await updateDoc(doc(db, "Packages", currentShipment.docId), updatedData);
-
           if (statusChanged) {
             await addDoc(
               collection(db, "Packages", currentShipment.docId, "statusHistory"),
@@ -613,9 +561,7 @@ const Shipments = () => {
               }
             );
           }
-
           await logActivity(adminFullName, `Edited shipment ${currentShipment.packageNumber || currentShipment.customId}`);
-
           setShipments((prev) =>
             prev.map((s) =>
               s.docId === currentShipment.docId ? { ...s, ...updatedData } : s
@@ -631,7 +577,6 @@ const Shipments = () => {
       }
     }
   };
-
   const handleDoneShipment = async (shipment) => {
     if (shipment.packageStatus === "Delivered") {
       toast.info("Shipment is already Delivered.");
@@ -645,15 +590,13 @@ const Shipments = () => {
         const { adminFirstName, adminLastName } = await fetchAdminDetails();
         const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
         const statusChanged = shipment.packageStatus !== "Delivered";
-       
+      
         const updatedData = {
           packageStatus: "Delivered",
           paid: true,
           updatedTime: serverTimestamp(),
         };
-
         await updateDoc(doc(db, "Packages", shipment.docId), updatedData);
-
         if (statusChanged) {
           await addDoc(
             collection(db, "Packages", shipment.docId, "statusHistory"),
@@ -663,7 +606,6 @@ const Shipments = () => {
             }
           );
         }
-
         await logActivity(adminFullName, `Marked shipment ${shipment.packageNumber || shipment.customId} as Delivered and Paid`);
         setShipments((prev) =>
           prev.map((s) =>
@@ -677,7 +619,6 @@ const Shipments = () => {
       }
     }
   };
-
   const handleArchiveShipment = async (shipment) => {
     const confirmArchive = window.confirm(
       "Are you sure you want to ARCHIVE this shipment? It will be moved to the Archive Modal."
@@ -686,15 +627,14 @@ const Shipments = () => {
       try {
         const { adminFirstName, adminLastName } = await fetchAdminDetails();
         const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
-       
+      
         const updatedData = {
             isArchived: true,
             packageStatus: "Archived",
             archivedTime: serverTimestamp()
         };
-
         await updateDoc(doc(db, "Packages", shipment.docId), updatedData);
-       
+      
         await addDoc(
             collection(db, "Packages", shipment.docId, "statusHistory"),
             {
@@ -702,9 +642,8 @@ const Shipments = () => {
               timestamp: serverTimestamp(),
             }
         );
-
         await logActivity(adminFullName, `Archived shipment ${shipment.packageNumber || shipment.customId}`);
-       
+      
         setShipments((prev) =>
           prev.map((s) =>
             s.docId === shipment.docId ? { ...s, ...updatedData } : s
@@ -717,7 +656,43 @@ const Shipments = () => {
       }
     }
   };
-
+  const handleUnarchiveShipment = async (shipment) => {
+    const confirmUnarchive = window.confirm(
+      "Are you sure you want to UNARCHIVE this shipment? It will be moved back to the main table."
+    );
+    if (confirmUnarchive) {
+      try {
+        const { adminFirstName, adminLastName } = await fetchAdminDetails();
+        const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
+      
+        const updatedData = {
+            isArchived: false,
+            packageStatus: "Delivered", // Assuming archived shipments are completed; adjust if needed
+            updatedTime: serverTimestamp()
+        };
+        await updateDoc(doc(db, "Packages", shipment.docId), updatedData);
+      
+        await addDoc(
+            collection(db, "Packages", shipment.docId, "statusHistory"),
+            {
+              status: "Unarchived",
+              timestamp: serverTimestamp(),
+            }
+        );
+        await logActivity(adminFullName, `Unarchived shipment ${shipment.packageNumber || shipment.customId}`);
+      
+        setShipments((prev) =>
+          prev.map((s) =>
+            s.docId === shipment.docId ? { ...s, ...updatedData } : s
+          )
+        );
+        toast.success("Shipment unarchived successfully.");
+      } catch (error) {
+        console.error("Error unarchiving shipment:", error);
+        toast.error("Failed to unarchive shipment.");
+      }
+    }
+  };
   const handleDeletePermanent = async (shipment) => {
     const confirmDelete = window.confirm(
         `Are you sure you want to PERMANENTLY DELETE shipment ${shipment.packageNumber}? This cannot be undone.`
@@ -726,10 +701,8 @@ const Shipments = () => {
         try {
             const { adminFirstName, adminLastName } = await fetchAdminDetails();
             const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
-
             await deleteDoc(doc(db, "Packages", shipment.docId));
             await logActivity(adminFullName, `Permanently Deleted shipment ${shipment.packageNumber}`);
-
             setShipments((prev) => prev.filter((s) => s.docId !== shipment.docId));
             toast.success("Shipment deleted permanently.");
         } catch (error) {
@@ -738,14 +711,12 @@ const Shipments = () => {
         }
     }
   };
-
   const handleSetPaid = async (shipment, paid) => {
     const confirmSet = window.confirm(`Are you sure you want to set paid to ${paid ? 'Yes' : 'No'}?`);
     if (!confirmSet) return;
     try {
       const { adminFirstName, adminLastName } = await fetchAdminDetails();
       const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
-
       const updatedData = {
         paid,
         updatedTime: serverTimestamp(),
@@ -763,7 +734,6 @@ const Shipments = () => {
       toast.error("Failed to set paid status.");
     }
   };
-
   const handleAction = (shipment, action) => {
     switch (action) {
       case 'info':
@@ -790,7 +760,6 @@ const Shipments = () => {
         break;
     }
   };
-
   const openInfoModal = async (shipment) => {
     setCurrentShipment(shipment);
     setInfoLoading(true);
@@ -814,7 +783,6 @@ const Shipments = () => {
       setInfoLoading(false);
     }
   };
-
   const [newCountry, setNewCountry] = useState('');
   const handleAddCountry = async () => {
     const trimmed = newCountry.trim();
@@ -844,7 +812,6 @@ const Shipments = () => {
       toast.error("Failed to add country.");
     }
   };
-
   const handleRemoveCountry = async (countryId, countryName) => {
     if (!window.confirm(`Are you sure you want to remove ${countryName}?`)) return;
     try {
@@ -861,7 +828,6 @@ const Shipments = () => {
       toast.error("Failed to remove country.");
     }
   };
-
   const handleExportCSV = () => {
     if (sortedShipments.length === 0) {
       toast.info("No data to export.");
@@ -878,7 +844,6 @@ const Shipments = () => {
       "Paid",
       "Date Started"
     ];
-
     const rows = sortedShipments.map((s, index) => [
       index + 1,
       s.packageNumber || "",
@@ -890,7 +855,6 @@ const Shipments = () => {
       s.paid ? "Yes" : "No",
       s.dateStarted ? new Date(s.dateStarted).toLocaleDateString() : "N/A"
     ]);
-
     const escapeCsv = (str) => {
       if (str === null || str === undefined) return "";
       const stringValue = String(str);
@@ -899,14 +863,12 @@ const Shipments = () => {
       }
       return stringValue;
     };
-
     const csvContent =
       "data:text/csv;charset=utf-8," +
       [
         headers.join(","),
         ...rows.map((row) => row.map(escapeCsv).join(","))
       ].join("\n");
-
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -915,7 +877,6 @@ const Shipments = () => {
     link.click();
     document.body.removeChild(link);
   };
-
   // Logic for report header date range
   let minDate = null;
   let maxDate = null;
@@ -929,12 +890,11 @@ const Shipments = () => {
   const dateRange = minDate && maxDate
     ? `From ${minDate.toLocaleDateString()} to ${maxDate.toLocaleDateString()}`
     : 'N/A';
-  
+ 
   const currentDate = new Date().toLocaleDateString();
   const filterText = searchQuery ? `Filter: ${searchQuery}` : '';
-  
+ 
   const narrative = `\u200B \u200B \u200B \u200B \u200B \u200BThis report summarizes the shipments for the ${view} view${searchQuery ? `, filtered by "${searchQuery}"` : ''}.`;
-
   const handlePrint = useReactToPrint({
     contentRef: tableRef,
     documentTitle: "\u200B",
@@ -957,23 +917,22 @@ const Shipments = () => {
       }
     `,
   });
-
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-gray-100">
       <Sidebar />
       <div className="flex-1 p-4 md:p-6 md:ml-64">
         <ToastContainer position="top-right" autoClose={3000} />
-        
+       
         {/* --- HEADER --- */}
         <div className="flex justify-between items-center mb-6">
-            <div className="w-24"></div> 
+            <div className="w-24"></div>
             <h2 className="text-xl font-semibold text-center flex-1">
                 Shipment Information
             </h2>
             {/* Archive Modal Button */}
             <button
                 onClick={() => setArchiveModal(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold bg-purple-600 text-white hover:bg-purple-700 transition"
+                className="flex rounded items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold bg-purple-600 text-white hover:bg-purple-700 transition"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
@@ -981,7 +940,6 @@ const Shipments = () => {
                 View Archives
             </button>
         </div>
-
         {/* --- FILTERS (Tabs) --- */}
         <div className="mb-4 flex flex-col md:flex-row justify-center gap-3 space-x-0 md:space-x-4">
           <button onClick={() => setView("all")} className={`px-4 py-2 rounded ${view === "all" ? "bg-blue-600 text-white" : "bg-gray-300"} mb-2 md:mb-0`}>All</button>
@@ -989,7 +947,6 @@ const Shipments = () => {
           <button onClick={() => setView("canceled")} className={`px-4 py-2 rounded ${view === "canceled" ? "bg-blue-600 text-white" : "bg-gray-300"} mb-2 md:mb-0`}>Canceled</button>
           <button onClick={() => setView("delivered")} className={`px-4 py-2 rounded ${view === "delivered" ? "bg-blue-600 text-white" : "bg-gray-300"} mb-2 md:mb-0`}>Delivered</button>
         </div>
-
         {/* --- SEARCH & DATE FILTER (Main) --- */}
         <div className="mb-4 flex flex-col md:flex-row justify-center gap-4 items-center">
           <input
@@ -1001,8 +958,8 @@ const Shipments = () => {
           />
           <div className="flex items-center gap-2">
             <label className="text-sm font-medium text-gray-700">From:</label>
-            <input 
-                type="date" 
+            <input
+                type="date"
                 className="p-2 border rounded border-gray-300"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
@@ -1010,15 +967,14 @@ const Shipments = () => {
           </div>
           <div className="flex items-center gap-2">
             <label className="text-sm font-medium text-gray-700">To:</label>
-            <input 
-                type="date" 
+            <input
+                type="date"
                 className="p-2 border rounded border-gray-300"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
             />
           </div>
         </div>
-
         {/* --- MAIN TABLE --- */}
         <div ref={tableRef} className="bg-white shadow-lg rounded-xl p-6 print-section">
           <div className="print-header hidden print:block">
@@ -1029,7 +985,7 @@ const Shipments = () => {
             </div>
           </div>
           <p className="narrative hidden print:block mb-4">{narrative}</p>
-        
+       
           <div className="overflow-x-auto overflow-y-auto max-h-[70vh] border rounded-lg relative">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
@@ -1123,7 +1079,6 @@ const Shipments = () => {
             <p>Date: {currentDate}</p>
           </div>
         </div>
-
         {/* Legend */}
         <div className="mt-6 bg-white pt-3 pb-2 rounded-lg shadow no-print">
           <ul className="space-y-2">
@@ -1141,7 +1096,6 @@ const Shipments = () => {
             </li>
           </ul>
         </div>
-
         {/* --- BOTTOM ACTIONS --- */}
         <div className="mt-4 flex flex-col md:flex-row justify-between space-y-4 md:space-y-0 no-print">
           <div className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
@@ -1154,7 +1108,6 @@ const Shipments = () => {
             <button onClick={handlePrint} className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 transition">Print Table</button>
           </div>
         </div>
-
         {/* --- ARCHIVE MODAL --- */}
         {archiveModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 no-print">
@@ -1163,7 +1116,7 @@ const Shipments = () => {
                     <h3 className="text-2xl font-bold text-gray-800">Archived Shipments</h3>
                     <button onClick={() => setArchiveModal(false)} className="text-gray-500 hover:text-gray-700 text-xl font-bold">&times;</button>
                 </div>
-                
+               
                 {/* Archive Filters */}
                 <div className="mb-4 flex flex-col md:flex-row gap-4 items-center bg-gray-50 p-3 rounded">
                     <input
@@ -1182,7 +1135,6 @@ const Shipments = () => {
                         <input type="date" className="p-2 border rounded border-gray-300" value={archiveEndDate} onChange={(e) => setArchiveEndDate(e.target.value)} />
                     </div>
                 </div>
-
                 <div className="overflow-x-auto border rounded-lg">
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-purple-100">
@@ -1194,6 +1146,8 @@ const Shipments = () => {
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Mode</th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date Started</th>
+                        <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">View</th>
+                        <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Unarchive</th>
                         <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Delete</th>
                     </tr>
                     </thead>
@@ -1209,6 +1163,24 @@ const Shipments = () => {
                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{shipment.packageStatus}</td>
                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{shipment.dateStarted ? new Date(shipment.dateStarted).toLocaleDateString() : "N/A"}</td>
                             <td className="px-4 py-2 whitespace-nowrap text-sm text-center">
+                                <button onClick={() => openInfoModal(shipment)} className="text-blue-600 hover:text-blue-800 p-1 border border-blue-600 rounded bg-white" title="View Info">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                </button>
+                            </td>
+                            <td className="px-4 py-2 whitespace-nowrap text-sm text-center">
+                                <button
+                                    onClick={() => handleUnarchiveShipment(shipment)}
+                                    className="text-green-600 hover:text-green-800 p-1 border border-green-600 rounded bg-white" title="Unarchive"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                                    </svg>
+                                </button>
+                            </td>
+                            <td className="px-4 py-2 whitespace-nowrap text-sm text-center">
                                 <button
                                     onClick={() => handleDeletePermanent(shipment)}
                                     className="bg-red-500 hover:bg-red-600 text-white p-1 rounded transition"
@@ -1223,7 +1195,7 @@ const Shipments = () => {
                         ))
                     ) : (
                         <tr>
-                        <td colSpan="8" className="px-4 py-4 text-center text-gray-500">No archived shipments found.</td>
+                        <td colSpan="10" className="px-4 py-4 text-center text-gray-500">No archived shipments found.</td>
                         </tr>
                     )}
                     </tbody>
@@ -1240,7 +1212,6 @@ const Shipments = () => {
             </div>
             </div>
         )}
-
         {/* Add Shipment Modal */}
         {showModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 overflow-y-auto no-print">
@@ -1367,7 +1338,6 @@ const Shipments = () => {
             </div>
           </div>
         )}
-
         {/* Edit Shipment Modal */}
         {editModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 no-print">
@@ -1393,7 +1363,6 @@ const Shipments = () => {
             </div>
           </div>
         )}
-
         {/* Add Country Modal */}
         {showAddCountryModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 no-print">
@@ -1429,9 +1398,129 @@ const Shipments = () => {
             </div>
           </div>
         )}
+        {/* Info Modal */}
+        {infoModal && currentShipment && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 overflow-y-auto no-print">
+            <div className="bg-white rounded-lg shadow-lg w-11/12 max-w-4xl p-6 max-h-[80vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-2xl font-bold text-gray-800">Shipment Details</h3>
+                <button onClick={() => setInfoModal(false)} className="text-gray-500 hover:text-gray-700 text-xl font-bold">&times;</button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="flex flex-col">
+                  <label className="mb-1 font-medium text-gray-700">Package Number</label>
+                  <p className="p-2 border border-gray-300 rounded-md bg-gray-100">{currentShipment.packageNumber || "N/A"}</p>
+                </div>
+                <div className="flex flex-col">
+                  <label className="mb-1 font-medium text-gray-700">Shipper Full Name</label>
+                  <p className="p-2 border border-gray-300 rounded-md bg-gray-100">{currentShipment.shipperName || "N/A"}</p>
+                </div>
+                <div className="flex flex-col">
+                  <label className="mb-1 font-medium text-gray-700">Mobile Number</label>
+                  <p className="p-2 border border-gray-300 rounded-md bg-gray-100">{currentShipment.mobile || "N/A"}</p>
+                </div>
+                <div className="flex flex-col">
+                  <label className="mb-1 font-medium text-gray-700">Email</label>
+                  <p className="p-2 border border-gray-300 rounded-md bg-gray-100">{currentShipment.email || "N/A"}</p>
+                </div>
+                <div className="flex flex-col">
+                  <label className="mb-1 font-medium text-gray-700">Sender Country</label>
+                  <p className="p-2 border border-gray-300 rounded-md bg-gray-100">{currentShipment.senderCountry || "N/A"}</p>
+                </div>
+                <div className="flex flex-col">
+                  <label className="mb-1 font-medium text-gray-700">Destination Country</label>
+                  <p className="p-2 border border-gray-300 rounded-md bg-gray-100">{currentShipment.destinationCountry || "N/A"}</p>
+                </div>
+                <div className="md:col-span-2 flex flex-col">
+                  <label className="mb-1 font-medium text-gray-700">Destination Address</label>
+                  <p className="p-2 border border-gray-300 rounded-md bg-gray-100">{currentShipment.destinationAddress || "N/A"}</p>
+                </div>
+                <div className="flex flex-col">
+                  <label className="mb-1 font-medium text-gray-700">Mode of Transport</label>
+                  <p className="p-2 border border-gray-300 rounded-md bg-gray-100">{currentShipment.transportMode || "N/A"}</p>
+                </div>
+                <div className="flex flex-col">
+                  <label className="mb-1 font-medium text-gray-700">Shipment Direction</label>
+                  <p className="p-2 border border-gray-300 rounded-md bg-gray-100">{currentShipment.shipmentDirection || "N/A"}</p>
+                </div>
+                <div className="flex flex-col">
+                  <label className="mb-1 font-medium text-gray-700">Load Type</label>
+                  <p className="p-2 border border-gray-300 rounded-md bg-gray-100">{currentShipment.loadType || "N/A"}</p>
+                </div>
+                <div className="flex flex-col">
+                  <label className="mb-1 font-medium text-gray-700">Way Bill#</label>
+                  <p className="p-2 border border-gray-300 rounded-md bg-gray-100">{currentShipment.airwayBill || "N/A"}</p>
+                </div>
+                <div className="flex flex-col">
+                  <label className="mb-1 font-medium text-gray-700">Pickup Option</label>
+                  <p className="p-2 border border-gray-300 rounded-md bg-gray-100">{currentShipment.pickupOption || "N/A"}</p>
+                </div>
+                {currentShipment.pickupOption === 'needPickup' && currentShipment.pickupAddress && (
+                  <div className="md:col-span-2">
+                    <h4 className="text-lg font-semibold mb-2">Pickup Address</h4>
+                    <p className="p-2 border border-gray-300 rounded-md bg-gray-100">
+                      {currentShipment.pickupAddress.region || ""}, {currentShipment.pickupAddress.province || ""}, {currentShipment.pickupAddress.city || ""}, {currentShipment.pickupAddress.barangay || ""}<br />
+                      {currentShipment.pickupAddress.detailedAddress || "N/A"}
+                    </p>
+                  </div>
+                )}
+                <div className="md:col-span-2">
+                  <h4 className="text-lg font-semibold mb-2">Additional Services</h4>
+                  <p className="p-2 border border-gray-300 rounded-md bg-gray-100">
+                    Documentation: {currentShipment.additionalServices?.documentation ? "Yes" : "No"}<br />
+                    Customs Clearance: {currentShipment.additionalServices?.customsClearance ? "Yes" : "No"}<br />
+                    Brokerage: {currentShipment.additionalServices?.brokerage ? "Yes" : "No"}<br />
+                    Consolidation: {currentShipment.additionalServices?.consolidation ? "Yes" : "No"}
+                  </p>
+                </div>
+                <div className="md:col-span-2">
+                  <h4 className="text-lg font-semibold mb-2">Packages</h4>
+                  {currentShipment.packages?.map((pkg, index) => (
+                    <div key={index} className="border border-gray-300 p-4 mb-4 rounded-md">
+                      <p><strong>Length:</strong> {pkg.length || "N/A"} cm</p>
+                      <p><strong>Width:</strong> {pkg.width || "N/A"} cm</p>
+                      <p><strong>Height:</strong> {pkg.height || "N/A"} cm</p>
+                      <p><strong>Weight:</strong> {pkg.weight || "N/A"} kg</p>
+                      <p><strong>Contents:</strong> {pkg.contents || "N/A"}</p>
+                      {previewUrls[currentShipment.docId]?.[index] && (
+                        <img src={previewUrls[currentShipment.docId][index]} alt={`Package ${index + 1}`} className="w-32 h-auto mt-2" />
+                      )}
+                    </div>
+                  )) || <p>No packages</p>}
+                </div>
+                {businessPreviewUrls[currentShipment.docId] && (
+                  <div className="md:col-span-2">
+                    <h4 className="text-lg font-semibold mb-2">Business Permit</h4>
+                    <img src={businessPreviewUrls[currentShipment.docId]} alt="Business Permit" className="w-48 h-auto" />
+                  </div>
+                )}
+                <div className="md:col-span-2">
+                  <h4 className="text-lg font-semibold mb-2">Status History</h4>
+                  {infoLoading ? (
+                    <p className="text-gray-500">Loading history...</p>
+                  ) : infoHistory.length > 0 ? (
+                    <ul className="list-disc pl-5">
+                      {infoHistory.map((hist) => (
+                        <li key={hist.id}>
+                          {hist.status} - {hist.timestamp ? hist.timestamp.toDate().toLocaleString() : "N/A"}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-gray-500">No status history available.</p>
+                  )}
+                </div>
+              </div>
+              <div className="flex justify-end mt-4">
+                <button className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded" onClick={() => setInfoModal(false)}>
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 };
-
 export default Shipments;

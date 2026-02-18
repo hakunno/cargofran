@@ -1,19 +1,17 @@
 import React, { useState, forwardRef, useImperativeHandle } from "react";
 import { useNavigate } from "react-router-dom";
-import { Modal, Button, Form } from "react-bootstrap";
-import { toast } from "react-toastify"; 
-import { 
-  signInWithEmailAndPassword, 
+import { Modal, Button, Form, Spinner } from "react-bootstrap"; // Added Spinner
+import { toast } from "react-toastify";
+import {
+  signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
-  setPersistence,
-  browserLocalPersistence,
   signOut
 } from "firebase/auth";
-import { auth, db } from "../jsfile/firebase"; 
-import { 
-  doc, 
-  setDoc, 
+import { auth, db } from "../jsfile/firebase";
+import {
+  doc,
+  setDoc,
   getDoc
 } from "firebase/firestore";
 
@@ -25,9 +23,12 @@ const LoginModal = forwardRef(({ setIsOpen, hideTrigger = false }, ref) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  
+
   const [error, setError] = useState("");
   const [redirectAfterLogin, setRedirectAfterLogin] = useState(null);
+  
+  // New Loading State
+  const [isLoading, setIsLoading] = useState(false);
 
   const navigate = useNavigate();
 
@@ -51,136 +52,153 @@ const LoginModal = forwardRef(({ setIsOpen, hideTrigger = false }, ref) => {
   const handleClose = () => {
     setShow(false);
     setView("login");
-    setError(""); 
+    setError("");
     setRedirectAfterLogin(null);
+    setIsLoading(false); // Reset loading on close
   };
 
   const changeView = (newView) => {
     setView(newView);
-    setError("");          
+    setError("");
   };
 
-  // === UPDATED: BLOCK INCOGNITO + SINGLE DEVICE LOGIN ===
- const handleLogin = async (e) => {
-  e.preventDefault();
-  setError("");
+  // === LOGIN LOGIC ===
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setError("");
+    setIsLoading(true); // Start Spinner
 
-  // Block incognito
-  const incognito = await isIncognito();
-  if (incognito) {
-    setError("Login is not allowed in incognito/private mode.");
-    toast.error("Login is not allowed in incognito mode.");
-    return;
-  }
-
-  try {
-    await setPersistence(auth, browserLocalPersistence);
-
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
-
-    const idToken = await user.getIdToken();
-
-    const res = await fetch("http://localhost:5000/revokeOtherSessions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${idToken}`,
-        "Content-Type": "application/json"
-      }
-    });
-
-    if (!res.ok) throw new Error("Session setup failed");
-
-    const { sessionId } = await res.json();
-
-    localStorage.setItem("sessionId", sessionId);
-
-    await setDoc(doc(db, "Users", user.uid), { forceLogout: null }, { merge: true });
-
-    // Get user data
-    const userDoc = await getDoc(doc(db, "Users", user.uid));
-    if (!userDoc.exists()) {
-      setError("User role not found.");
+    // 1. Block incognito
+    const incognito = await isIncognito();
+    if (incognito) {
+      setError("Login is not allowed in incognito/private mode.");
+      toast.error("Login is not allowed in incognito mode.");
+      setIsLoading(false);
       return;
     }
 
-    const userData = userDoc.data();
-    const targetPath = redirectAfterLogin || 
-      (userData.role === "admin" || userData.role === "staff" ? "/AdminDashboard" : "/");
+    try {
+      // 2. Firebase Login
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
 
-    toast.success(`Welcome back, ${userData.firstName || "User"}!`);
+      // Force a token refresh to ensure claims/state are 100% fresh
+      await user.getIdToken(true); 
+      // Force local user reload to sync with server
+      await user.reload(); 
 
-    handleClose();
+      // 3. Single Device Check (Backend Call)
+      const idToken = await user.getIdToken();
+      const res = await fetch("http://localhost:5000/revokeOtherSessions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${idToken}`,
+          "Content-Type": "application/json"
+        }
+      });
 
-    // 🔥 FULL RELOAD = fixes "only footer" + role loading delay + clean state
-    window.location.href = targetPath;
+      if (!res.ok) throw new Error("Session setup failed");
 
-  } catch (error) {
-    console.error(error);
-    setError("Login failed. Please try again.");
-    toast.error("Login failed.");
-  }
-};
-  
-  // Signup (unchanged)
+      const { sessionId } = await res.json();
+      localStorage.setItem("sessionId", sessionId);
+
+      // 4. Reset forceLogout flag
+      await setDoc(doc(db, "Users", user.uid), { forceLogout: null }, { merge: true });
+
+      // 5. Get Role for Redirection
+      const userDoc = await getDoc(doc(db, "Users", user.uid));
+      if (!userDoc.exists()) {
+        setError("User role not found.");
+        setIsLoading(false);
+        return;
+      }
+
+      const userData = userDoc.data();
+      const targetPath = redirectAfterLogin ||
+        (userData.role === "admin" || userData.role === "staff" ? "/AdminDashboard" : "/");
+
+      // 6. UI Updates
+      toast.success(`Welcome back, ${userData.firstName || "User"}!`);
+
+      // 7. NAVIGATE with DELAY
+      // We wait 800ms to allow your AuthProvider/Context to finish fetching 
+      // the user role in the background. This prevents the "Footer Only" glitch.
+      setTimeout(() => {
+        handleClose(); // Close modal visually
+        navigate(targetPath);
+      }, 800);
+
+    } catch (error) {
+      console.error(error);
+      setError("Login failed. Check your credentials.");
+      toast.error("Login failed.");
+      setIsLoading(false); // Stop spinner on error
+    }
+  };
+
+  // Signup
   const handleSignup = async (e) => {
     e.preventDefault();
     setError("");
+    setIsLoading(true);
 
     if (password !== confirmPassword) {
       setError("Passwords do not match");
       toast.error("Passwords do not match!");
+      setIsLoading(false);
       return;
     }
 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      const uid = user.uid; 
+      const uid = user.uid;
 
       const userDocRef = doc(db, "Users", uid);
       await setDoc(userDocRef, {
-        uid, 
+        uid,
         firstName,
         lastName,
         email,
-        role: "user", 
-        verified: false, 
+        role: "user",
+        verified: false,
         createdAt: new Date(),
       });
 
       toast.success("Account created! Please log in.");
-      setView("login"); 
-
+      setView("login");
     } catch (error) {
       setError(error.message);
-      toast.error("Error creating account. Please try again.");
+      toast.error("Error creating account.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Forgot password (unchanged)
+  // Forgot password
   const handleForgotPassword = async (e) => {
     e.preventDefault();
     setError("");
-  
+    setIsLoading(true);
+
     if (!email) {
       setError("Please enter your email address.");
+      setIsLoading(false);
       return;
     }
-  
+
     try {
       const formattedEmail = email.trim().toLowerCase();
-  
       await sendPasswordResetEmail(auth, formattedEmail);
-      
       toast.success("Password reset link sent to your email!");
-      
       setEmail("");
-      changeView("login"); 
+      changeView("login");
     } catch (error) {
-      setError("Failed to send reset link. Please try again later.");
+      setError("Failed to send reset link.");
       toast.error("Failed to send reset link.");
       console.error("Reset Password Error:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -192,11 +210,11 @@ const LoginModal = forwardRef(({ setIsOpen, hideTrigger = false }, ref) => {
 
   return (
     <>
-      {!hideTrigger && ( 
+      {!hideTrigger && (
         <div
           className="lexend text-xl drop-shadow-[2px_2px_2px_rgba(0,0,0,0.8)] font-bold relative block py-2 px-0 no-underline transition-all duration-200 transform hover:scale-110 active:scale-95 
-                    after:content-[''] after:absolute after:left-0 after:bottom-0 after:w-0 after:h-[2px] after:bg-black/90 after:transition-all after:duration-300 
-                    hover:after:w-full text-white/100 hover:text-green-400 cursor-pointer"
+                  after:content-[''] after:absolute after:left-0 after:bottom-0 after:w-0 after:h-[2px] after:bg-black/90 after:transition-all after:duration-300 
+                  hover:after:w-full text-white/100 hover:text-green-400 cursor-pointer"
           onClick={() => setShow(true)}
         >
           Log In / Sign Up
@@ -231,8 +249,8 @@ const LoginModal = forwardRef(({ setIsOpen, hideTrigger = false }, ref) => {
                   autoComplete="email"
                 />
               </Form.Group>
-              <Button variant="primary" type="submit" className="w-100">
-                Send Reset Link
+              <Button variant="primary" type="submit" className="w-100" disabled={isLoading}>
+                {isLoading ? <Spinner animation="border" size="sm" /> : "Send Reset Link"}
               </Button>
               <div className="mt-3 text-center">
                 <a href="#" onClick={(e) => { e.preventDefault(); changeView("login"); }}>
@@ -276,8 +294,15 @@ const LoginModal = forwardRef(({ setIsOpen, hideTrigger = false }, ref) => {
                   </a>
                 </div>
               </Form.Group>
-              <Button variant="primary" type="submit" className="lexend w-100">
-                Log In
+              <Button variant="primary" type="submit" className="lexend w-100" disabled={isLoading}>
+                {isLoading ? (
+                    <>
+                        <Spinner animation="border" size="sm" className="me-2" />
+                        Logging in...
+                    </>
+                ) : (
+                    "Log In"
+                )}
               </Button>
               <div className="lexend mt-3 text-center">
                 <a href="#" onClick={(e) => { e.preventDefault(); changeView("signup"); }}>
@@ -353,8 +378,8 @@ const LoginModal = forwardRef(({ setIsOpen, hideTrigger = false }, ref) => {
                   autoComplete="new-password"
                 />
               </Form.Group>
-              <Button variant="primary" type="submit" className="w-100">
-                Sign Up
+              <Button variant="primary" type="submit" className="w-100" disabled={isLoading}>
+                 {isLoading ? <Spinner animation="border" size="sm" /> : "Sign Up"}
               </Button>
               <div className="mt-3 lexend text-center">
                 <a href="#" onClick={(e) => { e.preventDefault(); changeView("login"); }}>
@@ -369,7 +394,7 @@ const LoginModal = forwardRef(({ setIsOpen, hideTrigger = false }, ref) => {
   );
 });
 
-// === UPDATED LOGOUT MODAL (same file) ===
+// === UPDATED LOGOUT MODAL ===
 export const LogoutModal = forwardRef((props, ref) => {
   const [show, setShow] = useState(false);
   const navigate = useNavigate();
@@ -384,19 +409,25 @@ export const LogoutModal = forwardRef((props, ref) => {
     setShow(false);
   };
 
-const handleLogout = async () => {
-  try {
-    localStorage.removeItem("sessionId");   // ← This was already there, good
+  const handleLogout = async () => {
+    try {
+      localStorage.removeItem("sessionId");
 
-    await signOut(auth);
-    toast.success("Logged out successfully!");
-    navigate("/");
-  } catch (error) {
-    toast.error("Error logging out.");
-  } finally {
-    handleClose();
-  }
-};
+      handleClose();
+
+      await signOut(auth);
+
+      toast.success("Logged out successfully!");
+
+      setTimeout(() => {
+        navigate("/");
+      }, 500);
+
+    } catch (error) {
+      console.error(error);
+      toast.error("Error logging out.");
+    }
+  };
 
   return (
     <Modal show={show} onHide={handleClose} centered>

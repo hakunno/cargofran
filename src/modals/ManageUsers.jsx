@@ -17,6 +17,8 @@ import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
 import "../assets/css/ManageUsers.css";
 import { useAuth } from "../utils/AuthContext"; // Import your auth context
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 function ManageUsers({ show, onHide }) {
   // Get current user's role and loading state from your auth context
@@ -61,9 +63,9 @@ function ManageUsers({ show, onHide }) {
   useEffect(() => {
     const fetchUsers = async () => {
       const snapshot = await getDocs(usersCollection);
-      const userList = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
+      const userList = snapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data(),
       }));
 
       // Sort users by createdAt (descending - newest first)
@@ -108,17 +110,17 @@ function ManageUsers({ show, onHide }) {
 
   const handleResetPassword = async (email) => {
     if (resetCooldown[email]) {
-      alert("Please wait before sending another reset email.");
+      toast.warning("Please wait before sending another reset email.");
       return;
     }
 
     try {
       await sendPasswordResetEmail(auth, email);
-      alert(`Password reset email sent to ${email}`);
+      toast.success(`Password reset email sent to ${email}`);
       setResetCooldown((prev) => ({ ...prev, [email]: 60 }));
     } catch (error) {
       console.error("Error sending reset email:", error.message);
-      alert("Failed to send reset email. Please try again.");
+      toast.error("Failed to send reset email. Please try again.");
     }
   };
 
@@ -133,12 +135,12 @@ function ManageUsers({ show, onHide }) {
       !newUserEmail ||
       !newUserPassword
     ) {
-      alert("Please fill in all fields.");
+      toast.warning("Please fill in all fields.");
       return;
     }
 
     if (newUserPassword.length < 6) {
-      alert("Password must be at least 6 characters long.");
+      toast.warning("Password must be at least 6 characters long.");
       return;
     }
 
@@ -175,7 +177,7 @@ function ManageUsers({ show, onHide }) {
           ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
         );
 
-        alert("User created successfully!");
+        toast.success("User created successfully!");
         setShowAddUserModal(false);
         setNewUserFirstName("");
         setNewUserLastName("");
@@ -183,11 +185,11 @@ function ManageUsers({ show, onHide }) {
         setNewUserPassword("");
         setNewUserRole("user");
       } else {
-        alert("Failed to create user: " + data.error);
+        toast.error("Failed to create user: " + data.error);
       }
     } catch (error) {
       console.error("Error:", error);
-      alert("Something went wrong.");
+      toast.error("Something went wrong.");
     }
   };
 
@@ -207,13 +209,13 @@ function ManageUsers({ show, onHide }) {
 
       if (response.ok) {
         setUsers((prevUsers) => prevUsers.filter((user) => user.id !== userId));
-        alert("User deleted successfully!");
+        toast.success("User deleted successfully!");
       } else {
-        alert("Failed to delete user: " + data.error);
+        toast.error("Failed to delete user: " + data.error);
       }
     } catch (error) {
       console.error("Error:", error);
-      alert("Something went wrong while deleting the user.");
+      toast.error("Something went wrong while deleting the user.");
     }
   };
 
@@ -230,7 +232,7 @@ function ManageUsers({ show, onHide }) {
       );
     } catch (error) {
       console.error("Error updating verification status:", error);
-      alert("Failed to update verification status.");
+      toast.error("Failed to update verification status.");
     }
   };
 
@@ -240,6 +242,7 @@ function ManageUsers({ show, onHide }) {
 
   return (
     <>
+      <ToastContainer position="top-right" autoClose={3000} />
       {/* Main Manage Users Modal */}
       <Modal
         show={show}

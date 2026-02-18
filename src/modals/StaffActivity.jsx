@@ -37,7 +37,7 @@ const ActivityModal = ({ show, onHide }) => {
       const activityList = snapshot.docs.map((doc) => {
         const data = doc.data();
         const date = data.timestamp?.toDate();
-        return {
+        const baseActivity = {
           id: doc.id,
           userName: data.userName || "Unknown",
           action: data.action || "",
@@ -45,6 +45,15 @@ const ActivityModal = ({ show, onHide }) => {
           dateString: date ? date.toLocaleDateString("sv-SE") : null,
           formattedTimestamp: date ? date.toLocaleString() : "N/A",
         };
+
+        // Remove any 20-character alphanumeric IDs (Firestore-style) from the displayed action
+        const idPattern = /\b[A-Za-z0-9]{20}\b/g;
+        baseActivity.displayedAction = baseActivity.action
+          .replace(idPattern, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        return baseActivity;
       });
       setActivities(activityList);
     });
@@ -67,7 +76,7 @@ const ActivityModal = ({ show, onHide }) => {
       // Hide if no valid timestamp
       if (!activity.dateString) return false;
 
-      // Search in userName OR action
+      // Search in userName OR action (use original action for search)
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         const matchesSearch =
@@ -80,7 +89,7 @@ const ActivityModal = ({ show, onHide }) => {
       if (startDate && activity.dateString < startDate) return false;
       if (endDate && activity.dateString > endDate) return false;
 
-      // Checkbox filters
+      // Checkbox filters (use original action for filters)
       const anyFilterActive = Object.values(filters).some((f) => f);
       if (anyFilterActive) {
         let matches = false;
@@ -128,7 +137,7 @@ const ActivityModal = ({ show, onHide }) => {
     const headers = ["User Name", "Action", "Timestamp"];
     const rows = filteredActivities.map((activity) => [
       activity.userName,
-      activity.action,
+      activity.displayedAction, // Use displayedAction for export
       activity.formattedTimestamp,
     ]);
 
@@ -168,7 +177,7 @@ const ActivityModal = ({ show, onHide }) => {
         (activity) => `
           <tr>
             <td style="border:1px solid #ccc; padding:8px;">${activity.userName}</td>
-            <td style="border:1px solid #ccc; padding:8px;">${activity.action}</td>
+            <td style="border:1px solid #ccc; padding:8px;">${activity.displayedAction}</td> {/* Use displayedAction for print */}
             <td style="border:1px solid #ccc; padding:8px;">${activity.formattedTimestamp}</td>
           </tr>`
       )
@@ -317,7 +326,7 @@ const ActivityModal = ({ show, onHide }) => {
               filteredActivities.map((activity) => (
                 <tr key={activity.id}>
                   <td>{activity.userName}</td>
-                  <td>{activity.action}</td>
+                  <td>{activity.displayedAction}</td> {/* Use displayedAction for display */}
                   <td>{activity.formattedTimestamp}</td>
                 </tr>
               ))

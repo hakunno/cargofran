@@ -1,72 +1,101 @@
-import { useEffect, useRef } from "react";
-import { signOut } from "firebase/auth";
-import { auth } from "../jsfile/firebase";
+import { useEffect, useRef, useState } from "react";
+import { signOut, onAuthStateChanged } from "firebase/auth"; // Import onAuthStateChanged
+import { auth, db } from "../jsfile/firebase"; 
 import { toast } from "react-toastify";
 import { doc, getDoc } from "firebase/firestore";
-import { db } from "../jsfile/firebase";
+import { useNavigate } from "react-router-dom"; // Import useNavigate
 
-const TIMEOUT_MS = 5 * 60 * 1000;     // 5 minutes
-const WARNING_MS = 60 * 1000;         // warning 1 min before
+const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const WARNING_MS = 60 * 1000;     // 1 minute before
 
 export const useIdleTimeout = () => {
+  const navigate = useNavigate(); // Use this to keep Toasts visible
+  const [isChecking, setIsChecking] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+  
   const timeoutRef = useRef(null);
   const warningRef = useRef(null);
-  const isAdminRef = useRef(false);
 
-  const resetTimer = () => {
-    if (isAdminRef.current) return;   // ← SKIP FOR ADMINS
-
+  const cleanUp = () => {
     clearTimeout(timeoutRef.current);
     clearTimeout(warningRef.current);
+  };
 
+  const startTimer = () => {
+    cleanUp(); 
+
+    // Warning Timer
     warningRef.current = setTimeout(() => {
-      toast.warning("Your session will expire in 1 minute due to inactivity", {
+      toast.warning("Session expiring in 1 minute...", {
         position: "top-center",
-        autoClose: 55000,
+        autoClose: 10000, 
       });
     }, TIMEOUT_MS - WARNING_MS);
 
+    // Logout Timer
     timeoutRef.current = setTimeout(async () => {
       try {
         await signOut(auth);
-        toast.info("Logged out due to inactivity.");
-        window.location.href = "/";
+        cleanUp();
+        
+        // 1. Redirect smoothly without refreshing the page
+        navigate("/"); 
+        
+        // 2. Show toast AFTER navigation so it doesn't get wiped
+        setTimeout(() => {
+            toast.info("Logged out due to inactivity.");
+        }, 100);
+        
       } catch (err) {
-        console.error(err);
+        console.error("Logout Error:", err);
       }
     }, TIMEOUT_MS);
   };
 
-  // Check user role once
+  // 1. Check Role Dynamically (Fixes Page Refresh & Login issues)
   useEffect(() => {
-    const checkRole = async () => {
-      const user = auth.currentUser;
-      if (!user) return;
-
-      const userDoc = await getDoc(doc(db, "Users", user.uid));
-      if (userDoc.exists()) {
-        const role = userDoc.data().role;
-        isAdminRef.current = role === "admin" || role === "staff";
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+         // User is not logged in
+         setIsChecking(false);
+         setIsAdmin(false);
+         return;
       }
-    };
 
-    checkRole();
+      try {
+        const userDoc = await getDoc(doc(db, "Users", user.uid));
+        if (userDoc.exists()) {
+          const role = userDoc.data().role;
+          if (role === "admin" || role === "staff") {
+            setIsAdmin(true);
+          } else {
+            setIsAdmin(false);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching role:", error);
+      } finally {
+        setIsChecking(false);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  // Activity listeners
+  // 2. Manage Listeners
   useEffect(() => {
-    if (isAdminRef.current) return;   // don't even attach listeners for admins
+    // If checking or Admin, STOP here. (Admins get no listeners = no logout)
+    if (isChecking || isAdmin) return;
 
     const events = ["mousemove", "keydown", "scroll", "click", "touchstart"];
-    const handleActivity = () => resetTimer();
+    const handleActivity = () => startTimer();
 
-    events.forEach(ev => window.addEventListener(ev, handleActivity));
-    resetTimer();
+    events.forEach((ev) => window.addEventListener(ev, handleActivity));
+    startTimer();
 
     return () => {
-      events.forEach(ev => window.removeEventListener(ev, handleActivity));
-      clearTimeout(timeoutRef.current);
-      clearTimeout(warningRef.current);
+      events.forEach((ev) => window.removeEventListener(ev, handleActivity));
+      cleanUp();
     };
-  }, []);
+  }, [isChecking, isAdmin, navigate]); 
 };

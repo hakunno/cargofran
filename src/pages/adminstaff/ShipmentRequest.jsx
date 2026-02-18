@@ -16,6 +16,8 @@ import Sidebar from '../../component/adminstaff/Sidebar';
 import { getStorage, ref, getDownloadURL } from 'firebase/storage';
 import { logActivity } from "../../modals/StaffActivity.jsx"; 
 import { useReactToPrint } from 'react-to-print';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const storage = getStorage();
 
@@ -188,7 +190,7 @@ const ShipmentInquiryRequests = () => {
 
   const confirmAcceptWithPackageNumber = async () => {
     if (!packageNumberInput.trim()) {
-      alert('Please enter a package number.');
+      toast.warning('Please enter a package number.');
       return;
     }
 
@@ -231,15 +233,15 @@ const ShipmentInquiryRequests = () => {
       
       await logActivity(adminFullName, `Accepted shipment inquiry ${inquiryToAccept.id} and created package ${packageNumberInput.trim()}`);
 
-      alert(`Shipment created!`);
       setInquiries((prev) => prev.filter((i) => i.id !== inquiryToAccept.id));
       
       closeModal();
       setIsAcceptModalOpen(false);
       setInquiryToAccept(null);
+      toast.success('Shipment created successfully!');
     } catch (error) {
       console.error('Error accepting request:', error);
-      alert('Failed to accept request. Please try again.');
+      toast.error('Failed to accept request. Please try again.');
     }
   };
 
@@ -257,12 +259,12 @@ const ShipmentInquiryRequests = () => {
 
       await logActivity(adminFullName, `Rejected shipment inquiry ${inquiry.id}`);
 
-      alert('Request rejected.');
       setInquiries((prev) => prev.filter((i) => i.id !== inquiry.id));
       closeModal();
+      toast.success('Request rejected successfully!');
     } catch (error) {
       console.error('Error rejecting request:', error);
-      alert('Failed to reject request. Please try again.');
+      toast.error('Failed to reject request. Please try again.');
     }
   };
 
@@ -288,7 +290,7 @@ const ShipmentInquiryRequests = () => {
 
   const handleExportCSV = () => {
     if (inquiries.length === 0) {
-      alert("No data to export.");
+      toast.info("No data to export.");
       return;
     }
     const headers = ["Name", "Email", "Mobile", "Sender Country", "Destination Country", "Transport Mode", "Direction", "Load Type", "Pickup Option", "Request Date"];
@@ -300,7 +302,7 @@ const ShipmentInquiryRequests = () => {
 
   const handleHistoryExportCSV = () => {
     if (historyInquiries.length === 0) {
-        alert("No history data to export.");
+        toast.info("No history data to export.");
         return;
     }
     const headers = ["Name", "Email", "Status", "Date Processed"];
@@ -363,6 +365,7 @@ const ShipmentInquiryRequests = () => {
     <div className="flex flex-col md:flex-row min-h-screen bg-gray-100">
       <Sidebar />
       <div className="flex-1 p-4 md:p-6 md:ml-64">
+        <ToastContainer position="top-right" autoClose={3000} />
         
         {/* HEADER */}
         <div className="flex justify-between items-center mb-6">

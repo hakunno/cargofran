@@ -38,6 +38,7 @@ import Reports from "./pages/adminstaff/Reports";
 
 // Hook
 import { useIdleTimeout } from "./hooks/useIdleTimeout";
+import { AuthProvider } from './utils/AuthContext';
 
 const App = () => {
   // Idle timeout hook
@@ -156,8 +157,8 @@ useEffect(() => {
 
   return (
     <>
-
       <ThemeProvider>
+      <AuthProvider>
       {/* Toast Container - must be at the top level */}
       <ToastContainer
         position="top-right"
@@ -265,6 +266,7 @@ useEffect(() => {
 
       {/* Hide footer on specific admin/user pages */}
       {!hiddenFooterRoutes.includes(location.pathname) && <Footer />}
+      </AuthProvider>
       </ThemeProvider>
     </>
   );

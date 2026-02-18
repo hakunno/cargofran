@@ -16,6 +16,8 @@ import { db, auth } from "../../jsfile/firebase";
 import Sidebar from "../../component/adminstaff/Sidebar";
 import { logActivity } from "../../modals/StaffActivity.jsx"; 
 import { useReactToPrint } from 'react-to-print';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const ConversationsAdmin = () => {
   const [conversations, setConversations] = useState([]); // Pending conversations
@@ -129,7 +131,7 @@ const ConversationsAdmin = () => {
     try {
       const currentAdmin = auth.currentUser;
       if (!currentAdmin) {
-        alert("Admin not logged in.");
+        toast.error("Admin not logged in.");
         return;
       }
       
@@ -160,9 +162,10 @@ const ConversationsAdmin = () => {
       setShowModal(false);
       setSelectedConversation(null);
       setMessages([]);
+      toast.success("Conversation approved successfully!");
     } catch (error) {
       console.error("Error approving conversation:", error);
-      alert("Failed to approve conversation. Please try again.");
+      toast.error("Failed to approve conversation. Please try again.");
     }
   };
   
@@ -197,9 +200,10 @@ const ConversationsAdmin = () => {
       setShowModal(false);
       setSelectedConversation(null);
       setMessages([]);
+      toast.success("Conversation rejected successfully!");
     } catch (error) {
       console.error("Error rejecting conversation:", error);
-      alert("Failed to reject conversation. Please try again.");
+      toast.error("Failed to reject conversation. Please try again.");
     }
   };
 
@@ -224,7 +228,7 @@ const ConversationsAdmin = () => {
 
   const handleHistoryExportCSV = () => {
     if (historyConversations.length === 0) {
-      alert("No data to export.");
+      toast.info("No data to export.");
       return;
     }
     const headers = ["User Name", "Email", "Status", "Processed By", "Date Processed"];
@@ -277,6 +281,7 @@ const ConversationsAdmin = () => {
     <div className="flex flex-col md:flex-row min-h-screen">
       <Sidebar />
       <div className="flex-1 p-4 md:p-6 md:ml-64">
+        <ToastContainer position="top-right" autoClose={3000} />
         
         <div className="d-flex justify-content-between align-items-center mb-4">
           <h2 className="text-xl font-semibold text-center m-0">Pending Conversations</h2>
@@ -286,7 +291,7 @@ const ConversationsAdmin = () => {
           </Button>
         </div>
 
-        <div className="overflow-x-auto shadow rounded-lg">
+        <div className="overflow-x-auto shadow shadow rounded-lg">
           <Table striped bordered hover className="min-w-full">
             <thead className="bg-gray-200">
               <tr>

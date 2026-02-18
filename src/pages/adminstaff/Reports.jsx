@@ -32,7 +32,6 @@ const Reports = () => {
   const [shipments, setShipments] = useState([]);
   const [requests, setRequests] = useState([]); 
   const [conversations, setConversations] = useState([]); 
-  const [loading, setLoading] = useState(true);
   const [adminName, setAdminName] = useState("Authorized Admin");
   
   // --- Period Filters ---
@@ -75,7 +74,6 @@ const Reports = () => {
     };
 
     const fetchAllData = async () => {
-      setLoading(true);
       try {
         await fetchAdmin();
         
@@ -105,8 +103,6 @@ const Reports = () => {
 
       } catch (error) {
         console.error("Error fetching report data:", error);
-      } finally {
-        setLoading(false);
       }
     };
 
@@ -269,10 +265,10 @@ const Reports = () => {
   const activityData = {
     labels: ['Total Activity'],
     datasets: [
-      { label: 'Completed', data: [processedShipments.filter(s => s.packageStatus === 'Delivered').length], backgroundColor: '#10B981' },
-      { label: 'Active', data: [processedShipments.filter(s => s.packageStatus !== 'Delivered').length], backgroundColor: '#3B82F6' },
-      { label: 'Requests', data: [processedRequests.length], backgroundColor: '#F59E0B' },
-      { label: 'Messages', data: [processedConversations.length], backgroundColor: '#8B5CF6' },
+      { label: 'Completed Shipments', data: [processedShipments.filter(s => s.packageStatus === 'Delivered').length], backgroundColor: '#10B981' },
+      { label: 'Active Shipments', data: [processedShipments.filter(s => s.packageStatus !== 'Delivered').length], backgroundColor: '#3B82F6' },
+      { label: 'Shipment Requests', data: [processedRequests.length], backgroundColor: '#F59E0B' },
+      { label: 'Messages Requests', data: [processedConversations.length], backgroundColor: '#8B5CF6' },
     ],
   };
 
@@ -294,8 +290,6 @@ const Reports = () => {
       }
     `,
   });
-
-  if (loading) return <div className="flex justify-center items-center h-screen">Loading Reports...</div>;
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-gray-100">
@@ -455,7 +449,7 @@ const Reports = () => {
                     <SummaryCard title="Processed Messages" value={processedConversations.length} color="purple" />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 print-break-inside">
-                    <ChartCard title="Activity Metrics"><Bar options={chartOptions} data={activityData} /></ChartCard>
+                    <ChartCard title="Reports Metrics"><Bar options={chartOptions} data={activityData} /></ChartCard>
                     <ChartCard title="Status Distribution"><Pie data={pieChartData} /></ChartCard>
                 </div>
             </div>

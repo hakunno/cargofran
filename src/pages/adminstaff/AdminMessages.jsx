@@ -1,21 +1,26 @@
 import React, { useState, useEffect } from "react";
-import { 
-  collection, 
-  query, 
-  where, 
-  onSnapshot, 
-  orderBy, 
-  doc, 
-  getDoc, 
-  getDocs, 
-  setDoc, 
-  deleteDoc, 
-  serverTimestamp 
-} from "firebase/firestore";
-import { db, auth } from "../../jsfile/firebase";
+import { Link } from "react-router-dom";
 import Sidebar from "../../component/adminstaff/Sidebar";
+import { auth } from "../../jsfile/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+  orderBy,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  deleteDoc,
+  serverTimestamp
+} from "firebase/firestore";
+import { db } from "../../jsfile/firebase";
 import ChatWindow from "../Messages";
 import { FaArrowLeft, FaSearch, FaUserCircle, FaCommentSlash, FaHistory, FaInbox, FaClock, FaCheckDouble, FaTimesCircle } from "react-icons/fa";
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const AdminConversations = () => {
   // Toggle State: 'active' or 'history'
@@ -84,7 +89,7 @@ const AdminConversations = () => {
       const convSnap = await getDoc(convRef);
 
       if (!convSnap.exists()) {
-        alert("Conversation not found.");
+        toast.error("Conversation not found.");
         return;
       }
 
@@ -126,10 +131,32 @@ const AdminConversations = () => {
       setSelectedConversationId(null);
       
       // Note: The snapshots above will automatically update the lists (remove from Active, add to History)
+      toast.success("Conversation ended and moved to history.");
 
     } catch (error) {
       console.error("Error ending conversation:", error);
-      alert("Failed to end conversation. See console.");
+      toast.error("Failed to end conversation.");
+    }
+  };
+
+  // --- NEW: Handle Delete History Conversation ---
+  const handleDeleteHistory = async (convId) => {
+    const confirmDelete = window.confirm("Are you sure you want to delete this conversation history? This cannot be undone.");
+    if (!confirmDelete) return;
+
+    try {
+      await deleteDoc(doc(db, "archived_conversations", convId));
+      
+      // Reset if currently selected
+      if (selectedConversationId === convId) {
+        setSelectedConversationId(null);
+        setSelectedArchivedData(null);
+      }
+
+      toast.success("History deleted successfully.");
+    } catch (error) {
+      console.error("Error deleting history:", error);
+      toast.error("Failed to delete history.");
     }
   };
 
@@ -173,7 +200,7 @@ const AdminConversations = () => {
             selectedConversationId ? "hidden md:flex" : "flex"
           } flex-col w-full md:w-80 bg-white border-r border-gray-200 h-full shadow-sm z-10`}
         >
-          {/* Header & Toggle Buttons */}
+          {/* Header & Toggle */}
           <div className="p-5 border-b border-gray-100 bg-white sticky top-0 z-10 space-y-4">
             
             <div className="flex justify-between items-center">
@@ -240,45 +267,62 @@ const AdminConversations = () => {
                         isActive ? "bg-blue-50 border-l-4 border-blue-600" : "border-l-4 border-transparent"
                       }`}
                     >
-                      <div className="flex items-start gap-3">
-                        {/* Avatar */}
-                        <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shadow-sm ${
-                            isActive ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-600 group-hover:bg-gray-300"
-                        }`}>
-                          {initials}
-                        </div>
+                      <div className="flex items-start justify-between">
+                        {/* Left: Avatar + Details */}
+                        <div className="flex items-start gap-3 flex-1">
+                          {/* Avatar */}
+                          <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shadow-sm ${
+                              isActive ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-600 group-hover:bg-gray-300"
+                          }`}>
+                            {initials}
+                          </div>
 
-                        {/* Text Details */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-baseline mb-1">
-                            <h3 className={`text-sm font-semibold truncate ${isActive ? 'text-gray-900' : 'text-gray-700'}`}>
-                              {conv.userFullName || "Unknown User"}
-                            </h3>
+                          {/* Text Details */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-baseline mb-1">
+                              <h3 className={`text-sm font-semibold truncate ${isActive ? 'text-gray-900' : 'text-gray-700'}`}>
+                                {conv.userFullName || "Unknown User"}
+                              </h3>
+                              
+                              {/* Display Date for History */}
+                              {viewMode === 'history' && conv.endedAt && (
+                                  <span className="text-[10px] text-gray-400">
+                                      {new Date(conv.endedAt.seconds * 1000).toLocaleDateString()}
+                                  </span>
+                              )}
+                            </div>
                             
-                            {/* Display Date for History */}
-                            {viewMode === 'history' && conv.endedAt && (
-                                <span className="text-[10px] text-gray-400">
-                                    {new Date(conv.endedAt.seconds * 1000).toLocaleDateString()}
-                                </span>
+                            <p className={`text-xs truncate ${isActive ? 'text-blue-700 font-medium' : 'text-gray-500'}`}>
+                              {conv.userEmail}
+                            </p>
+
+                            {/* Show Duration if in History Mode */}
+                            {viewMode === 'history' ? (
+                               <div className="flex items-center gap-1 mt-1 text-xs text-green-600 font-medium bg-green-50 w-fit px-2 py-0.5 rounded">
+                                  <FaClock className="text-[10px]" /> 
+                                  Duration: {conv.duration || "N/A"}
+                               </div>
+                            ) : (
+                              <p className="text-xs text-gray-400 mt-1 truncate">
+                                Active now
+                              </p>
                             )}
                           </div>
-                          
-                          <p className={`text-xs truncate ${isActive ? 'text-blue-700 font-medium' : 'text-gray-500'}`}>
-                            {conv.userEmail}
-                          </p>
-
-                          {/* Show Duration if in History Mode */}
-                          {viewMode === 'history' ? (
-                             <div className="flex items-center gap-1 mt-1 text-xs text-green-600 font-medium bg-green-50 w-fit px-2 py-0.5 rounded">
-                                <FaClock className="text-[10px]" /> 
-                                Duration: {conv.duration || "N/A"}
-                             </div>
-                          ) : (
-                            <p className="text-xs text-gray-400 mt-1 truncate">
-                              Active now
-                            </p>
-                          )}
                         </div>
+
+                        {/* Right: Delete Button (History Only) */}
+                        {viewMode === 'history' && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation(); // Prevent selecting the chat
+                              handleDeleteHistory(conv.id);
+                            }}
+                            className="p-1.5 text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                            title="Delete History"
+                          >
+                            <FaTimesCircle size={16} />
+                          </button>
+                        )}
                       </div>
                     </li>
                   );
@@ -327,7 +371,7 @@ const AdminConversations = () => {
                 {viewMode === 'active' && (
                     <button
                         onClick={handleEndConversation}
-                        className="flex items-center gap-2 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                        className="flex items-center gap-2 bg-red-600 text-white hover:bg-red-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
                     >
                         <FaTimesCircle />
                         End Chat
