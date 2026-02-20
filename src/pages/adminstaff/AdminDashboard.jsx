@@ -309,8 +309,8 @@ const AdminDashboard = () => {
       title: `Message Request: ${m.userFullName || 'Guest'}`, 
       sub: 'Waiting for agent approval',
       link: '/MessageRequest',
-      icon: <FaCommentDots className="text-indigo-600 dark:text-indigo-400" />,
-      color: 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-800'
+      icon: <FaCommentDots className="text-indigo-600" />,
+      color: 'bg-indigo-50 border-indigo-200'
     }));
 
     // Priority 2: Shipment Requests (Grouped)
@@ -322,8 +322,8 @@ const AdminDashboard = () => {
         title: count === 1 ? 'Shipment Request' : 'Shipment Requests',
         sub: `${count} new booking${count === 1 ? '' : 's'} pending approval`,
         link: '/ShipmentRequest',
-        icon: <FaClipboardList className="text-amber-600 dark:text-amber-400" />,
-        color: 'bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800'
+        icon: <FaClipboardList className="text-amber-600" />,
+        color: 'bg-amber-50 border-amber-200'
       });
     }
 
@@ -333,8 +333,8 @@ const AdminDashboard = () => {
       title: `Delayed: ${s.packageNumber}`,
       sub: s.packageStatus,
       link: `/Shipments/${s.id}`,
-      icon: <FaExclamationTriangle className="text-red-600 dark:text-red-400" />,
-      color: 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800'
+      icon: <FaExclamationTriangle className="text-red-600" />,
+      color: 'bg-red-50 border-red-200'
     }));
 
     // Priority 4: Active Messages
@@ -343,8 +343,8 @@ const AdminDashboard = () => {
       title: `Active Chat: ${m.userFullName}`,
       sub: 'Live conversation',
       link: '/AdminMessages',
-      icon: <FaComments className="text-emerald-600 dark:text-emerald-400" />,
-      color: 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800'
+      icon: <FaComments className="text-emerald-600" />,
+      color: 'bg-emerald-50 border-emerald-200'
     }));
 
     return items;
@@ -353,17 +353,17 @@ const AdminDashboard = () => {
   const attentionItems = getAttentionItems();
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen bg-slate-50 dark:bg-gray-900">
+    <div className="flex flex-col md:flex-row min-h-screen bg-slate-50">
       <Sidebar />
       
       <main className="flex-1 p-4 md:p-8 md:ml-64">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800 dark:text-gray-200 oswald">DASHBOARD</h1>
+            <h1 className="text-2xl font-bold text-slate-800 oswald">DASHBOARD</h1>
           </div>
           <div className="text-right hidden md:block">
-             <span className="bg-white dark:bg-gray-800 px-4 py-2 rounded-lg shadow-sm text-sm font-medium text-slate-600 dark:text-gray-300">
+             <span className="bg-white px-4 py-2 rounded-lg shadow-sm text-sm font-medium text-slate-600">
                {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
              </span>
           </div>
@@ -373,22 +373,22 @@ const AdminDashboard = () => {
         <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 lexend">
           <KpiCard 
             title="Active Shipments" value={kpiData.activePackages} 
-            icon={<FaShippingFast className="text-blue-600 dark:text-blue-400 text-xl" />} color="bg-blue-50 dark:bg-blue-900/30"
+            icon={<FaShippingFast className="text-blue-600 text-xl" />} color="bg-blue-50"
             link="/Shipments?view=active"
           />
           <KpiCard 
             title="Pending Requests" value={kpiData.shipmentRequests} 
-            icon={<FaClipboardList className="text-amber-600 dark:text-amber-400 text-xl" />} color="bg-amber-50 dark:bg-amber-900/30"
+            icon={<FaClipboardList className="text-amber-600 text-xl" />} color="bg-amber-50"
             link="/ShipmentRequest"
           />
           <KpiCard 
             title="Active Chats" value={kpiData.activeMessages} 
-            icon={<FaComments className="text-emerald-600 dark:text-emerald-400 text-xl" />} color="bg-emerald-50 dark:bg-emerald-900/30"
+            icon={<FaComments className="text-emerald-600 text-xl" />} color="bg-emerald-50"
             link="/AdminMessages"
           />
           <KpiCard 
             title="Message Requests" value={kpiData.messageRequests} 
-            icon={<FaCommentDots className="text-indigo-600 dark:text-indigo-400 text-xl" />} color="bg-indigo-50 dark:bg-indigo-900/30"
+            icon={<FaCommentDots className="text-indigo-600 text-xl" />} color="bg-indigo-50"
             link="/MessageRequest"
           />
         </section>
@@ -396,15 +396,15 @@ const AdminDashboard = () => {
         {/* --- CHARTS --- */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8 lexend">
           {/* Volume Chart */}
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-gray-700 lg:col-span-2">
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 lg:col-span-2">
 
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
-              <h3 className="font-bold text-slate-700 dark:text-gray-200">Shipping Volume</h3>
+              <h3 className="font-bold text-slate-700">Shipping Volume</h3>
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full md:w-auto">
                 <select 
                   value={filterMode}
                   onChange={(e) => setFilterMode(e.target.value)}
-                  className="text-sm border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800 rounded-md text-slate-600 dark:text-gray-300 focus:ring-blue-500"
+                  className="text-sm border-slate-200 bg-slate-50 rounded-md text-slate-600 focus:ring-blue-500"
                 >
                   <option value="preset">Preset</option>
                   <option value="custom">Custom Range</option>
@@ -413,7 +413,7 @@ const AdminDashboard = () => {
                   <select 
                     value={volumeFilter}
                     onChange={(e) => setVolumeFilter(e.target.value)}
-                    className="text-sm border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800 rounded-md text-slate-600 dark:text-gray-300 focus:ring-blue-500"
+                    className="text-sm border-slate-200 bg-slate-50 rounded-md text-slate-600 focus:ring-blue-500"
                   >
                     <option value="week">Last 7 Days</option>
                     <option value="last30">Last 30 Days</option>
@@ -427,14 +427,14 @@ const AdminDashboard = () => {
                       type="date"
                       value={fromDate || ''}
                       onChange={(e) => setFromDate(e.target.value)}
-                      className="text-sm border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800 rounded-md text-slate-600 dark:text-gray-300 focus:ring-blue-500 px-2 py-1"
+                      className="text-sm border-slate-200 bg-slate-50 rounded-md text-slate-600 focus:ring-blue-500 px-2 py-1"
                     />
-                    <span className="text-slate-500 dark:text-gray-400">to</span>
+                    <span className="text-slate-500">to</span>
                     <input
                       type="date"
                       value={toDate || ''}
                       onChange={(e) => setToDate(e.target.value)}
-                      className="text-sm border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800 rounded-md text-slate-600 dark:text-gray-300 focus:ring-blue-500 px-2 py-1"
+                      className="text-sm border-slate-200 bg-slate-50 rounded-md text-slate-600 focus:ring-blue-500 px-2 py-1"
                     />
                   </div>
                 )}
@@ -449,7 +449,7 @@ const AdminDashboard = () => {
                   scales: { 
                     y: { 
                       beginAtZero: true, 
-                      grid: { borderDash: [4, 4], color: 'rgba(148, 163, 184, 0.2)' } // slate-400/20 for light/dark
+                      grid: { borderDash: [4, 4], color: 'rgba(148, 163, 184, 0.2)' } // slate-400/20
                     }, 
                     x: { grid: { display: false } } 
                   }
@@ -459,9 +459,9 @@ const AdminDashboard = () => {
           </div>
 
           {/* Status Doughnut */}
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-gray-700">
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
 
-            <h3 className="font-bold text-slate-700 dark:text-gray-200 mb-4 lexend">Status Breakdown</h3>
+            <h3 className="font-bold text-slate-700 mb-4 lexend">Status Breakdown</h3>
             <div className="h-48 relative flex justify-center">
               <Doughnut 
                 data={statusDistributionData} 
@@ -472,7 +472,7 @@ const AdminDashboard = () => {
               />
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div className="text-center">
-                  <span className="block text-2xl font-bold text-slate-800 dark:text-gray-200">{kpiData.totalPackages}</span>
+                  <span className="block text-2xl font-bold text-slate-800">{kpiData.totalPackages}</span>
                 </div>
               </div>
             </div>
@@ -483,34 +483,34 @@ const AdminDashboard = () => {
         <section className={`grid grid-cols-1 gap-6 ${userRole === 'admin' ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
           
           {/* 1. ACTION REQUIRED */}
-          <div className="lexend bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-slate-100 dark:border-gray-700 flex flex-col h-[400px]">
-            <div className="p-4 border-b border-slate-100 dark:border-gray-700 flex justify-between items-center">
-              <h3 className="font-bold text-slate-700 dark:text-gray-200 flex items-center gap-2">
+          <div className="lexend bg-white rounded-xl shadow-sm border border-slate-100 flex flex-col h-[400px]">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="font-bold text-slate-700 flex items-center gap-2">
                 <FaExclamationTriangle className="text-red-500" /> Action Required
               </h3>
-              <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 px-2 py-0.5 rounded-full font-bold">
+              <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold">
                 {attentionItems.length}
               </span>
             </div>
             <div className="flex-1 p-3 overflow-y-auto custom-scrollbar space-y-2">
               {attentionItems.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-slate-400 dark:text-gray-500">
-                  <FaCheckCircle className="text-4xl mb-3 text-emerald-100 dark:text-emerald-900/50" />
+                <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                  <FaCheckCircle className="text-4xl mb-3 text-emerald-100" />
                   <p>All clear! No urgent items.</p>
                 </div>
               ) : (
                 attentionItems.map((item, index) => (
                   <div key={`${item.type}-${item.id}-${index}`} className={`flex items-center justify-between p-3 rounded-lg border ${item.color} bg-opacity-30`}>
                     <div className="flex items-center gap-3">
-                      <div className="p-2 bg-white dark:bg-gray-700 rounded-full shadow-sm">
+                      <div className="p-2 bg-white rounded-full shadow-sm">
                         {item.icon}
                       </div>
                       <div>
-                        <h4 className="text-sm font-semibold text-slate-800 dark:text-gray-200">{item.title}</h4>
-                        <p className="text-xs text-slate-500 dark:text-gray-400">{item.sub}</p>
+                        <h4 className="text-sm font-semibold text-slate-800">{item.title}</h4>
+                        <p className="text-xs text-slate-500">{item.sub}</p>
                       </div>
                     </div>
-                    <Link to={item.link} className="text-xs px-3 py-1.5 bg-white dark:bg-gray-700 border border-slate-200 dark:border-gray-600 rounded hover:bg-slate-50 dark:hover:bg-gray-600 text-slate-600 dark:text-gray-300 flex items-center gap-1 shadow-sm">
+                    <Link to={item.link} className="text-xs px-3 py-1.5 bg-white border border-slate-200 rounded hover:bg-slate-50 text-slate-600 flex items-center gap-1 shadow-sm">
                       View <FaArrowRight size={10} />
                     </Link>
                   </div>
@@ -520,28 +520,28 @@ const AdminDashboard = () => {
           </div>
 
           {/* 2. RECENT BOOKINGS (Restored) */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-slate-100 dark:border-gray-700 flex flex-col h-[400px]">
-            <div className="p-4 border-b border-slate-100 dark:border-gray-700 flex justify-between items-center">
-              <h3 className="font-bold text-slate-700 dark:text-gray-200 flex items-center gap-2 lexend">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-100 flex flex-col h-[400px]">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="font-bold text-slate-700 flex items-center gap-2 lexend">
                 <FaClipboardList className="text-blue-500" /> Recent Bookings
               </h3>
-              <Link to="/ShipmentRequest" className="text-xs text-blue-600 dark:text-blue-400 font-medium hover:underline">View All</Link>
+              <Link to="/ShipmentRequest" className="text-xs text-blue-600 font-medium hover:underline">View All</Link>
             </div>
             <div className="flex-1 p-2 overflow-y-auto custom-scrollbar">
               {recentBookings.length === 0 ? (
-                 <div className="h-full flex flex-col items-center justify-center text-slate-400 dark:text-gray-500">
+                 <div className="h-full flex flex-col items-center justify-center text-slate-400">
                     <p className="text-sm">No recent bookings</p>
                  </div>
               ) : (
                 <ul className="space-y-1">
                   {recentBookings.map(r => (
-                    <li key={r.id} className="p-3 hover:bg-slate-50 dark:hover:bg-gray-700 rounded-lg transition-colors flex justify-between items-start">
+                    <li key={r.id} className="p-3 hover:bg-slate-50 rounded-lg transition-colors flex justify-between items-start">
                       <div>
-                        <div className="font-medium text-slate-700 dark:text-gray-200 text-sm">{r.name || "Unknown Sender"}</div>
-                        <div className="text-xs text-slate-400 dark:text-gray-500">{r.serviceType || "Standard"} • {formatDate(r.requestTime)}</div>
+                        <div className="font-medium text-slate-700 text-sm">{r.name || "Unknown Sender"}</div>
+                        <div className="text-xs text-slate-400">{r.serviceType || "Standard"} • {formatDate(r.requestTime)}</div>
                       </div>
                       <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-                        (r.status || "").toLowerCase() === 'accepted' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-600'
+                        (r.status || "").toLowerCase() === 'accepted' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'
                       }`}>
                         {r.status || "Pending"}
                       </span>
@@ -554,22 +554,22 @@ const AdminDashboard = () => {
 
           {/* 3. ACTIVITY LOG (ADMIN ONLY) */}
           {userRole === 'admin' && (
-            <div className="lexend bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-slate-100 dark:border-gray-700 flex flex-col h-[400px]">
-              <div className="p-4 border-b border-slate-100 dark:border-gray-700 flex justify-between items-center">
-                <h3 className="font-bold text-slate-700 dark:text-gray-200 flex items-center gap-2">
-                  <FaBoxOpen className="text-slate-400 dark:text-gray-500" /> System Activity
+            <div className="lexend bg-white rounded-xl shadow-sm border border-slate-100 flex flex-col h-[400px]">
+              <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+                <h3 className="font-bold text-slate-700 flex items-center gap-2">
+                  <FaBoxOpen className="text-slate-400" /> System Activity
                 </h3>
               </div>
               <div className="flex-1 p-2 overflow-y-auto custom-scrollbar">
                 <ul className="space-y-1">
                   {recentUpdates.map(u => (
-                    <li key={u.id} className="p-3 text-xs border-l-2 border-slate-200 dark:border-gray-700 ml-2 hover:border-blue-500 dark:hover:border-blue-400 transition-colors">
-                      <p className="text-slate-600 dark:text-gray-300 mb-1">
-                        <span className="font-semibold text-slate-800 dark:text-gray-200">
+                    <li key={u.id} className="p-3 text-xs border-l-2 border-slate-200 ml-2 hover:border-blue-500 transition-colors">
+                      <p className="text-slate-600 mb-1">
+                        <span className="font-semibold text-slate-800">
                           {u.type ? u.type.replace(/_/g, " ").toUpperCase() : "UPDATE"}
                         </span>
                       </p>
-                      <p className="text-slate-400 dark:text-gray-500">{formatDate(u.timestamp)}</p>
+                      <p className="text-slate-400">{formatDate(u.timestamp)}</p>
                     </li>
                   ))}
                 </ul>
@@ -585,10 +585,10 @@ const AdminDashboard = () => {
 
 // --- Sub-Component ---
 const KpiCard = ({ title, value, icon, color, link }) => (
-  <Link to={link || "#"} className="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-gray-700 hover:shadow-md transition-shadow flex items-start justify-between">
+  <Link to={link || "#"} className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow flex items-start justify-between">
     <div>
-      <p className="text-slate-500 dark:text-gray-400 text-sm font-medium mb-1">{title}</p>
-      <h3 className="text-3xl font-bold text-slate-800 dark:text-gray-200">{value}</h3>
+      <p className="text-slate-500 text-sm font-medium mb-1">{title}</p>
+      <h3 className="text-3xl font-bold text-slate-800">{value}</h3>
     </div>
     <div className={`p-3 rounded-lg ${color}`}>
       {icon}
