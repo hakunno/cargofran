@@ -6,13 +6,17 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
-  signOut
+  signOut,
+  GoogleAuthProvider,
+  signInWithPopup
 } from "firebase/auth";
 import { auth, db } from "../jsfile/firebase";
 import {
   doc,
   setDoc,
-  getDoc
+  getDoc,
+  updateDoc,
+  serverTimestamp
 } from "firebase/firestore";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
@@ -28,21 +32,13 @@ const LoginModal = forwardRef(({ hideTrigger = false }, ref) => {
 
   const [error, setError] = useState("");
   const [redirectAfterLogin, setRedirectAfterLogin] = useState(null);
-  
+
   // New Loading State
   const [isLoading, setIsLoading] = useState(false);
 
   const navigate = useNavigate();
 
-  // Detect incognito mode
-  const isIncognito = async () => {
-    return new Promise((resolve) => {
-      if (typeof window === "undefined") return resolve(false);
-      const fs = window.RequestFileSystem || window.webkitRequestFileSystem;
-      if (!fs) return resolve(false);
-      fs(window.TEMPORARY, 100, () => resolve(false), () => resolve(true));
-    });
-  };
+
 
   useImperativeHandle(ref, () => ({
     openModal: (redirect) => {
@@ -68,16 +64,7 @@ const LoginModal = forwardRef(({ hideTrigger = false }, ref) => {
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
-    setIsLoading(true); // Start Spinner
-
-    // 1. Block incognito
-    const incognito = await isIncognito();
-    if (incognito) {
-      setError("Login is not allowed in incognito/private mode.");
-      toast.error("Login is not allowed in incognito mode.");
-      setIsLoading(false);
-      return;
-    }
+    setIsLoading(true);
 
     try {
       // 2. Firebase Login
@@ -85,27 +72,21 @@ const LoginModal = forwardRef(({ hideTrigger = false }, ref) => {
       const user = userCredential.user;
 
       // Force a token refresh to ensure claims/state are 100% fresh
-      await user.getIdToken(true); 
+      await user.getIdToken(true);
       // Force local user reload to sync with server
-      await user.reload(); 
+      await user.reload();
 
-      // 3. Single Device Check (Backend Call)
-      const idToken = await user.getIdToken();
-      const res = await fetch(`${API_BASE_URL}/revokeOtherSessions`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${idToken}`,
-          "Content-Type": "application/json"
-        }
-      });
-
-      if (!res.ok) throw new Error("Session setup failed");
-
-      const { sessionId } = await res.json();
+      // 3. Generate a new session ID and write it to Firestore directly.
+      // This does NOT require the local backend to be running.
+      // Any other device watching the same user doc will detect the change and log out.
+      const sessionId = crypto.randomUUID();
       localStorage.setItem("sessionId", sessionId);
 
-      // 4. Reset forceLogout flag
-      await setDoc(doc(db, "Users", user.uid), { forceLogout: null }, { merge: true });
+      await updateDoc(doc(db, "Users", user.uid), {
+        currentSessionId: sessionId,
+        lastLoginAt: serverTimestamp(),
+        forceLogout: null,
+      });
 
       // 5. Get Role for Redirection
       const userDoc = await getDoc(doc(db, "Users", user.uid));
@@ -210,6 +191,68 @@ const LoginModal = forwardRef(({ hideTrigger = false }, ref) => {
       .replace(/\b\w/g, (char) => char.toUpperCase());
   };
 
+  // === GOOGLE LOGIN ===
+  const handleGoogleLogin = async () => {
+    setError("");
+    setIsLoading(true);
+
+    try {
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+
+      // Check if a Firestore user doc already exists
+      const userDocRef = doc(db, "Users", user.uid);
+      const userSnap = await getDoc(userDocRef);
+
+      if (!userSnap.exists()) {
+        // First-time Google login — create a user doc with role "user"
+        const nameParts = (user.displayName || "").split(" ");
+        await setDoc(userDocRef, {
+          uid: user.uid,
+          firstName: nameParts[0] || "",
+          lastName: nameParts.slice(1).join(" ") || "",
+          email: user.email,
+          role: "user",
+          verified: true,
+          createdAt: serverTimestamp(),
+        });
+      }
+
+      // Single-device session enforcement (same as email/password login)
+      const sessionId = crypto.randomUUID();
+      localStorage.setItem("sessionId", sessionId);
+      await updateDoc(userDocRef, {
+        currentSessionId: sessionId,
+        lastLoginAt: serverTimestamp(),
+        forceLogout: null,
+      });
+
+      const latestSnap = await getDoc(userDocRef);
+      const userData = latestSnap.data();
+      const targetPath = redirectAfterLogin ||
+        (userData.role === "admin" || userData.role === "staff" ? "/AdminDashboard" : "/");
+
+      toast.success(`Welcome${userSnap.exists() ? " back" : ""}, ${userData.firstName || user.displayName || "User"}!`);
+
+      setTimeout(() => {
+        handleClose();
+        navigate(targetPath);
+      }, 800);
+
+    } catch (error) {
+      if (error.code === "auth/popup-closed-by-user") {
+        // User dismissed the popup — not an error
+        setIsLoading(false);
+        return;
+      }
+      console.error("Google login error:", error);
+      setError("Google sign-in failed. Please try again.");
+      toast.error("Google sign-in failed.");
+      setIsLoading(false);
+    }
+  };
+
   return (
     <>
       {!hideTrigger && (
@@ -298,14 +341,58 @@ const LoginModal = forwardRef(({ hideTrigger = false }, ref) => {
               </Form.Group>
               <Button variant="primary" type="submit" className="lexend w-100" disabled={isLoading}>
                 {isLoading ? (
-                    <>
-                        <Spinner animation="border" size="sm" className="me-2" />
-                        Logging in...
-                    </>
+                  <>
+                    <Spinner animation="border" size="sm" className="me-2" />
+                    Logging in...
+                  </>
                 ) : (
-                    "Log In"
+                  "Log In"
                 )}
               </Button>
+
+              {/* Divider */}
+              <div className="d-flex align-items-center my-3">
+                <hr className="flex-grow-1" />
+                <span className="mx-2 text-muted small">or</span>
+                <hr className="flex-grow-1" />
+              </div>
+
+              {/* Google Sign-In Button */}
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                disabled={isLoading}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "10px",
+                  width: "100%",
+                  padding: "10px 16px",
+                  border: "1px solid #dadce0",
+                  borderRadius: "6px",
+                  background: "#fff",
+                  cursor: isLoading ? "not-allowed" : "pointer",
+                  fontSize: "15px",
+                  fontWeight: 500,
+                  color: "#3c4043",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
+                  transition: "box-shadow 0.2s",
+                }}
+                onMouseEnter={e => e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.2)"}
+                onMouseLeave={e => e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.12)"}
+              >
+                {/* Official Google SVG logo */}
+                <svg width="20" height="20" viewBox="0 0 48 48">
+                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+                  <path fill="none" d="M0 0h48v48H0z" />
+                </svg>
+                Continue with Google
+              </button>
+
               <div className="lexend mt-3 text-center">
                 <a href="#" onClick={(e) => { e.preventDefault(); changeView("signup"); }}>
                   First time? Sign up
@@ -381,7 +468,7 @@ const LoginModal = forwardRef(({ hideTrigger = false }, ref) => {
                 />
               </Form.Group>
               <Button variant="primary" type="submit" className="w-100" disabled={isLoading}>
-                 {isLoading ? <Spinner animation="border" size="sm" /> : "Sign Up"}
+                {isLoading ? <Spinner animation="border" size="sm" /> : "Sign Up"}
               </Button>
               <div className="mt-3 lexend text-center">
                 <a href="#" onClick={(e) => { e.preventDefault(); changeView("login"); }}>

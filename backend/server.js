@@ -164,7 +164,7 @@ const registerSocket = async (socket, idToken, sessionId) => {
   });
   markSessionActivity(uid, sessionId);
 
-  sendJson(socket, { type: "session_ready" });
+  sendJson(socket, { type: "session_ready", role });
 };
 
 wss.on("connection", (socket) => {
@@ -327,7 +327,7 @@ const deleteOrphanedConversations = async () => {
       // If the document has no fields but has subcollections
       if (Object.keys(data).length === 0) {
         console.log(`Deleting orphaned conversation: ${doc.id}`);
-        
+
         // Recursively delete the document and its subcollections
         deletePromises.push(admin.firestore().recursiveDelete(doc.ref));
       }
@@ -378,21 +378,21 @@ app.post("/createUser", async (req, res) => {
 
 // Delete a user from Firebase Auth and Firestore
 app.delete("/deleteUser/:uid", async (req, res) => {
-    const { uid } = req.params;
-  
-    try {
-      // Delete user from Firebase Authentication
-      await auth.deleteUser(uid);
-  
-      // Remove user from Firestore
-      await admin.firestore().collection("Users").doc(uid).delete();
-  
-      res.status(200).json({ message: "User deleted successfully!" });
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-  
+  const { uid } = req.params;
+
+  try {
+    // Delete user from Firebase Authentication
+    await auth.deleteUser(uid);
+
+    // Remove user from Firestore
+    await admin.firestore().collection("Users").doc(uid).delete();
+
+    res.status(200).json({ message: "User deleted successfully!" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // === ADD THIS AFTER YOUR OTHER ROUTES ===
 
 // Establish new session (single device login) — NO revokeRefreshTokens

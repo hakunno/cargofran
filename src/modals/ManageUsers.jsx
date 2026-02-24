@@ -17,7 +17,7 @@ import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
 import "../assets/css/ManageUsers.css";
 import { useAuth } from "../utils/AuthContext"; // Import your auth context
-import { ToastContainer, toast } from 'react-toastify';
+import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 function ManageUsers({ show, onHide }) {
@@ -242,7 +242,7 @@ function ManageUsers({ show, onHide }) {
 
   return (
     <>
-      <ToastContainer position="top-right" autoClose={3000} />
+
       {/* Main Manage Users Modal */}
       <Modal
         show={show}
@@ -278,9 +278,9 @@ function ManageUsers({ show, onHide }) {
                 {users
                   .filter((user) => {
                     const fullName = `${user.firstName || ''} ${user.lastName || ''}`.toLowerCase();
-                    return fullName.includes(search.toLowerCase()) || 
-                           user.email.toLowerCase().includes(search.toLowerCase()) ||
-                           user.role.toLowerCase().includes(search.toLowerCase());
+                    return fullName.includes(search.toLowerCase()) ||
+                      user.email.toLowerCase().includes(search.toLowerCase()) ||
+                      user.role.toLowerCase().includes(search.toLowerCase());
                   })
                   .map((user) => (
                     <tr key={user.id} className="text-center hover:bg-gray-50">

@@ -14,9 +14,9 @@ import {
 } from 'firebase/firestore';
 import Sidebar from '../../component/adminstaff/Sidebar';
 import { getStorage, ref, getDownloadURL } from 'firebase/storage';
-import { logActivity } from "../../modals/StaffActivity.jsx"; 
+import { logActivity } from "../../modals/StaffActivity.jsx";
 import { useReactToPrint } from 'react-to-print';
-import { ToastContainer, toast } from 'react-toastify';
+import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 const storage = getStorage();
@@ -24,22 +24,22 @@ const storage = getStorage();
 const ShipmentInquiryRequests = () => {
   const [inquiries, setInquiries] = useState([]); // Pending Inquiries
   const [historyInquiries, setHistoryInquiries] = useState([]); // Accepted & Rejected Inquiries
-  
+
   const [previewUrls, setPreviewUrls] = useState({});
   const [businessPreviewUrls, setBusinessPreviewUrls] = useState({});
-  
+
   const [selectedInquiry, setSelectedInquiry] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  
+
   const [isAcceptModalOpen, setIsAcceptModalOpen] = useState(false);
-  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false); 
-  
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+
   const [packageNumberInput, setPackageNumberInput] = useState('');
-  const [inquiryToAccept, setInquiryToAccept] = useState(null); 
+  const [inquiryToAccept, setInquiryToAccept] = useState(null);
   const [zoomedImage, setZoomedImage] = useState(null);
-  
+
   const [adminName, setAdminName] = useState('');
-  
+
   // Refs for Printing
   const tableRef = useRef(); // For Main Pending Table
   const historyTableRef = useRef(); // For History Table
@@ -53,10 +53,10 @@ const ShipmentInquiryRequests = () => {
           id: docSnap.id,
           ...docSnap.data(),
         }));
-        
+
         // Filter for Pending only
-        const activeInquiries = inquiryList.filter(item => 
-            item.status !== 'Accepted' && item.status !== 'Rejected'
+        const activeInquiries = inquiryList.filter(item =>
+          item.status !== 'Accepted' && item.status !== 'Rejected'
         );
 
         const sortedInquiries = activeInquiries.sort((a, b) => new Date(b.requestTime) - new Date(a.requestTime));
@@ -66,7 +66,7 @@ const ShipmentInquiryRequests = () => {
       }
     };
     fetchInquiries();
-  }, [isHistoryModalOpen, isAcceptModalOpen]); 
+  }, [isHistoryModalOpen, isAcceptModalOpen]);
 
   // Fetch HISTORY Inquiries (Accepted OR Rejected)
   useEffect(() => {
@@ -76,13 +76,13 @@ const ShipmentInquiryRequests = () => {
         id: doc.id,
         ...doc.data()
       }));
-      
+
       list.sort((a, b) => {
         const dateA = a.acceptedAt || a.rejectedAt || a.requestTime;
         const dateB = b.acceptedAt || b.rejectedAt || b.requestTime;
         return new Date(dateB) - new Date(dateA);
       });
-      
+
       setHistoryInquiries(list);
     });
     return () => unsubscribe();
@@ -91,8 +91,8 @@ const ShipmentInquiryRequests = () => {
   // Fetch Admin Name for Report
   useEffect(() => {
     const fetchAdminName = async () => {
-        const { adminFirstName, adminLastName } = await fetchAdminDetails();
-        setAdminName(`${adminFirstName} ${adminLastName}`.trim());
+      const { adminFirstName, adminLastName } = await fetchAdminDetails();
+      setAdminName(`${adminFirstName} ${adminLastName}`.trim());
     };
     fetchAdminName();
   }, []);
@@ -104,48 +104,48 @@ const ShipmentInquiryRequests = () => {
     const fetchPreviewUrls = async () => {
       const newPackagePreviews = { ...previewUrls };
       const newBusinessPreviews = { ...businessPreviewUrls };
-      
+
       await Promise.all(
         itemsToLoad.map(async (inquiry) => {
-            if(!newPackagePreviews[inquiry.id]) {
-                const packageUrls = [];
-                if (inquiry.packages && Array.isArray(inquiry.packages)) {
-                    await Promise.all(
-                    inquiry.packages.map(async (pkg) => {
-                        let url = null;
-                        if (pkg.image) {
-                        if (pkg.image.startsWith('https://')) {
-                            url = pkg.image; 
-                        } else {
-                            try {
-                            const fileRef = ref(storage, `shipRequests/${inquiry.id}/${pkg.image}`);
-                            url = await getDownloadURL(fileRef);
-                            } catch (error) {
-                            console.error('Error fetching package image:', error);
-                            }
-                        }
-                        }
-                        packageUrls.push(url);
-                    })
-                    );
-                }
-                newPackagePreviews[inquiry.id] = packageUrls;
-
-                let businessUrl = null;
-                if (inquiry.businessPermitImage) {
-                    if (inquiry.businessPermitImage.startsWith('https://')) {
-                    businessUrl = inquiry.businessPermitImage; 
+          if (!newPackagePreviews[inquiry.id]) {
+            const packageUrls = [];
+            if (inquiry.packages && Array.isArray(inquiry.packages)) {
+              await Promise.all(
+                inquiry.packages.map(async (pkg) => {
+                  let url = null;
+                  if (pkg.image) {
+                    if (pkg.image.startsWith('https://')) {
+                      url = pkg.image;
                     } else {
-                    try {
-                        const fileRef = ref(storage, `shipRequests/${inquiry.id}/businessPermitImage/${inquiry.businessPermitImage}`);
-                        businessUrl = await getDownloadURL(fileRef);
-                    } catch (error) {
-                        console.error('Error fetching business permit image:', error);
+                      try {
+                        const fileRef = ref(storage, `shipRequests/${inquiry.id}/${pkg.image}`);
+                        url = await getDownloadURL(fileRef);
+                      } catch (error) {
+                        console.error('Error fetching package image:', error);
+                      }
                     }
-                    }
-                }
-                newBusinessPreviews[inquiry.id] = businessUrl;
+                  }
+                  packageUrls.push(url);
+                })
+              );
             }
+            newPackagePreviews[inquiry.id] = packageUrls;
+
+            let businessUrl = null;
+            if (inquiry.businessPermitImage) {
+              if (inquiry.businessPermitImage.startsWith('https://')) {
+                businessUrl = inquiry.businessPermitImage;
+              } else {
+                try {
+                  const fileRef = ref(storage, `shipRequests/${inquiry.id}/businessPermitImage/${inquiry.businessPermitImage}`);
+                  businessUrl = await getDownloadURL(fileRef);
+                } catch (error) {
+                  console.error('Error fetching business permit image:', error);
+                }
+              }
+            }
+            newBusinessPreviews[inquiry.id] = businessUrl;
+          }
         })
       );
       setPreviewUrls(newPackagePreviews);
@@ -206,10 +206,10 @@ const ShipmentInquiryRequests = () => {
       const newCustomId = maxId + 1;
 
       const newShipment = {
-        ...inquiryToAccept, 
+        ...inquiryToAccept,
         shipperName: inquiryToAccept.name,
         packageNumber: packageNumberInput.trim(),
-        customId: newCustomId, 
+        customId: newCustomId,
         dateStarted: new Date().toISOString(),
         createdTime: serverTimestamp(),
         packageStatus: 'Processing',
@@ -230,11 +230,11 @@ const ShipmentInquiryRequests = () => {
         acceptedAt: serverTimestamp(),
         packageNumber: packageNumberInput.trim(),
       });
-      
+
       await logActivity(adminFullName, `Accepted shipment inquiry ${inquiryToAccept.id} and created package ${packageNumberInput.trim()}`);
 
       setInquiries((prev) => prev.filter((i) => i.id !== inquiryToAccept.id));
-      
+
       closeModal();
       setIsAcceptModalOpen(false);
       setInquiryToAccept(null);
@@ -302,23 +302,23 @@ const ShipmentInquiryRequests = () => {
 
   const handleHistoryExportCSV = () => {
     if (historyInquiries.length === 0) {
-        toast.info("No history data to export.");
-        return;
+      toast.info("No history data to export.");
+      return;
     }
     const headers = ["Name", "Email", "Status", "Date Processed"];
     const rows = historyInquiries.map((item) => {
-        const dateProcessed = item.acceptedAt 
-            ? new Date(item.acceptedAt.toDate()).toLocaleString() 
-            : (item.rejectedAt ? new Date(item.rejectedAt.toDate()).toLocaleString() : 'N/A');
-        return [item.name, item.email, item.status, dateProcessed];
+      const dateProcessed = item.acceptedAt
+        ? new Date(item.acceptedAt.toDate()).toLocaleString()
+        : (item.rejectedAt ? new Date(item.rejectedAt.toDate()).toLocaleString() : 'N/A');
+      return [item.name, item.email, item.status, dateProcessed];
     });
     downloadCSV(headers, rows, "shipment_requests_history");
   };
 
   const downloadCSV = (headers, rows, filename) => {
     const csvContent = "data:text/csv;charset=utf-8," + [
-        headers.join(","),
-        ...rows.map((row) => row.map(escapeCsv).join(","))
+      headers.join(","),
+      ...rows.map((row) => row.map(escapeCsv).join(","))
     ].join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -365,31 +365,30 @@ const ShipmentInquiryRequests = () => {
     <div className="flex flex-col md:flex-row min-h-screen bg-gray-100">
       <Sidebar />
       <div className="flex-1 p-4 md:p-6 md:ml-64">
-        <ToastContainer position="top-right" autoClose={3000} />
-        
+
         {/* HEADER */}
         <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold text-center flex-1">Shipment Inquiry Requests</h2>
-            <button 
-                onClick={() => setIsHistoryModalOpen(true)}
-                className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 transition font-semibold"
-            >
-                Requests History
-            </button>
+          <h2 className="text-xl font-semibold text-center flex-1">Shipment Inquiry Requests</h2>
+          <button
+            onClick={() => setIsHistoryModalOpen(true)}
+            className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 transition font-semibold"
+          >
+            Requests History
+          </button>
         </div>
 
         {inquiries.length === 0 ? (
           <p className="text-center text-gray-700">No pending requests available.</p>
         ) : (
           <div ref={tableRef} className="bg-white shadow rounded-lg p-4 print-section">
-            
+
             {/* PRINT HEADER */}
             <div className="print-header hidden print:block">
-                <h2 className="text-2xl font-bold text-gray-900 text-center">SHIPMENT INQUIRY REPORTS</h2>
-                <div className="header-details">
-                    <span>Date: {currentDate}</span>
-                    <span>Status: Pending</span>
-                </div>
+              <h2 className="text-2xl font-bold text-gray-900 text-center">SHIPMENT INQUIRY REPORTS</h2>
+              <div className="header-details">
+                <span>Date: {currentDate}</span>
+                <span>Status: Pending</span>
+              </div>
             </div>
 
             <div className="overflow-x-auto overflow-y-auto max-h-[70vh] border rounded-lg">
@@ -434,25 +433,25 @@ const ShipmentInquiryRequests = () => {
 
             {/* PRINT FOOTER */}
             <div className="prepared-by hidden print:block">
-                <p>Prepared by: {adminName.toUpperCase()}</p>
+              <p>Prepared by: {adminName.toUpperCase()}</p>
             </div>
           </div>
         )}
 
         {/* BOTTOM RIGHT EXPORT/PRINT ACTIONS (PENDING) */}
         <div className="mt-4 flex justify-end gap-3 no-print">
-            <button 
-                onClick={handleExportCSV}
-                className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition font-semibold"
-            >
-                Export CSV
-            </button>
-            <button 
-                onClick={handlePrint}
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition font-semibold"
-            >
-                Print Table
-            </button>
+          <button
+            onClick={handleExportCSV}
+            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition font-semibold"
+          >
+            Export CSV
+          </button>
+          <button
+            onClick={handlePrint}
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition font-semibold"
+          >
+            Print Table
+          </button>
         </div>
       </div>
 
@@ -461,8 +460,8 @@ const ShipmentInquiryRequests = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 no-print">
           <div className="bg-white rounded-lg shadow-lg w-11/12 max-w-4xl p-6 max-h-[80vh] overflow-y-auto">
             <h3 className="text-2xl font-bold mb-4">
-                Request Details {selectedInquiry.status === 'Rejected' && <span className="text-red-500">(Rejected)</span>}
-                {selectedInquiry.status === 'Accepted' && <span className="text-green-500">(Accepted)</span>}
+              Request Details {selectedInquiry.status === 'Rejected' && <span className="text-red-500">(Rejected)</span>}
+              {selectedInquiry.status === 'Accepted' && <span className="text-green-500">(Accepted)</span>}
             </h3>
             <div className="space-y-3 text-gray-800">
               <p><strong>Name:</strong> {selectedInquiry.name}</p>
@@ -545,25 +544,25 @@ const ShipmentInquiryRequests = () => {
 
               <p><strong>Request Time:</strong> {selectedInquiry.requestTime ? new Date(selectedInquiry.requestTime).toLocaleString() : 'N/A'}</p>
             </div>
-            
+
             <div className="mt-6 flex flex-col md:flex-row gap-2 justify-center">
-                {selectedInquiry.status !== 'Rejected' && selectedInquiry.status !== 'Accepted' && (
-                    <>
-                    <button
-                        onClick={() => openAcceptModal(selectedInquiry)}
-                        className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded"
-                    >
-                        Accept
-                    </button>
-                    <button
-                        onClick={() => rejectInquiry(selectedInquiry)}
-                        className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
-                    >
-                        Reject
-                    </button>
-                    </>
-                )}
-              
+              {selectedInquiry.status !== 'Rejected' && selectedInquiry.status !== 'Accepted' && (
+                <>
+                  <button
+                    onClick={() => openAcceptModal(selectedInquiry)}
+                    className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    onClick={() => rejectInquiry(selectedInquiry)}
+                    className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+                  >
+                    Reject
+                  </button>
+                </>
+              )}
+
               <button
                 onClick={closeModal}
                 className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
@@ -578,105 +577,105 @@ const ShipmentInquiryRequests = () => {
       {/* REQUESTS HISTORY MODAL (Changed to z-40 so it is behind Details Modal) */}
       {isHistoryModalOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black bg-opacity-50 no-print">
-            <div className="bg-white rounded-lg shadow-lg w-11/12 max-w-5xl p-6 max-h-[80vh] overflow-y-auto">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-2xl font-bold">Requests History</h3>
-                    <button 
-                        onClick={() => setIsHistoryModalOpen(false)}
-                        className="text-gray-500 hover:text-gray-700 font-bold text-xl"
-                    >
-                        ✕
-                    </button>
-                </div>
-                
-                <div ref={historyTableRef} className="print-section">
-                    
-                    {/* HISTORY PRINT HEADER */}
-                    <div className="print-header hidden print:block">
-                        <h2 className="text-2xl font-bold text-gray-900 text-center">SHIPMENT INQUIRY REPORTS</h2>
-                        <div className="header-details">
-                            <span>Date: {currentDate}</span>
-                            <span>Status: History (Accepted/Rejected)</span>
-                        </div>
-                    </div>
-
-                    <div className="overflow-x-auto overflow-y-auto max-h-[70vh] border rounded-lg">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
-                                <tr>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Name</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Email</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Status</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Date Processed</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 no-print">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {historyInquiries.length > 0 ? (
-                                    historyInquiries.map((inquiry) => (
-                                        <tr key={inquiry.id} className="text-center hover:bg-gray-50">
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{inquiry.name}</td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{inquiry.email}</td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                                                {inquiry.status === 'Accepted' ? (
-                                                    <span className="bg-green-100 text-green-800 py-1 px-2 rounded-full text-xs font-semibold">Accepted</span>
-                                                ) : (
-                                                    <span className="bg-red-100 text-red-800 py-1 px-2 rounded-full text-xs font-semibold">Rejected</span>
-                                                )}
-                                            </td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                                                {inquiry.acceptedAt 
-                                                    ? new Date(inquiry.acceptedAt.toDate()).toLocaleString() 
-                                                    : (inquiry.rejectedAt ? new Date(inquiry.rejectedAt.toDate()).toLocaleString() : 'N/A')
-                                                }
-                                            </td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 no-print">
-                                                <button
-                                                    onClick={() => openModal(inquiry)}
-                                                    className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm"
-                                                >
-                                                    View Info
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))
-                                ) : (
-                                    <tr>
-                                        <td colSpan="5" className="p-4 text-center">No history found.</td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    {/* HISTORY PRINT FOOTER */}
-                    <div className="prepared-by hidden print:block">
-                        <p>Prepared by: {adminName.toUpperCase()}</p>
-                    </div>
-                </div>
-
-                {/* BOTTOM RIGHT EXPORT/PRINT ACTIONS (HISTORY) */}
-                <div className="mt-4 flex justify-end gap-3 no-print">
-                    <button 
-                        onClick={handleHistoryExportCSV}
-                        className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition font-semibold"
-                    >
-                        Export CSV
-                    </button>
-                    <button 
-                        onClick={handleHistoryPrint}
-                        className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition font-semibold"
-                    >
-                        Print Table
-                    </button>
-                    <button
-                        onClick={() => setIsHistoryModalOpen(false)}
-                        className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded transition font-semibold"
-                    >
-                        Close
-                    </button>
-                </div>
+          <div className="bg-white rounded-lg shadow-lg w-11/12 max-w-5xl p-6 max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-2xl font-bold">Requests History</h3>
+              <button
+                onClick={() => setIsHistoryModalOpen(false)}
+                className="text-gray-500 hover:text-gray-700 font-bold text-xl"
+              >
+                ✕
+              </button>
             </div>
+
+            <div ref={historyTableRef} className="print-section">
+
+              {/* HISTORY PRINT HEADER */}
+              <div className="print-header hidden print:block">
+                <h2 className="text-2xl font-bold text-gray-900 text-center">SHIPMENT INQUIRY REPORTS</h2>
+                <div className="header-details">
+                  <span>Date: {currentDate}</span>
+                  <span>Status: History (Accepted/Rejected)</span>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto overflow-y-auto max-h-[70vh] border rounded-lg">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Name</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Email</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Status</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Date Processed</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 no-print">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {historyInquiries.length > 0 ? (
+                      historyInquiries.map((inquiry) => (
+                        <tr key={inquiry.id} className="text-center hover:bg-gray-50">
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{inquiry.name}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{inquiry.email}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                            {inquiry.status === 'Accepted' ? (
+                              <span className="bg-green-100 text-green-800 py-1 px-2 rounded-full text-xs font-semibold">Accepted</span>
+                            ) : (
+                              <span className="bg-red-100 text-red-800 py-1 px-2 rounded-full text-xs font-semibold">Rejected</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                            {inquiry.acceptedAt
+                              ? new Date(inquiry.acceptedAt.toDate()).toLocaleString()
+                              : (inquiry.rejectedAt ? new Date(inquiry.rejectedAt.toDate()).toLocaleString() : 'N/A')
+                            }
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 no-print">
+                            <button
+                              onClick={() => openModal(inquiry)}
+                              className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm"
+                            >
+                              View Info
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="5" className="p-4 text-center">No history found.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* HISTORY PRINT FOOTER */}
+              <div className="prepared-by hidden print:block">
+                <p>Prepared by: {adminName.toUpperCase()}</p>
+              </div>
+            </div>
+
+            {/* BOTTOM RIGHT EXPORT/PRINT ACTIONS (HISTORY) */}
+            <div className="mt-4 flex justify-end gap-3 no-print">
+              <button
+                onClick={handleHistoryExportCSV}
+                className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition font-semibold"
+              >
+                Export CSV
+              </button>
+              <button
+                onClick={handleHistoryPrint}
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition font-semibold"
+              >
+                Print Table
+              </button>
+              <button
+                onClick={() => setIsHistoryModalOpen(false)}
+                className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded transition font-semibold"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

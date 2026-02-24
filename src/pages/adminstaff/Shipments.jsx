@@ -20,7 +20,7 @@ import AddressSelector from '../AddressSelector';
 import { logActivity } from "../../modals/StaffActivity.jsx";
 import { getStorage, ref, getDownloadURL } from 'firebase/storage';
 import { useReactToPrint } from 'react-to-print';
-import { ToastContainer, toast } from 'react-toastify';
+import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import {
   Chart as ChartJS,
@@ -921,7 +921,7 @@ const Shipments = () => {
     <div className="flex flex-col md:flex-row min-h-screen bg-gray-100">
       <Sidebar />
       <div className="flex-1 p-4 md:p-6 md:ml-64">
-        <ToastContainer position="top-right" autoClose={3000} />
+
        
         {/* --- HEADER --- */}
         <div className="flex justify-between items-center mb-6">

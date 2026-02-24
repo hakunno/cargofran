@@ -12,11 +12,11 @@ import {
   orderBy,
   serverTimestamp // Imported serverTimestamp
 } from "firebase/firestore";
-import { db, auth } from "../../jsfile/firebase"; 
+import { db, auth } from "../../jsfile/firebase";
 import Sidebar from "../../component/adminstaff/Sidebar";
-import { logActivity } from "../../modals/StaffActivity.jsx"; 
+import { logActivity } from "../../modals/StaffActivity.jsx";
 import { useReactToPrint } from 'react-to-print';
-import { ToastContainer, toast } from 'react-toastify';
+import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 const ConversationsAdmin = () => {
@@ -52,7 +52,7 @@ const ConversationsAdmin = () => {
   useEffect(() => {
     const historyRef = collection(db, "conversation_requests_history");
     const q = query(historyRef, orderBy("processedAt", "desc")); // Order by when it was processed
-    
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const convos = snapshot.docs.map((docSnap) => ({
         id: docSnap.id,
@@ -66,8 +66,8 @@ const ConversationsAdmin = () => {
   // Fetch Admin Name for Print Footer
   useEffect(() => {
     const fetchAdminName = async () => {
-        const { adminFirstName, adminLastName } = await fetchAdminDetails();
-        setAdminName(`${adminFirstName} ${adminLastName}`.trim());
+      const { adminFirstName, adminLastName } = await fetchAdminDetails();
+      setAdminName(`${adminFirstName} ${adminLastName}`.trim());
     };
     fetchAdminName();
   }, []);
@@ -105,20 +105,20 @@ const ConversationsAdmin = () => {
     // If it's a pending request, messages are in the subcollection of 'conversations'
     // If it's history, we might have stored messages in the history doc, or we fetch from original if not deleted.
     // For now, assuming pending request logic is primary for this modal.
-    if(conv.originalConversationId || conv.id) {
-        const targetId = conv.originalConversationId || conv.id;
-        const messagesRef = collection(db, "conversations", targetId, "messages");
-        const q = query(messagesRef, orderBy("timestamp", "asc"));
-        
-        // Note: If original is deleted, this might return empty. 
-        // For 'Request History', usually we just want to see who accepted/rejected it.
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+    if (conv.originalConversationId || conv.id) {
+      const targetId = conv.originalConversationId || conv.id;
+      const messagesRef = collection(db, "conversations", targetId, "messages");
+      const q = query(messagesRef, orderBy("timestamp", "asc"));
+
+      // Note: If original is deleted, this might return empty. 
+      // For 'Request History', usually we just want to see who accepted/rejected it.
+      const unsubscribe = onSnapshot(q, (snapshot) => {
         const msgs = snapshot.docs.map((docSnap) => ({
-            id: docSnap.id,
-            ...docSnap.data(),
+          id: docSnap.id,
+          ...docSnap.data(),
         }));
         setMessages(msgs);
-        });
+      });
     }
   };
 
@@ -127,17 +127,17 @@ const ConversationsAdmin = () => {
     if (!selectedConversation) return;
     const confirmApprove = window.confirm("Approve this conversation?");
     if (!confirmApprove) return;
-  
+
     try {
       const currentAdmin = auth.currentUser;
       if (!currentAdmin) {
         toast.error("Admin not logged in.");
         return;
       }
-      
+
       const { adminFirstName, adminLastName } = await fetchAdminDetails();
       const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
-      
+
       // 1. Update Active DB to 'approved' (This pushes it to Chat Window)
       await updateDoc(doc(db, "conversations", selectedConversation.id), {
         status: "approved",
@@ -168,7 +168,7 @@ const ConversationsAdmin = () => {
       toast.error("Failed to approve conversation. Please try again.");
     }
   };
-  
+
   // --- REJECT LOGIC ---
   const handleReject = async () => {
     if (!selectedConversation) return;
@@ -241,8 +241,8 @@ const ConversationsAdmin = () => {
     ]);
 
     const csvContent = "data:text/csv;charset=utf-8," + [
-        headers.join(","),
-        ...rows.map((row) => row.map(escapeCsv).join(","))
+      headers.join(","),
+      ...rows.map((row) => row.map(escapeCsv).join(","))
     ].join("\n");
 
     const encodedUri = encodeURI(csvContent);
@@ -281,8 +281,8 @@ const ConversationsAdmin = () => {
     <div className="flex flex-col md:flex-row min-h-screen">
       <Sidebar />
       <div className="flex-1 p-4 md:p-6 md:ml-64">
-        <ToastContainer position="top-right" autoClose={3000} />
-        
+
+
         <div className="d-flex justify-content-between align-items-center mb-4">
           <h2 className="text-xl font-semibold text-center m-0">Pending Conversations</h2>
           {/* Button to open History Modal */}
@@ -332,7 +332,7 @@ const ConversationsAdmin = () => {
         <Modal show={showModal} onHide={() => setShowModal(false)} size="lg">
           <Modal.Header closeButton>
             <Modal.Title>
-              Conversation Details 
+              Conversation Details
             </Modal.Title>
           </Modal.Header>
           <Modal.Body>
@@ -347,7 +347,7 @@ const ConversationsAdmin = () => {
                   <ul className="list-unstyled">
                     {messages.map((msg) => (
                       <li key={msg.id} className="mb-2">
-                        <strong>{msg.senderId === "system" ? "System" : "User"}:</strong> {msg.text} 
+                        <strong>{msg.senderId === "system" ? "System" : "User"}:</strong> {msg.text}
                         <br />
                         <small className="text-muted">({formatTimestamp(msg.timestamp)})</small>
                       </li>
@@ -365,14 +365,14 @@ const ConversationsAdmin = () => {
             </Button>
             {/* Only show Approve/Decline buttons if status is PENDING */}
             {selectedConversation?.status === 'pending' && (
-                <>
-                    <Button variant="success" onClick={handleApprove}>
-                    Accept
-                    </Button>
-                    <Button variant="danger" onClick={handleReject}>
-                    Decline
-                    </Button>
-                </>
+              <>
+                <Button variant="success" onClick={handleApprove}>
+                  Accept
+                </Button>
+                <Button variant="danger" onClick={handleReject}>
+                  Decline
+                </Button>
+              </>
             )}
           </Modal.Footer>
         </Modal>
@@ -385,68 +385,68 @@ const ConversationsAdmin = () => {
             <Modal.Title>Request History</Modal.Title>
           </Modal.Header>
           <Modal.Body>
-            
+
             <div ref={historyTableRef}>
-                {/* Print Header (Visible only in print) */}
-                <div className="print-header d-none">
-                    <h2>CONVERSATION REQUEST HISTORY</h2>
-                    <div className="header-details">
-                        <span>Date: {currentDate}</span>
-                        <span>Status: All History</span>
-                    </div>
+              {/* Print Header (Visible only in print) */}
+              <div className="print-header d-none">
+                <h2>CONVERSATION REQUEST HISTORY</h2>
+                <div className="header-details">
+                  <span>Date: {currentDate}</span>
+                  <span>Status: All History</span>
                 </div>
+              </div>
 
-                <div className="overflow-x-auto overflow-y-auto max-h-[70vh] border rounded-lg">
+              <div className="overflow-x-auto overflow-y-auto max-h-[70vh] border rounded-lg">
                 <Table className="min-w-full divide-y divide-gray-200 mb-0">
-                    <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
+                  <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
                     <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">User Name</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Email</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Status</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Processed By</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Date Processed</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">User Name</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Email</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Status</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Processed By</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Date Processed</th>
                     </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
                     {historyConversations.length > 0 ? (
-                        historyConversations.map((conv) => (
+                      historyConversations.map((conv) => (
                         <tr key={conv.id} className="text-center">
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{getFullName(conv)}</td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{conv.userEmail || "N/A"}</td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                                {conv.status === 'approved' 
-                                    ? <Badge bg="success">Approved</Badge> 
-                                    : <Badge bg="danger">Rejected</Badge>
-                                }
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{conv.processedBy || "N/A"}</td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{formatTimestamp(conv.processedAt)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{getFullName(conv)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{conv.userEmail || "N/A"}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                            {conv.status === 'approved'
+                              ? <Badge bg="success">Approved</Badge>
+                              : <Badge bg="danger">Rejected</Badge>
+                            }
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{conv.processedBy || "N/A"}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{formatTimestamp(conv.processedAt)}</td>
                         </tr>
-                        ))
+                      ))
                     ) : (
-                        <tr>
+                      <tr>
                         <td colSpan="5" className="text-center p-3">No history found.</td>
-                        </tr>
+                      </tr>
                     )}
-                    </tbody>
+                  </tbody>
                 </Table>
-                </div>
+              </div>
 
-                {/* Print Footer */}
-                <div className="prepared-by d-none">
-                    <p>Prepared by: {adminName.toUpperCase()}</p>
-                </div>
+              {/* Print Footer */}
+              <div className="prepared-by d-none">
+                <p>Prepared by: {adminName.toUpperCase()}</p>
+              </div>
             </div>
 
           </Modal.Body>
           <Modal.Footer>
             <div className="me-auto">
-                <Button variant="success" className="me-2" onClick={handleHistoryExportCSV}>
-                    Export CSV
-                </Button>
-                <Button variant="primary" onClick={handleHistoryPrint}>
-                    Print Table
-                </Button>
+              <Button variant="success" className="me-2" onClick={handleHistoryExportCSV}>
+                Export CSV
+              </Button>
+              <Button variant="primary" onClick={handleHistoryPrint}>
+                Print Table
+              </Button>
             </div>
             <Button variant="secondary" onClick={() => setShowHistoryModal(false)}>
               Close
