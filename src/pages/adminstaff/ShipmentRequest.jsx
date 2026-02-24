@@ -392,31 +392,31 @@ const ShipmentInquiryRequests = () => {
                 </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="min-w-full border-collapse border border-gray-300">
-                <thead className="bg-gray-200">
+            <div className="overflow-x-auto overflow-y-auto max-h-[70vh] border rounded-lg">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
                   <tr>
-                    <th className="p-2 border border-gray-300">Name</th>
-                    <th className="p-2 border border-gray-300">Sender Country</th>
-                    <th className="p-2 border border-gray-300">Destination Country</th>
-                    <th className="p-2 border border-gray-300">Transport Mode</th>
-                    <th className="p-2 border border-gray-300">Shipment Direction</th>
-                    <th className="p-2 border border-gray-300">Request Date</th>
-                    <th className="p-2 border border-gray-300 no-print">Actions</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Name</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Sender Country</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Destination Country</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Transport Mode</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Shipment Direction</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Request Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 no-print">Actions</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="bg-white divide-y divide-gray-200">
                   {inquiries.map((inquiry) => (
                     <tr key={inquiry.id} className="text-center hover:bg-gray-50">
-                      <td className="p-2 border border-gray-300">{inquiry.name}</td>
-                      <td className="p-2 border border-gray-300">{inquiry.senderCountry}</td>
-                      <td className="p-2 border border-gray-300">{inquiry.destinationCountry}</td>
-                      <td className="p-2 border border-gray-300">{inquiry.transportMode}</td>
-                      <td className="p-2 border border-gray-300">{inquiry.shipmentDirection}</td>
-                      <td className="p-2 border border-gray-300">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{inquiry.name}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{inquiry.senderCountry}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{inquiry.destinationCountry}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{inquiry.transportMode}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{inquiry.shipmentDirection}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                         {inquiry.requestTime ? new Date(inquiry.requestTime).toLocaleString() : 'N/A'}
                       </td>
-                      <td className="p-2 border border-gray-300 no-print">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 no-print">
                         <div className="flex flex-col md:flex-row gap-2 justify-center">
                           <button
                             onClick={() => openModal(inquiry)}
@@ -600,37 +600,37 @@ const ShipmentInquiryRequests = () => {
                         </div>
                     </div>
 
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full border-collapse border border-gray-300">
-                            <thead className="bg-gray-100">
+                    <div className="overflow-x-auto overflow-y-auto max-h-[70vh] border rounded-lg">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
                                 <tr>
-                                <th className="p-2 border border-gray-300">Name</th>
-                                <th className="p-2 border border-gray-300">Email</th>
-                                <th className="p-2 border border-gray-300">Status</th>
-                                <th className="p-2 border border-gray-300">Date Processed</th>
-                                <th className="p-2 border border-gray-300 no-print">Actions</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Name</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Email</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Status</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Date Processed</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 no-print">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody className="bg-white divide-y divide-gray-200">
                                 {historyInquiries.length > 0 ? (
                                     historyInquiries.map((inquiry) => (
                                         <tr key={inquiry.id} className="text-center hover:bg-gray-50">
-                                            <td className="p-2 border border-gray-300">{inquiry.name}</td>
-                                            <td className="p-2 border border-gray-300">{inquiry.email}</td>
-                                            <td className="p-2 border border-gray-300">
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{inquiry.name}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{inquiry.email}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                                 {inquiry.status === 'Accepted' ? (
                                                     <span className="bg-green-100 text-green-800 py-1 px-2 rounded-full text-xs font-semibold">Accepted</span>
                                                 ) : (
                                                     <span className="bg-red-100 text-red-800 py-1 px-2 rounded-full text-xs font-semibold">Rejected</span>
                                                 )}
                                             </td>
-                                            <td className="p-2 border border-gray-300">
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                                 {inquiry.acceptedAt 
                                                     ? new Date(inquiry.acceptedAt.toDate()).toLocaleString() 
                                                     : (inquiry.rejectedAt ? new Date(inquiry.rejectedAt.toDate()).toLocaleString() : 'N/A')
                                                 }
                                             </td>
-                                            <td className="p-2 border border-gray-300 no-print">
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 no-print">
                                                 <button
                                                     onClick={() => openModal(inquiry)}
                                                     className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm"

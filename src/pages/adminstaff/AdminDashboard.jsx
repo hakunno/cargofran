@@ -29,7 +29,6 @@ import { Line, Doughnut } from 'react-chartjs-2'; // Changed Bar to Line
 import {
   FaBoxOpen,
   FaShippingFast,
-  FaExclamationTriangle,
   FaClipboardList,
   FaCommentDots,
   FaComments,
@@ -562,7 +561,7 @@ const AdminDashboard = () => {
           <div className="lexend bg-white rounded-xl shadow-sm border border-slate-100 flex flex-col h-[400px]">
             <div className="p-4 border-b border-slate-100 flex justify-between items-center">
               <h3 className="font-bold text-slate-700 flex items-center gap-2">
-                <FaExclamationTriangle className="text-red-500" /> Action Required
+                Action Required
               </h3>
               <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold">
                 {attentionItems.length}
@@ -599,7 +598,7 @@ const AdminDashboard = () => {
           <div className="bg-white rounded-xl shadow-sm border border-slate-100 flex flex-col h-[400px]">
             <div className="p-4 border-b border-slate-100 flex justify-between items-center">
               <h3 className="font-bold text-slate-700 flex items-center gap-2 lexend">
-                <FaClipboardList className="text-blue-500" /> Recent Bookings
+                Recent Bookings
               </h3>
               <Link to="/ShipmentRequest" className="text-xs text-blue-600 font-medium hover:underline">View All</Link>
             </div>
@@ -633,7 +632,7 @@ const AdminDashboard = () => {
             <div className="lexend bg-white rounded-xl shadow-sm border border-slate-100 flex flex-col h-[400px]">
               <div className="p-4 border-b border-slate-100 flex justify-between items-center">
                 <h3 className="font-bold text-slate-700 flex items-center gap-2">
-                  <FaBoxOpen className="text-slate-400" /> System Activity
+                 System Activity
                 </h3>
               </div>
               <div className="flex-1 p-2 overflow-y-auto custom-scrollbar">

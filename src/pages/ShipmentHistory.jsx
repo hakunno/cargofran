@@ -162,31 +162,31 @@ const UserShipmentHistory = () => {
       {entries.length === 0 ? (
         <p className="text-center">No shipments or requests found for your account.</p>
       ) : (
-        <div className="overflow-auto">
-          <Table striped bordered hover>
-            <thead>
+        <div className="overflow-x-auto overflow-y-auto max-h-[70vh] border rounded-lg">
+          <Table className="min-w-full divide-y divide-gray-200 mb-0">
+            <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
               <tr>
-                <th className="text-center">Acceptance Status</th>
-                <th className="text-center">Package Number</th>
-                <th className="text-center">From</th>
-                <th className="text-center">Destination</th>
-                <th className="text-center">Status</th>
-                <th className="text-center">Email</th>
-                <th className="text-center">Date</th>
-                <th className="text-center">Actions</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Acceptance Status</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Package Number</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">From</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Destination</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Status</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Email</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Date</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="bg-white divide-y divide-gray-200">
               {entries.map((e) => (
                 <tr key={`${e.collection}-${e.docId}`} className="text-center">
-                  <td>{getAcceptanceStatus(e)}</td>
-                  <td>{getPackageNumber(e)}</td>
-                  <td>{e.senderCountry || "—"}</td>
-                  <td>{e.destinationCountry || "—"}</td>
-                  <td>{e.packageStatus || e.status || "—"}</td>
-                  <td>{e.email || "—"}</td>
-                  <td>{formatTimestamp(e.createdTime || e.createdAt || e.requestTime || e.dateStarted)}</td>
-                  <td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{getAcceptanceStatus(e)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{getPackageNumber(e)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{e.senderCountry || "N/A"}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{e.destinationCountry || "N/A"}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{e.packageStatus || e.status || "N/A"}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{e.email || "N/A"}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{formatTimestamp(e.createdTime || e.createdAt || e.requestTime || e.dateStarted)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                     <Button size="sm" variant="info" onClick={() => openInfoModal(e)}>
                       View
                     </Button>
@@ -221,15 +221,15 @@ const UserShipmentHistory = () => {
                 <>
                   <h6>Status History</h6>
                   {infoHistory.length === 0 ? <p>No status history available.</p> : (
-                    <div className="overflow-auto" style={{ maxHeight: '40vh' }}>
-                      <Table size="sm" striped bordered>
-                        <thead><tr><th></th><th>Status</th><th>Timestamp</th></tr></thead>
-                        <tbody>
+                    <div className="overflow-x-auto overflow-y-auto max-h-[40vh] border rounded-lg">
+                      <Table size="sm" className="min-w-full divide-y divide-gray-200 mb-0">
+                        <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm"><tr><th className="px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50"></th><th className="px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Status</th><th className="px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Timestamp</th></tr></thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
                           {infoHistory.map((h, idx) => (
                             <tr key={h.id || idx}>
-                              <td>{infoHistory.length - idx}</td>
-                              <td>{h.status}</td>
-                              <td>{formatTimestamp(h.timestamp)}</td>
+                              <td className="px-3 py-2 text-sm text-gray-900">{infoHistory.length - idx}</td>
+                              <td className="px-3 py-2 text-sm text-gray-900">{h.status}</td>
+                              <td className="px-3 py-2 text-sm text-gray-900">{formatTimestamp(h.timestamp)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -264,3 +264,4 @@ const UserShipmentHistory = () => {
 };
 
 export default UserShipmentHistory;
+

@@ -291,26 +291,26 @@ const ConversationsAdmin = () => {
           </Button>
         </div>
 
-        <div className="overflow-x-auto shadow shadow rounded-lg">
-          <Table striped bordered hover className="min-w-full">
-            <thead className="bg-gray-200">
+        <div className="overflow-x-auto overflow-y-auto max-h-[70vh] border rounded-lg">
+          <Table className="min-w-full divide-y divide-gray-200 mb-0">
+            <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
               <tr>
-                <th className="p-2">ID</th>
-                <th className="p-2">User Full Name</th>
-                <th className="p-2">Email</th>
-                <th className="p-2">Time</th>
-                <th className="p-2">Actions</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">ID</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">User Full Name</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Email</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Time</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="bg-white divide-y divide-gray-200">
               {conversations.length > 0 ? (
                 conversations.map((conv, index) => (
                   <tr key={conv.id} className="text-center">
-                    <td className="p-2">{index + 1}</td>
-                    <td className="p-2">{getFullName(conv)}</td>
-                    <td className="p-2">{conv.userEmail || "N/A"}</td>
-                    <td className="p-2">{formatTimestamp(conv.createdAt)}</td>
-                    <td className="p-2">
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{index + 1}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{getFullName(conv)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{conv.userEmail || "N/A"}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{formatTimestamp(conv.createdAt)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                       <Button variant="info" size="sm" onClick={() => handleShowDetails(conv)}>
                         Detail
                       </Button>
@@ -396,31 +396,31 @@ const ConversationsAdmin = () => {
                     </div>
                 </div>
 
-                <div className="overflow-x-auto">
-                <Table striped bordered hover className="min-w-full">
-                    <thead className="bg-gray-100">
+                <div className="overflow-x-auto overflow-y-auto max-h-[70vh] border rounded-lg">
+                <Table className="min-w-full divide-y divide-gray-200 mb-0">
+                    <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
                     <tr>
-                        <th className="p-2">User Name</th>
-                        <th className="p-2">Email</th>
-                        <th className="p-2">Status</th>
-                        <th className="p-2">Processed By</th>
-                        <th className="p-2">Date Processed</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">User Name</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Email</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Processed By</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Date Processed</th>
                     </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="bg-white divide-y divide-gray-200">
                     {historyConversations.length > 0 ? (
                         historyConversations.map((conv) => (
                         <tr key={conv.id} className="text-center">
-                            <td className="p-2">{getFullName(conv)}</td>
-                            <td className="p-2">{conv.userEmail || "N/A"}</td>
-                            <td className="p-2">
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{getFullName(conv)}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{conv.userEmail || "N/A"}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                 {conv.status === 'approved' 
                                     ? <Badge bg="success">Approved</Badge> 
                                     : <Badge bg="danger">Rejected</Badge>
                                 }
                             </td>
-                            <td className="p-2">{conv.processedBy || "N/A"}</td>
-                            <td className="p-2">{formatTimestamp(conv.processedAt)}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{conv.processedBy || "N/A"}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{formatTimestamp(conv.processedAt)}</td>
                         </tr>
                         ))
                     ) : (

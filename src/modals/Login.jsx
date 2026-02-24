@@ -15,7 +15,9 @@ import {
   getDoc
 } from "firebase/firestore";
 
-const LoginModal = forwardRef(({ setIsOpen, hideTrigger = false }, ref) => {
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+const LoginModal = forwardRef(({ hideTrigger = false }, ref) => {
   const [show, setShow] = useState(false);
   const [view, setView] = useState("login");
   const [firstName, setFirstName] = useState("");
@@ -89,7 +91,7 @@ const LoginModal = forwardRef(({ setIsOpen, hideTrigger = false }, ref) => {
 
       // 3. Single Device Check (Backend Call)
       const idToken = await user.getIdToken();
-      const res = await fetch("http://localhost:5000/revokeOtherSessions", {
+      const res = await fetch(`${API_BASE_URL}/revokeOtherSessions`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${idToken}`,
@@ -411,6 +413,25 @@ export const LogoutModal = forwardRef((props, ref) => {
 
   const handleLogout = async () => {
     try {
+      const sessionId = localStorage.getItem("sessionId");
+      const currentUser = auth.currentUser;
+
+      if (currentUser && sessionId) {
+        try {
+          const idToken = await currentUser.getIdToken();
+          await fetch(`${API_BASE_URL}/logoutSession`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${idToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ sessionId }),
+          });
+        } catch (error) {
+          console.error("Server logout session cleanup failed:", error);
+        }
+      }
+
       localStorage.removeItem("sessionId");
 
       handleClose();

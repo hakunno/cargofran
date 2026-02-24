@@ -262,19 +262,19 @@ function ManageUsers({ show, onHide }) {
             onChange={(e) => setSearch(e.target.value)}
             className="mb-3"
           />
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse border border-gray-300">
-              <thead>
-                <tr className="bg-gray-200">
-                  <th className="p-2 border">Email</th>
-                  <th className="p-2 border">Name</th>
-                  <th className="p-2 border">Role</th>
-                  <th className="p-2 border"></th>
-                  <th className="p-2 border">Reset Password</th>
-                  <th className="p-2 border">Delete</th>
+          <div className="overflow-x-auto overflow-y-auto max-h-[70vh] border rounded-lg">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Email</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Name</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Role</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50"></th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Reset Password</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Delete</th>
                 </tr>
               </thead>
-              <tbody className="max-h-[300px] overflow-y-auto">
+              <tbody className="bg-white divide-y divide-gray-200">
                 {users
                   .filter((user) => {
                     const fullName = `${user.firstName || ''} ${user.lastName || ''}`.toLowerCase();
@@ -283,11 +283,11 @@ function ManageUsers({ show, onHide }) {
                            user.role.toLowerCase().includes(search.toLowerCase());
                   })
                   .map((user) => (
-                    <tr key={user.id} className="text-center">
-                      <td className="p-2 border">{user.email}</td>
-                      <td className="p-2 border">{user.firstName} {user.lastName}</td>
-                      <td className="p-2 border">{user.role}</td>
-                      <td className="p-2 border">
+                    <tr key={user.id} className="text-center hover:bg-gray-50">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{user.email}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{user.firstName} {user.lastName}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{user.role}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                         <Button
                           variant={user.role === "staff" ? "danger" : "success"}
                           onClick={() =>
@@ -305,7 +305,7 @@ function ManageUsers({ show, onHide }) {
                             : `Change to ${user.role === "staff" ? "User" : "Staff"}`}
                         </Button>
                       </td>
-                      <td className="p-2 border">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                         <Button
                           variant="warning"
                           onClick={() => handleResetPassword(user.email)}
@@ -316,7 +316,7 @@ function ManageUsers({ show, onHide }) {
                             : "Send Reset Email"}
                         </Button>
                       </td>
-                      <td className="p-2 border">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                         {role === "admin" && user.role !== "admin" && (
                           <Button
                             variant="danger"

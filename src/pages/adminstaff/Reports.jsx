@@ -459,13 +459,13 @@ const Reports = () => {
                 <TableContainer headers={["Package #", "Date", "Shipper", "Dest", "Mode", "Status", "Paid"]}>
                     {processedShipments.length > 0 ? processedShipments.map((s) => (
                         <tr key={s.id} className="bg-white border-b print:border-gray-300">
-                            <td className="px-3 py-2 border font-bold text-gray-900">{s.packageNumber}</td>
-                            <td className="px-3 py-2 border">{s.dateStarted ? new Date(s.dateStarted).toLocaleDateString() : 'N/A'}</td>
-                            <td className="px-3 py-2 border">{s.shipperName}</td>
-                            <td className="px-3 py-2 border">{s.destinationCountry}</td>
-                            <td className="px-3 py-2 border">{s.transportMode}</td>
-                            <td className="px-3 py-2 border">{s.packageStatus}</td>
-                            <td className="px-3 py-2 border text-center">{s.paid ? "Yes" : "No"}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-bold text-gray-900">{s.packageNumber}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{s.dateStarted ? new Date(s.dateStarted).toLocaleDateString() : 'N/A'}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{s.shipperName}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{s.destinationCountry}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{s.transportMode}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{s.packageStatus}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 text-center">{s.paid ? "Yes" : "No"}</td>
                         </tr>
                     )) : <NoDataRow colSpan={7} />}
                 </TableContainer>
@@ -476,10 +476,10 @@ const Reports = () => {
                 <TableContainer headers={["Name", "Email", "Status", "Date Processed"]}>
                     {processedRequests.length > 0 ? processedRequests.map((r) => (
                         <tr key={r.id} className="bg-white border-b print:border-gray-300">
-                            <td className="px-3 py-2 border font-bold text-gray-900">{r.name}</td>
-                            <td className="px-3 py-2 border">{r.email}</td>
-                            <td className="px-3 py-2 border"><StatusBadge status={r.status} /></td>
-                            <td className="px-3 py-2 border">{(r.acceptedAt || r.rejectedAt || r.requestTime) ? getDate(r).toLocaleDateString() : 'N/A'}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-bold text-gray-900">{r.name}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{r.email}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900"><StatusBadge status={r.status} /></td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{(r.acceptedAt || r.rejectedAt || r.requestTime) ? getDate(r).toLocaleDateString() : 'N/A'}</td>
                         </tr>
                     )) : <NoDataRow colSpan={4} />}
                 </TableContainer>
@@ -490,11 +490,11 @@ const Reports = () => {
                 <TableContainer headers={["User Name", "Email", "Status", "Processed By", "Date"]}>
                     {processedConversations.length > 0 ? processedConversations.map((c) => (
                         <tr key={c.id} className="bg-white border-b print:border-gray-300">
-                            <td className="px-3 py-2 border font-bold text-gray-900">{c.userFullName || c.firstName}</td>
-                            <td className="px-3 py-2 border">{c.userEmail}</td>
-                            <td className="px-3 py-2 border"><StatusBadge status={c.status} /></td>
-                            <td className="px-3 py-2 border">{c.processedBy || 'System'}</td>
-                            <td className="px-3 py-2 border">{getDate(c).toLocaleDateString()}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-bold text-gray-900">{c.userFullName || c.firstName}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{c.userEmail}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900"><StatusBadge status={c.status} /></td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{c.processedBy || 'System'}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{getDate(c).toLocaleDateString()}</td>
                         </tr>
                     )) : <NoDataRow colSpan={5} />}
                 </TableContainer>
@@ -537,12 +537,12 @@ const ChartCard = ({ title, children }) => (
 );
 
 const TableContainer = ({ headers, children }) => (
-    <div className="overflow-x-auto">
-        <table className="min-w-full text-sm text-left text-gray-500 border-collapse">
-            <thead className="text-xs text-gray-700 uppercase bg-gray-100 border-b-2 border-gray-300">
-                <tr>{headers.map(h => <th key={h} className="px-3 py-3 border">{h}</th>)}</tr>
+    <div className="overflow-x-auto overflow-y-auto max-h-[70vh] border rounded-lg">
+        <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
+                <tr>{headers.map(h => <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">{h}</th>)}</tr>
             </thead>
-            <tbody>{children}</tbody>
+            <tbody className="bg-white divide-y divide-gray-200">{children}</tbody>
         </table>
     </div>
 );
@@ -566,3 +566,4 @@ const StatusBadge = ({ status }) => {
 };
 
 export default Reports;
+
