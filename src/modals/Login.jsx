@@ -11,6 +11,7 @@ import {
   signInWithPopup
 } from "firebase/auth";
 import { auth, db } from "../jsfile/firebase";
+import { logActivity } from "./StaffActivity";
 import {
   doc,
   setDoc,
@@ -102,6 +103,12 @@ const LoginModal = forwardRef(({ hideTrigger = false }, ref) => {
 
       // 6. UI Updates
       toast.success(`Welcome back, ${userData.firstName || "User"}!`);
+
+      // Log login activity for admin and staff only
+      if (userData.role === "admin" || userData.role === "staff") {
+        const fullName = `${userData.firstName || ""} ${userData.lastName || ""}`.trim() || user.email;
+        logActivity(fullName, "Logged in");
+      }
 
       // 7. NAVIGATE with DELAY
       // We wait 800ms to allow your AuthProvider/Context to finish fetching 
@@ -234,6 +241,12 @@ const LoginModal = forwardRef(({ hideTrigger = false }, ref) => {
         (userData.role === "admin" || userData.role === "staff" ? "/AdminDashboard" : "/");
 
       toast.success(`Welcome${userSnap.exists() ? " back" : ""}, ${userData.firstName || user.displayName || "User"}!`);
+
+      // Log login activity for admin and staff only
+      if (userData.role === "admin" || userData.role === "staff") {
+        const fullName = `${userData.firstName || ""} ${userData.lastName || ""}`.trim() || user.displayName || user.email;
+        logActivity(fullName, "Logged in");
+      }
 
       setTimeout(() => {
         handleClose();

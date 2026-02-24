@@ -27,6 +27,8 @@ const ActivityModal = ({ show, onHide }) => {
     canceled: false,
     acceptedMessage: false,
     acceptedShipment: false,
+    loggedIn: false,
+    loggedOut: false,
   });
 
   useEffect(() => {
@@ -98,6 +100,8 @@ const ActivityModal = ({ show, onHide }) => {
         if (filters.canceled && activity.action.includes("Canceled")) matches = true;
         if (filters.acceptedMessage && activity.action.includes("Approved conversation")) matches = true;
         if (filters.acceptedShipment && activity.action.includes("Accepted shipment")) matches = true;
+        if (filters.loggedIn && activity.action.includes("Logged in")) matches = true;
+        if (filters.loggedOut && activity.action.includes("Logged out")) matches = true;
         if (!matches) return false;
       }
 
@@ -122,6 +126,8 @@ const ActivityModal = ({ show, onHide }) => {
       canceled: false,
       acceptedMessage: false,
       acceptedShipment: false,
+      loggedIn: false,
+      loggedOut: false,
     });
   };
 
@@ -285,6 +291,18 @@ const ActivityModal = ({ show, onHide }) => {
               checked={filters.acceptedShipment}
               onChange={() => handleFilterChange('acceptedShipment')}
             />
+            <Form.Check
+              type="checkbox"
+              label="Logged In"
+              checked={filters.loggedIn}
+              onChange={() => handleFilterChange('loggedIn')}
+            />
+            <Form.Check
+              type="checkbox"
+              label="Logged Out"
+              checked={filters.loggedOut}
+              onChange={() => handleFilterChange('loggedOut')}
+            />
           </div>
 
           {/* Clear Filters + Export Buttons */}
@@ -308,32 +326,32 @@ const ActivityModal = ({ show, onHide }) => {
         </div>
 
         <div className="overflow-x-auto overflow-y-auto max-h-[70vh] border rounded-lg">
-        <Table className="min-w-full divide-y divide-gray-200 mb-0" responsive>
-          <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">User Name</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Action</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Timestamp</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {filteredActivities.length === 0 ? (
+          <Table className="min-w-full divide-y divide-gray-200 mb-0" responsive>
+            <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
               <tr>
-                <td colSpan="3" className="text-center text-muted py-4">
-                  No activities match the current filters.
-                </td>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">User Name</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Action</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Timestamp</th>
               </tr>
-            ) : (
-              filteredActivities.map((activity) => (
-                <tr key={activity.id}>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{activity.userName}</td>
-                  <td className="px-4 py-3 text-sm text-gray-900">{activity.displayedAction}</td> {/* Use displayedAction for display */}
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{activity.formattedTimestamp}</td>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredActivities.length === 0 ? (
+                <tr>
+                  <td colSpan="3" className="text-center text-muted py-4">
+                    No activities match the current filters.
+                  </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </Table>
+              ) : (
+                filteredActivities.map((activity) => (
+                  <tr key={activity.id}>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{activity.userName}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900">{activity.displayedAction}</td> {/* Use displayedAction for display */}
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{activity.formattedTimestamp}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </Table>
         </div>
       </Modal.Body>
       <Modal.Footer>

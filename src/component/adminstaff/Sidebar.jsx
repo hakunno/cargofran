@@ -5,33 +5,42 @@ import { useAuth } from "../../utils/AuthContext";
 import ManageUsers from "../../modals/ManageUsers";
 import StaffActivityModal from "../../modals/StaffActivity";
 import { auth } from "../../jsfile/firebase";
+import { db } from "../../jsfile/firebase";
 import { signOut } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { logActivity } from "../../modals/StaffActivity";
+import { useAdminNotifications } from "../../hooks/useAdminNotifications";
 
 // Icons
-import { 
-  FaSignOutAlt, 
-  FaTimes, 
-  FaTachometerAlt, 
-  FaBoxOpen, 
-  FaClipboardList, 
-  FaEnvelope, 
-  FaChartBar, 
-  FaUsers, 
+import {
+  FaSignOutAlt,
+  FaTimes,
+  FaTachometerAlt,
+  FaBoxOpen,
+  FaClipboardList,
+  FaEnvelope,
+  FaChartBar,
+  FaUsers,
   FaHistory,
-  FaCommentDots
+  FaCommentDots,
+  FaBell
 } from "react-icons/fa";
 
-const Sidebar = ({ mobileOpen, setMobileOpen }) => { 
+const Sidebar = ({ mobileOpen, setMobileOpen }) => {
   const location = useLocation();
   const { user, role, loading } = useAuth();
-  
+
   const [manageUsersShow, setManageUsersShow] = useState(false);
   const [showStaffActivityModal, setShowStaffActivityModal] = useState(false);
-  
+
+  // Live notification counts from Firestore
+  const { shipmentRequests, messageRequests, liveChats } = useAdminNotifications();
+  const totalNotifications = shipmentRequests + messageRequests + liveChats;
+
   // Local state fallback
   const [localOpen, setLocalOpen] = useState(false);
   const isSidebarOpen = mobileOpen !== undefined ? mobileOpen : localOpen;
-  
+
   const toggleSidebar = (state) => {
     if (setMobileOpen) setMobileOpen(state);
     else setLocalOpen(state);
@@ -41,6 +50,15 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
 
   const handleLogout = async () => {
     try {
+      // Fetch the user's name to log the activity before signing out
+      if (user?.uid) {
+        const userDoc = await getDoc(doc(db, "Users", user.uid));
+        if (userDoc.exists()) {
+          const { firstName, lastName } = userDoc.data();
+          const fullName = `${firstName || ""} ${lastName || ""}`.trim() || user.email;
+          await logActivity(fullName, "Logged out");
+        }
+      }
       await signOut(auth);
     } catch (error) {
       console.error("Error signing out:", error);
@@ -73,16 +91,14 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
       {/* Mobile Overlay */}
       <div
         onClick={() => toggleSidebar(false)}
-        className={`fixed inset-0 z-30 bg-slate-900/60 backdrop-blur-sm transition-opacity duration-300 md:hidden ${
-          isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-        }`}
+        className={`fixed inset-0 z-30 bg-slate-900/60 backdrop-blur-sm transition-opacity duration-300 md:hidden ${isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+          }`}
       />
 
       {/* Sidebar Container - KEPT w-64 TO MATCH YOUR ORIGINAL LAYOUT */}
       <aside
-        className={`fixed top-0 left-0 z-40 w-64 h-screen bg-white border-r border-slate-200 flex flex-col shadow-2xl md:shadow-none transition-transform duration-300 ease-in-out ${
-          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } md:translate-x-0`}
+        className={`fixed top-0 left-0 z-40 w-64 h-screen bg-white border-r border-slate-200 flex flex-col shadow-2xl md:shadow-none transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          } md:translate-x-0`}
       >
         {/* --- HEADER --- */}
         <div className="flex flex-col items-center justify-center py-5 border-b border-slate-100 relative">
@@ -92,23 +108,33 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
           >
             <FaTimes size={20} />
           </button>
-          
+
           <div className="w-full px-6 flex justify-center mb-2">
-              <img
-                src={Logo}
-                className="h-14 w-auto object-contain drop-shadow-sm" 
-                alt="Company Logo"
-              />
+            <img
+              src={Logo}
+              className="h-14 w-auto object-contain drop-shadow-sm"
+              alt="Company Logo"
+            />
           </div>
-          
+
+          {/* Notification bell showing total unread */}
+          {totalNotifications > 0 && (
+            <div className="relative flex items-center justify-center mt-1">
+              <FaBell className="text-teal-600 text-lg" />
+              <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow">
+                {totalNotifications > 99 ? "99+" : totalNotifications}
+              </span>
+            </div>
+          )}
+
           <div className="px-3 py-0.5 bg-teal-50 text-teal-700 rounded-full text-[10px] font-bold tracking-widest uppercase border border-teal-100">
             {role === 'admin' ? 'Administrator' : 'Staff Portal'}
           </div>
         </div>
 
         {/* --- NAVIGATION --- */}
-        <nav 
-          ref={navRef} 
+        <nav
+          ref={navRef}
           className="flex-1 overflow-y-auto px-3 py-4 space-y-5 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent"
         >
           {/* Group 1: Overview */}
@@ -129,7 +155,7 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
             </p>
             <div className="space-y-1">
               <NavItem to="/Shipments" icon={<FaBoxOpen />} label="Shipments" location={location} />
-              <NavItem to="/ShipmentRequest" icon={<FaClipboardList />} label="Requests" location={location} />
+              <NavItem to="/ShipmentRequest" icon={<FaClipboardList />} label="Requests" location={location} badge={shipmentRequests} />
             </div>
           </div>
 
@@ -139,8 +165,8 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
               Communication
             </p>
             <div className="space-y-1">
-              <NavItem to="/MessageRequest" icon={<FaEnvelope />} label="Inbox" location={location} />
-              <NavItem to="/AdminMessages" icon={<FaCommentDots />} label="Live Chats" location={location} />
+              <NavItem to="/MessageRequest" icon={<FaEnvelope />} label="Inbox" location={location} badge={messageRequests} />
+              <NavItem to="/AdminMessages" icon={<FaCommentDots />} label="Live Chats" location={location} badge={liveChats} />
             </div>
           </div>
 
@@ -182,7 +208,7 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
               <p className="text-[10px] text-slate-500 capitalize">{role}</p>
             </div>
           </div>
-          
+
           <button
             onClick={handleLogout}
             className="w-full group flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all duration-200 shadow-sm"
@@ -201,24 +227,27 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
 };
 
 // --- Nav Item Component ---
-const NavItem = ({ to, icon, label, location }) => {
+const NavItem = ({ to, icon, label, location, badge = 0 }) => {
   const isActive = location.pathname === to || location.pathname.startsWith(`${to}/`);
-  
+
   return (
     <Link
       to={to}
-      className={`relative flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 group ${
-        isActive
-          ? "bg-teal-600 text-white shadow-md shadow-teal-200/50"
-          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-      }`}
+      className={`relative flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 group ${isActive
+        ? "bg-teal-600 text-white shadow-md shadow-teal-200/50"
+        : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+        }`}
     >
-      <span className={`flex items-center justify-center w-4 h-4 mr-3 transition-colors ${
-        isActive ? "text-teal-100" : "text-slate-400 group-hover:text-slate-600"
-      }`}>
+      <span className={`flex items-center justify-center w-4 h-4 mr-3 transition-colors ${isActive ? "text-teal-100" : "text-slate-400 group-hover:text-slate-600"
+        }`}>
         {icon}
       </span>
-      <span>{label}</span>
+      <span className="flex-1">{label}</span>
+      {badge > 0 && (
+        <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 shadow">
+          {badge > 99 ? "99+" : badge}
+        </span>
+      )}
     </Link>
   );
 };
