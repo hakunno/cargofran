@@ -30,6 +30,14 @@ const ConversationsAdmin = () => {
 
   const historyTableRef = useRef();
 
+  const [now, setNow] = useState(Date.now());
+
+  // Live timer for countdowns
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   // 1. Fetch PENDING conversations (From active 'conversations' collection)
   useEffect(() => {
     const convRef = collection(db, "conversations");
@@ -39,6 +47,9 @@ const ConversationsAdmin = () => {
       where("request", "==", "sent")
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      // Filter out any that have firmly expired by more than 5 minutes past their expiry 
+      // just so the list doesn't get flooded with ancient dead requests, but we let 
+      // the UI handle the actual exact 00:00 live countdown.
       const convos = snapshot.docs.map((docSnap) => ({
         id: docSnap.id,
         ...docSnap.data(),
@@ -216,6 +227,17 @@ const ConversationsAdmin = () => {
     return timestamp.toDate ? timestamp.toDate().toLocaleString() : new Date(timestamp).toLocaleString();
   };
 
+  const getCountdown = (expiresAtIso) => {
+    if (!expiresAtIso) return { expired: false, text: "No Expiry" };
+    const expiresMs = new Date(expiresAtIso).getTime();
+    const diff = expiresMs - now;
+    if (diff <= 0) return { expired: true, text: "Expired" };
+
+    const mins = Math.floor(diff / 60000);
+    const secs = Math.floor((diff % 60000) / 1000);
+    return { expired: false, text: `${mins}:${secs.toString().padStart(2, '0')}` };
+  };
+
   // --- CSV Export Logic for History ---
   const escapeCsv = (str) => {
     if (str === null || str === undefined) return "";
@@ -259,18 +281,24 @@ const ConversationsAdmin = () => {
     contentRef: historyTableRef,
     documentTitle: "Conversation Request History",
     pageStyle: `
-      @page { size: landscape; margin: 10mm; }
+      @page { size: landscape; margin: 15mm; }
       @media print {
-        body { font-family: Arial, sans-serif; -webkit-print-color-adjust: exact; }
-        .print-header { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #ddd; display: block !important; }
-        .print-header h2 { text-align: center; font-size: 20px; margin-bottom: 5px; color: #333; }
-        .print-header .header-details { display: flex; justify-content: space-between; font-size: 12px; color: #666; margin-top: 5px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10pt; }
-        th, td { border: 1px solid #ddd; padding: 6px; text-align: left; word-wrap: break-word; }
-        th { background-color: #f2f2f2; }
-        tr { break-inside: auto; page-break-inside: auto; }
+        * { box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; font-size: 9pt; color: #1e293b; -webkit-print-color-adjust: exact; margin: 0; }
+        .print-header { margin-bottom: 14px; padding-bottom: 10px; border-bottom: 2px solid #1e293b; }
+        .print-header h2 { font-size: 16pt; font-weight: bold; margin: 0 0 2px 0; }
+        .print-header .subtitle { font-size: 8pt; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 6px 0; }
+        .print-header .narrative { font-size: 9pt; color: #334155; margin: 6px 0 4px 0; line-height: 1.5; }
+        .print-header .meta { display: flex; justify-content: space-between; font-size: 8pt; color: #64748b; margin-top: 4px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 8pt; table-layout: fixed; }
+        thead { display: table-header-group; }
+        th { background-color: #f1f5f9 !important; font-weight: 700; color: #475569; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.05em; padding: 5px 8px; border: 1px solid #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+        td { border: 1px solid #e2e8f0; padding: 5px 8px; vertical-align: top; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        tr:nth-child(even) td { background-color: #f8fafc; }
+        .overflow-x-auto, .overflow-y-auto { overflow: visible !important; max-height: none !important; }
         .no-print { display: none !important; }
-        .prepared-by { margin-top: 30px; text-align: right; font-size: 12px; color: #333; page-break-inside: avoid; display: block !important; }
+        .print-footer { margin-top: 28px; padding-top: 12px; border-top: 1px solid #94a3b8; display: flex; justify-content: space-between; font-size: 9pt; color: #475569; }
+        .badge { font-size: 7pt; padding: 2px 6px; border: 1px solid #e2e8f0; border-radius: 3px; color: #334155; background: none !important; }
       }
     `,
   });
@@ -278,7 +306,7 @@ const ConversationsAdmin = () => {
   const currentDate = new Date().toLocaleDateString();
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen">
+    <div className="flex flex-col md:flex-row min-h-screen bg-gray-50 text-gray-900">
       <Sidebar />
       <div className="flex-1 p-4 md:p-6 md:ml-64">
 
@@ -304,19 +332,33 @@ const ConversationsAdmin = () => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {conversations.length > 0 ? (
-                conversations.map((conv, index) => (
-                  <tr key={conv.id} className="text-center">
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{index + 1}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{getFullName(conv)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{conv.userEmail || "N/A"}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{formatTimestamp(conv.createdAt)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                      <Button variant="info" size="sm" onClick={() => handleShowDetails(conv)}>
-                        Detail
-                      </Button>
-                    </td>
-                  </tr>
-                ))
+                conversations.map((conv, index) => {
+                  const countdown = getCountdown(conv.requestExpiresAt);
+                  return (
+                    <tr key={conv.id} className={`text-center ${countdown.expired ? "bg-red-50 opacity-50" : ""}`}>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{index + 1}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{getFullName(conv)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{conv.userEmail || "N/A"}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                        {formatTimestamp(conv.createdAt)}
+                        {conv.requestExpiresAt && (
+                          <div className={`mt-1 font-bold ${countdown.expired ? "text-red-600" : "text-orange-500"}`}>
+                            {countdown.text}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                        {countdown.expired ? (
+                          <Badge bg="danger">Expired</Badge>
+                        ) : (
+                          <Button variant="info" size="sm" onClick={() => handleShowDetails(conv)}>
+                            Detail
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
                   <td colSpan="5" className="text-center p-3">No pending requests found.</td>
@@ -388,11 +430,13 @@ const ConversationsAdmin = () => {
 
             <div ref={historyTableRef}>
               {/* Print Header (Visible only in print) */}
-              <div className="print-header d-none">
-                <h2>CONVERSATION REQUEST HISTORY</h2>
-                <div className="header-details">
-                  <span>Date: {currentDate}</span>
-                  <span>Status: All History</span>
+              <div className="print-header hidden print:block">
+                <h2>Conversation Request History</h2>
+                <p className="subtitle">Logistics Management System</p>
+                <p className="narrative">This report lists all processed conversation requests (Approved / Rejected). Printed on {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.</p>
+                <div className="meta">
+                  <span>Status: <strong>All History</strong></span>
+                  <span>Printed: {currentDate}</span>
                 </div>
               </div>
 
@@ -433,8 +477,9 @@ const ConversationsAdmin = () => {
               </div>
 
               {/* Print Footer */}
-              <div className="prepared-by d-none">
-                <p>Prepared by: {adminName.toUpperCase()}</p>
+              <div className="print-footer hidden print:flex">
+                <span>Produced by: <strong>{adminName.toUpperCase()}</strong></span>
+                <span>Date: {currentDate}</span>
               </div>
             </div>
 

@@ -22,11 +22,13 @@ import Messages from "./pages/Messages";
 import ShippingInquiry from "./pages/ShippingInquiry";
 import TermsAndConditions from "./pages/TermsAndConditions";
 import MyShipments from "./pages/ShipmentHistory";
+import ShipmentMessages from "./pages/ShipmentMessages";
 
 // Admin / Staff
 import AdminDashboard from "./pages/adminstaff/AdminDashboard";
 import Shipments from "./pages/adminstaff/Shipments";
 import AdminMessages from "./pages/adminstaff/AdminMessages";
+import AdminShipmentMessages from "./pages/adminstaff/AdminShipmentMessages";
 import MessageRequest from "./pages/adminstaff/MessageRequest";
 import ShipmentRequest from "./pages/adminstaff/ShipmentRequest";
 import Reports from "./pages/adminstaff/Reports";
@@ -44,6 +46,7 @@ const App = () => {
   const hiddenFooterRoutes = [
     "/Shipments",
     "/AdminMessages",
+    "/AdminShipmentMessages",
     "/AdminDashboard",
     "/Messages",
     "/MessageRequest",
@@ -53,6 +56,7 @@ const App = () => {
     "/Reports",
     "/Contact",
     "/MyShipments",
+    "/ShipmentMessages",
     "/ManageSystem",
   ];
 
@@ -111,6 +115,14 @@ const App = () => {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/ShipmentMessages"
+              element={
+                <ProtectedRoute requiredRoles={["user"]}>
+                  <ShipmentMessages />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Protected Admin/Staff Routes */}
             <Route
@@ -134,6 +146,14 @@ const App = () => {
               element={
                 <ProtectedRoute requiredRoles={["admin", "staff"]}>
                   <AdminMessages />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/AdminShipmentMessages"
+              element={
+                <ProtectedRoute requiredRoles={["admin", "staff"]}>
+                  <AdminShipmentMessages />
                 </ProtectedRoute>
               }
             />

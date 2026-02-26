@@ -35,7 +35,7 @@ const Shipments = () => {
   const [shipments, setShipments] = useState([]);
   const [previewUrls, setPreviewUrls] = useState({});
   const [businessPreviewUrls, setBusinessPreviewUrls] = useState({});
- 
+
   // Modals
   const [showModal, setShowModal] = useState(false);
   const [editModal, setEditModal] = useState(false);
@@ -43,7 +43,8 @@ const Shipments = () => {
   const [archiveModal, setArchiveModal] = useState(false); // New Archive Modal
   const [showAddCountryModal, setShowAddCountryModal] = useState(false);
   const [currentShipment, setCurrentShipment] = useState(null);
- 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // Form Data
   const [formData, setFormData] = useState({
     packageNumber: "",
@@ -79,6 +80,7 @@ const Shipments = () => {
     packageStatus: "Processing",
     paid: false,
     airwayBill: "",
+    delayReason: "",
   });
   // Filtering & Sorting State
   const [searchQuery, setSearchQuery] = useState("");
@@ -399,10 +401,12 @@ const Shipments = () => {
     }
     return matchesSearch && matchesDate;
   }).sort((a, b) => {
-     // Default sort by date desc for archives
-     return new Date(b.dateStarted) - new Date(a.dateStarted);
+    // Default sort by date desc for archives
+    return new Date(b.dateStarted) - new Date(a.dateStarted);
   });
   const handleAddShipment = async () => {
+    if (isSubmitting) return; // STRICT GUARD: Prevent multiple clicks
+
     if (
       !formData.packageNumber ||
       !formData.shipperName ||
@@ -422,6 +426,7 @@ const Shipments = () => {
       toast.warning('Please fill in all pickup address fields.');
       return;
     }
+
     if (isFullLoad) {
       if (formData.packages.length === 0 || !formData.packages[0].weight) {
         toast.warning('Please enter the total weight.');
@@ -438,51 +443,74 @@ const Shipments = () => {
         return;
       }
     }
+
+    // --- NEW: Uniqueness Check ---
+    try {
+      const q = query(
+        collection(db, "Packages"),
+        where("packageNumber", "==", formData.packageNumber.trim())
+      );
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        toast.error(`A shipment with tracking number "${formData.packageNumber.trim()}" already exists!`);
+        return; // Stop execution
+      }
+    } catch (err) {
+      console.error("Error checking for duplicate package numbers:", err);
+      toast.error("Failed to verify tracking number uniqueness. Please try again.");
+      return;
+    }
+
     const confirmAdd = window.confirm(
       "Are you sure you want to add this shipment?"
     );
     if (!confirmAdd) return;
-    const maxId = shipments.reduce(
-      (acc, s) => Math.max(acc, s.customId || 0),
-      0
-    );
-    const newCustomId = maxId + 1;
-    const newShipment = {
-      packageNumber: formData.packageNumber,
-      shipperName: formData.shipperName,
-      senderCountry: formData.senderCountry,
-      destinationCountry: formData.destinationCountry,
-      destinationAddress: formData.destinationAddress,
-      transportMode: formData.transportMode,
-      shipmentDirection: formData.shipmentDirection,
-      loadType: formData.loadType,
-      mobile: formData.mobile,
-      email: formData.email,
-      pickupOption: formData.pickupOption,
-      pickupAddress:
-        formData.pickupOption === 'needPickup'
-          ? {
+
+    setIsSubmitting(true);
+
+    try {
+      const maxId = shipments.reduce(
+        (acc, s) => Math.max(acc, s.customId || 0),
+        0
+      );
+      const newCustomId = maxId + 1;
+      const newShipment = {
+        packageNumber: formData.packageNumber,
+        shipperName: formData.shipperName,
+        senderCountry: formData.senderCountry,
+        destinationCountry: formData.destinationCountry,
+        destinationAddress: formData.destinationAddress,
+        transportMode: formData.transportMode,
+        shipmentDirection: formData.shipmentDirection,
+        loadType: formData.loadType,
+        mobile: formData.mobile,
+        email: formData.email,
+        pickupOption: formData.pickupOption,
+        pickupAddress:
+          formData.pickupOption === 'needPickup'
+            ? {
               region: formData.pickupRegion,
               province: formData.pickupProvince,
               city: formData.pickupCity,
               barangay: formData.pickupBarangay,
               detailedAddress: formData.pickupDetailedAddress,
             }
-          : null,
-      packages: formData.packages.map((pkg) => ({
-        ...pkg,
-        image: pkg.image ? pkg.image.name : null,
-      })),
-      additionalServices: formData.additionalServices,
-      packageStatus: formData.packageStatus,
-      paid: formData.paid,
-      airwayBill: formData.airwayBill,
-      customId: newCustomId,
-      dateStarted: new Date().toISOString(),
-      createdTime: serverTimestamp(),
-      isArchived: false,
-    };
-    try {
+            : null,
+        packages: formData.packages.map((pkg) => ({
+          ...pkg,
+          image: pkg.image ? pkg.image.name : null,
+        })),
+        additionalServices: formData.additionalServices,
+        packageStatus: formData.packageStatus,
+        paid: formData.paid,
+        airwayBill: formData.airwayBill,
+        customId: newCustomId,
+        dateStarted: new Date().toISOString(),
+        createdTime: serverTimestamp(),
+        isArchived: false,
+      };
+
       const { adminFirstName, adminLastName } = await fetchAdminDetails();
       const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
       const docRef = await addDoc(collection(db, "Packages"), newShipment);
@@ -531,14 +559,19 @@ const Shipments = () => {
     } catch (error) {
       console.error("Error adding shipment:", error);
       toast.error("Failed to add shipment. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
   const handleEditShipment = async () => {
+    if (isSubmitting) return;
+
     if (currentShipment) {
       const confirmEdit = window.confirm(
         "Are you sure you want to save changes?"
       );
       if (confirmEdit) {
+        setIsSubmitting(true);
         try {
           const { adminFirstName, adminLastName } = await fetchAdminDetails();
           const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
@@ -557,9 +590,27 @@ const Shipments = () => {
               collection(db, "Packages", currentShipment.docId, "statusHistory"),
               {
                 status: formData.packageStatus,
+                reason: formData.packageStatus === 'Delayed' ? (formData.delayReason || '') : '',
                 timestamp: serverTimestamp(),
               }
             );
+
+            // --- Generate User Notification ---
+            if (currentShipment.userUid) {
+              try {
+                await addDoc(collection(db, 'userNotifications'), {
+                  userId: currentShipment.userUid,
+                  title: 'Shipment Status Update',
+                  message: `Your shipment ${currentShipment.packageNumber || currentShipment.customId} has been updated to: ${formData.packageStatus}`,
+                  read: false,
+                  createdAt: serverTimestamp(),
+                  relatedId: currentShipment.docId,
+                  type: 'shipment_update'
+                });
+              } catch (err) {
+                console.error("Failed to generate notification: ", err);
+              }
+            }
           }
           await logActivity(adminFullName, `Edited shipment ${currentShipment.packageNumber || currentShipment.customId}`);
           setShipments((prev) =>
@@ -573,6 +624,8 @@ const Shipments = () => {
         } catch (error) {
           console.error("Error updating shipment:", error);
           toast.error("Failed to update shipment.");
+        } finally {
+          setIsSubmitting(false);
         }
       }
     }
@@ -590,7 +643,7 @@ const Shipments = () => {
         const { adminFirstName, adminLastName } = await fetchAdminDetails();
         const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
         const statusChanged = shipment.packageStatus !== "Delivered";
-      
+
         const updatedData = {
           packageStatus: "Delivered",
           paid: true,
@@ -605,6 +658,22 @@ const Shipments = () => {
               timestamp: serverTimestamp(),
             }
           );
+
+          if (shipment.userUid) {
+            try {
+              await addDoc(collection(db, 'userNotifications'), {
+                userId: shipment.userUid,
+                title: 'Shipment Delivered',
+                message: `Your shipment ${shipment.packageNumber || shipment.customId} has been delivered.`,
+                read: false,
+                createdAt: serverTimestamp(),
+                relatedId: shipment.docId,
+                type: 'shipment_update'
+              });
+            } catch (err) {
+              console.error("Failed to generate notification: ", err);
+            }
+          }
         }
         await logActivity(adminFullName, `Marked shipment ${shipment.packageNumber || shipment.customId} as Delivered and Paid`);
         setShipments((prev) =>
@@ -627,23 +696,23 @@ const Shipments = () => {
       try {
         const { adminFirstName, adminLastName } = await fetchAdminDetails();
         const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
-      
+
         const updatedData = {
-            isArchived: true,
-            packageStatus: "Archived",
-            archivedTime: serverTimestamp()
+          isArchived: true,
+          packageStatus: "Archived",
+          archivedTime: serverTimestamp()
         };
         await updateDoc(doc(db, "Packages", shipment.docId), updatedData);
-      
+
         await addDoc(
-            collection(db, "Packages", shipment.docId, "statusHistory"),
-            {
-              status: "Archived",
-              timestamp: serverTimestamp(),
-            }
+          collection(db, "Packages", shipment.docId, "statusHistory"),
+          {
+            status: "Archived",
+            timestamp: serverTimestamp(),
+          }
         );
         await logActivity(adminFullName, `Archived shipment ${shipment.packageNumber || shipment.customId}`);
-      
+
         setShipments((prev) =>
           prev.map((s) =>
             s.docId === shipment.docId ? { ...s, ...updatedData } : s
@@ -664,23 +733,23 @@ const Shipments = () => {
       try {
         const { adminFirstName, adminLastName } = await fetchAdminDetails();
         const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
-      
+
         const updatedData = {
-            isArchived: false,
-            packageStatus: "Delivered", // Assuming archived shipments are completed; adjust if needed
-            updatedTime: serverTimestamp()
+          isArchived: false,
+          packageStatus: "Delivered", // Assuming archived shipments are completed; adjust if needed
+          updatedTime: serverTimestamp()
         };
         await updateDoc(doc(db, "Packages", shipment.docId), updatedData);
-      
+
         await addDoc(
-            collection(db, "Packages", shipment.docId, "statusHistory"),
-            {
-              status: "Unarchived",
-              timestamp: serverTimestamp(),
-            }
+          collection(db, "Packages", shipment.docId, "statusHistory"),
+          {
+            status: "Unarchived",
+            timestamp: serverTimestamp(),
+          }
         );
         await logActivity(adminFullName, `Unarchived shipment ${shipment.packageNumber || shipment.customId}`);
-      
+
         setShipments((prev) =>
           prev.map((s) =>
             s.docId === shipment.docId ? { ...s, ...updatedData } : s
@@ -695,20 +764,20 @@ const Shipments = () => {
   };
   const handleDeletePermanent = async (shipment) => {
     const confirmDelete = window.confirm(
-        `Are you sure you want to PERMANENTLY DELETE shipment ${shipment.packageNumber}? This cannot be undone.`
+      `Are you sure you want to PERMANENTLY DELETE shipment ${shipment.packageNumber}? This cannot be undone.`
     );
-    if(confirmDelete) {
-        try {
-            const { adminFirstName, adminLastName } = await fetchAdminDetails();
-            const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
-            await deleteDoc(doc(db, "Packages", shipment.docId));
-            await logActivity(adminFullName, `Permanently Deleted shipment ${shipment.packageNumber}`);
-            setShipments((prev) => prev.filter((s) => s.docId !== shipment.docId));
-            toast.success("Shipment deleted permanently.");
-        } catch (error) {
-            console.error("Error deleting shipment:", error);
-            toast.error("Failed to delete shipment.");
-        }
+    if (confirmDelete) {
+      try {
+        const { adminFirstName, adminLastName } = await fetchAdminDetails();
+        const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
+        await deleteDoc(doc(db, "Packages", shipment.docId));
+        await logActivity(adminFullName, `Permanently Deleted shipment ${shipment.packageNumber}`);
+        setShipments((prev) => prev.filter((s) => s.docId !== shipment.docId));
+        toast.success("Shipment deleted permanently.");
+      } catch (error) {
+        console.error("Error deleting shipment:", error);
+        toast.error("Failed to delete shipment.");
+      }
     }
   };
   const handleSetPaid = async (shipment, paid) => {
@@ -890,30 +959,32 @@ const Shipments = () => {
   const dateRange = minDate && maxDate
     ? `From ${minDate.toLocaleDateString()} to ${maxDate.toLocaleDateString()}`
     : 'N/A';
- 
+
   const currentDate = new Date().toLocaleDateString();
   const filterText = searchQuery ? `Filter: ${searchQuery}` : '';
- 
-  const narrative = `\u200B \u200B \u200B \u200B \u200B \u200BThis report summarizes the shipments for the ${view} view${searchQuery ? `, filtered by "${searchQuery}"` : ''}.`;
+
+  const narrative = `This report covers shipments under the "${view}" view${searchQuery ? `, filtered by "${searchQuery}"` : ''}. Printed on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.`;
   const handlePrint = useReactToPrint({
     contentRef: tableRef,
-    documentTitle: "\u200B",
+    documentTitle: `Shipment_Report_${view}_${new Date().toISOString().split('T')[0]}`,
     pageStyle: `
-      @page { size: landscape; margin: 10mm; }
+      @page { size: landscape; margin: 15mm; }
       @media print {
-        body { font-family: Arial, sans-serif; -webkit-print-color-adjust: exact; }
-        .print-header { margin-bottom: 20px; position: relative; padding-bottom: 10px; border-bottom: 1px solid #ddd; }
-        .print-header h2 { text-align: center; font-size: 20px; margin-bottom: 5px; color: #333; }
-        .print-header .header-details { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #666; margin-top: 5px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 9pt; }
-        th, td { border: 1px solid #ddd; padding: 4px; text-align: left; word-wrap: break-word; }
-        th { background-color: #f2f2f2; }
-        tr { break-inside: auto; page-break-inside: auto; }
+        * { box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; font-size: 9pt; color: #1e293b; -webkit-print-color-adjust: exact; margin: 0; }
+        .print-header { margin-bottom: 14px; padding-bottom: 10px; border-bottom: 2px solid #1e293b; }
+        .print-header h2 { font-size: 16pt; font-weight: bold; margin: 0 0 2px 0; }
+        .print-header .subtitle { font-size: 8pt; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 6px 0; }
+        .print-header .narrative { font-size: 9pt; color: #334155; margin: 6px 0 4px 0; line-height: 1.5; }
+        .print-header .meta { display: flex; justify-content: space-between; font-size: 8pt; color: #64748b; margin-top: 4px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 8pt; table-layout: fixed; }
         thead { display: table-header-group; }
-        tfoot { display: table-footer-group; }
-        .overflow-x-auto, .overflow-y-auto { overflow: visible !important; max-height: none !important; height: auto !important; width: 100% !important; display: block; }
+        th { background-color: #f1f5f9 !important; font-weight: 700; color: #475569; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.05em; padding: 5px 8px; border: 1px solid #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+        td { border: 1px solid #e2e8f0; padding: 5px 8px; vertical-align: top; color: #1e293b; background-color: white !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        tr:nth-child(even) td { background-color: #f8fafc !important; }
+        .overflow-x-auto, .overflow-y-auto { overflow: visible !important; max-height: none !important; }
         .no-print { display: none !important; }
-        .prepared-by { margin-top: 20px; text-align: right; font-size: 12px; color: #666; page-break-inside: avoid; }
+        .print-footer { margin-top: 28px; padding-top: 12px; border-top: 1px solid #94a3b8; display: flex; justify-content: space-between; font-size: 9pt; color: #475569; }
       }
     `,
   });
@@ -922,23 +993,23 @@ const Shipments = () => {
       <Sidebar />
       <div className="flex-1 p-4 md:p-6 md:ml-64">
 
-       
+
         {/* --- HEADER --- */}
         <div className="flex justify-between items-center mb-6">
-            <div className="w-24"></div>
-            <h2 className="text-xl font-semibold text-center flex-1">
-                Shipment Information
-            </h2>
-            {/* Archive Modal Button */}
-            <button
-                onClick={() => setArchiveModal(true)}
-                className="flex rounded items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold bg-purple-600 text-white hover:bg-purple-700 transition"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
-                </svg>
-                View Archives
-            </button>
+          <div className="w-24"></div>
+          <h2 className="text-xl font-semibold text-center flex-1">
+            Shipment Information
+          </h2>
+          {/* Archive Modal Button */}
+          <button
+            onClick={() => setArchiveModal(true)}
+            className="flex rounded items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold bg-purple-600 text-white hover:bg-purple-700 transition"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+            </svg>
+            View Archives
+          </button>
         </div>
         {/* --- FILTERS (Tabs) --- */}
         <div className="mb-4 flex flex-col md:flex-row justify-center gap-3 space-x-0 md:space-x-4">
@@ -959,33 +1030,34 @@ const Shipments = () => {
           <div className="flex items-center gap-2">
             <label className="text-sm font-medium text-gray-700">From:</label>
             <input
-                type="date"
-                className="p-2 border rounded border-gray-300"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+              type="date"
+              className="p-2 border rounded border-gray-300"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
             />
           </div>
           <div className="flex items-center gap-2">
             <label className="text-sm font-medium text-gray-700">To:</label>
             <input
-                type="date"
-                className="p-2 border rounded border-gray-300"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
+              type="date"
+              className="p-2 border rounded border-gray-300"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
             />
           </div>
         </div>
         {/* --- MAIN TABLE --- */}
         <div ref={tableRef} className="bg-white shadow-lg rounded-xl p-6 print-section">
           <div className="print-header hidden print:block">
-            <h2 className="text-2xl font-bold text-gray-900 text-center">SHIPMENT SUMMARY REPORT</h2>
-            <div className="header-details">
-              <span>{dateRange}</span>
-              <span>{filterText}</span>
+            <h2>Shipment Summary Report</h2>
+            <p className="subtitle">Logistics Management System</p>
+            <p className="narrative">{narrative}</p>
+            <div className="meta">
+              <span>View: <strong>{view.charAt(0).toUpperCase() + view.slice(1)}</strong>{searchQuery ? ` • Filter: "${searchQuery}"` : ''}</span>
+              <span>Printed: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
             </div>
           </div>
-          <p className="narrative hidden print:block mb-4">{narrative}</p>
-       
+
           <div className="overflow-x-auto overflow-y-auto max-h-[70vh] border rounded-lg relative">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
@@ -1004,79 +1076,84 @@ const Shipments = () => {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {sortedShipments.length > 0 ? (
-                    sortedShipments.map((shipment, index) => {
+                  sortedShipments.map((shipment, index) => {
                     const isDelivered = shipment.packageStatus === "Delivered";
                     const isCanceled = shipment.canceled;
                     return (
-                        <tr key={shipment.docId} className={`hover:bg-gray-50 ${isCanceled ? "bg-gray-100" : (index % 2 === 0 ? "bg-white" : "bg-gray-50")}`}>
+                      <tr key={shipment.docId} className={`hover:bg-gray-50 ${isCanceled ? "bg-gray-100" : (index % 2 === 0 ? "bg-white" : "bg-gray-50")}`}>
                         <td className="px-2 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{index + 1}</td>
                         <td className="px-2 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shipment.packageNumber}</td>
                         <td className="px-2 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shipment.shipperName}</td>
                         <td className="px-2 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shipment.senderCountry || "N/A"}</td>
                         <td className="px-2 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shipment.destinationCountry || "N/A"}</td>
                         <td className="px-2 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shipment.transportMode || "N/A"}</td>
-                        <td className={`px-2 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 ${isDelivered ? "bg-green-200" : ""}`}>{shipment.packageStatus}</td>
+                        <td className={`px-2 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 ${isDelivered ? "bg-green-200" : (shipment.packageStatus === 'Delayed' ? 'bg-orange-100' : '')}`}>
+                          <div>{shipment.packageStatus}</div>
+                          {shipment.packageStatus === 'Delayed' && shipment.delayReason && (
+                            <div className="text-xs text-orange-700 mt-0.5 italic">Reason: {shipment.delayReason}</div>
+                          )}
+                        </td>
                         <td className={`px-2 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 ${shipment.paid ? "bg-green-200" : "bg-red-200"}`}>{shipment.paid ? "Yes" : "No"}</td>
                         <td className="px-2 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shipment.dateStarted ? new Date(shipment.dateStarted).toLocaleDateString() : "N/A"}</td>
                         <td className="px-2 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 no-print">
-                            <div className="flex items-center justify-center space-x-2">
+                          <div className="flex items-center justify-center space-x-2">
                             <button onClick={() => handleAction(shipment, 'info')} className="text-blue-600 hover:text-blue-800 p-1 border border-blue-600 rounded bg-white" title="View Info">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                </svg>
+                              </svg>
                             </button>
                             {!isCanceled && !isDelivered && (
-                                <button onClick={() => handleAction(shipment, 'update')} className="text-yellow-600 hover:text-yellow-800 p-1 border border-yellow-600 rounded bg-white" title="Edit Shipment">
+                              <button onClick={() => handleAction(shipment, 'update')} className="text-yellow-600 hover:text-yellow-800 p-1 border border-yellow-600 rounded bg-white" title="Edit Shipment">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
                                 </svg>
-                                </button>
+                              </button>
                             )}
                             {!isCanceled && (
-                                <>
+                              <>
                                 <button onClick={() => handleSetPaid(shipment, true)} className={`p-1 border rounded bg-white ${shipment.paid ? 'text-gray-400 border-gray-300' : 'text-green-600 border-green-600 hover:bg-green-50'}`} title="Set Paid: Yes">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
                                 </button>
                                 <button onClick={() => handleSetPaid(shipment, false)} className={`p-1 border rounded bg-white ${!shipment.paid ? 'text-gray-400 border-gray-300' : 'text-red-600 border-red-600 hover:bg-red-50'}`} title="Set Paid: No">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12H9m12 0a9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
                                 </button>
-                                </>
+                              </>
                             )}
                             {!isCanceled && !isDelivered && (
-                                <button onClick={() => handleDoneShipment(shipment)} className="text-green-600 hover:text-green-800 p-1 border border-green-600 rounded bg-white" title="Mark as Delivered">
+                              <button onClick={() => handleDoneShipment(shipment)} className="text-green-600 hover:text-green-800 p-1 border border-green-600 rounded bg-white" title="Mark as Delivered">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                                 </svg>
-                                </button>
+                              </button>
                             )}
                             {!isCanceled && (
-                                <button onClick={() => handleArchiveShipment(shipment)} className="text-purple-600 hover:text-purple-800 p-1 border border-purple-600 rounded bg-white" title="Archive Shipment">
+                              <button onClick={() => handleArchiveShipment(shipment)} className="text-purple-600 hover:text-purple-800 p-1 border border-purple-600 rounded bg-white" title="Archive Shipment">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
                                 </svg>
-                                </button>
+                              </button>
                             )}
-                            </div>
+                          </div>
                         </td>
-                        </tr>
+                      </tr>
                     );
-                    })
+                  })
                 ) : (
-                    <tr>
-                        <td colSpan="10" className="px-6 py-4 text-center text-gray-500">No shipments found.</td>
-                    </tr>
+                  <tr>
+                    <td colSpan="10" className="px-6 py-4 text-center text-gray-500">No shipments found.</td>
+                  </tr>
                 )}
               </tbody>
             </table>
           </div>
-          <div className="prepared-by hidden print:block">
-            <p>Prepared by: {adminName.toUpperCase()}</p>
-            <p>Date: {currentDate}</p>
+          <div className="print-footer hidden print:flex">
+            <span>Produced by: <strong>{adminName.toUpperCase()}</strong></span>
+            <span>Date: {currentDate}</span>
           </div>
         </div>
         {/* Legend */}
@@ -1110,107 +1187,107 @@ const Shipments = () => {
         </div>
         {/* --- ARCHIVE MODAL --- */}
         {archiveModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 no-print">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 no-print">
             <div className="bg-white rounded-lg shadow-lg w-11/12 max-w-6xl p-6 max-h-[90vh] overflow-y-auto">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-2xl font-bold text-gray-800">Archived Shipments</h3>
-                    <button onClick={() => setArchiveModal(false)} className="text-gray-500 hover:text-gray-700 text-xl font-bold">&times;</button>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-2xl font-bold text-gray-800">Archived Shipments</h3>
+                <button onClick={() => setArchiveModal(false)} className="text-gray-500 hover:text-gray-700 text-xl font-bold">&times;</button>
+              </div>
+
+              {/* Archive Filters */}
+              <div className="mb-4 flex flex-col md:flex-row gap-4 items-center bg-gray-50 p-3 rounded">
+                <input
+                  type="text"
+                  className="w-full md:w-1/3 p-2 border rounded border-gray-300"
+                  placeholder="Search archives..."
+                  value={archiveSearch}
+                  onChange={(e) => setArchiveSearch(e.target.value)}
+                />
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium text-gray-700">From:</label>
+                  <input type="date" className="p-2 border rounded border-gray-300" value={archiveStartDate} onChange={(e) => setArchiveStartDate(e.target.value)} />
                 </div>
-               
-                {/* Archive Filters */}
-                <div className="mb-4 flex flex-col md:flex-row gap-4 items-center bg-gray-50 p-3 rounded">
-                    <input
-                        type="text"
-                        className="w-full md:w-1/3 p-2 border rounded border-gray-300"
-                        placeholder="Search archives..."
-                        value={archiveSearch}
-                        onChange={(e) => setArchiveSearch(e.target.value)}
-                    />
-                    <div className="flex items-center gap-2">
-                        <label className="text-sm font-medium text-gray-700">From:</label>
-                        <input type="date" className="p-2 border rounded border-gray-300" value={archiveStartDate} onChange={(e) => setArchiveStartDate(e.target.value)} />
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <label className="text-sm font-medium text-gray-700">To:</label>
-                        <input type="date" className="p-2 border rounded border-gray-300" value={archiveEndDate} onChange={(e) => setArchiveEndDate(e.target.value)} />
-                    </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium text-gray-700">To:</label>
+                  <input type="date" className="p-2 border rounded border-gray-300" value={archiveEndDate} onChange={(e) => setArchiveEndDate(e.target.value)} />
                 </div>
-                <div className="overflow-x-auto border rounded-lg">
+              </div>
+              <div className="overflow-x-auto border rounded-lg">
                 <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-purple-100">
+                  <thead className="bg-purple-100">
                     <tr>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Package #</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Shipper</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Sender Country</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Dest. Country</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Mode</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date Started</th>
-                        <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">View</th>
-                        <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Unarchive</th>
-                        <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Delete</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Package #</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Shipper</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Sender Country</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Dest. Country</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Mode</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date Started</th>
+                      <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">View</th>
+                      <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Unarchive</th>
+                      <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Delete</th>
                     </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
                     {archivedShipments.length > 0 ? (
-                        archivedShipments.map((shipment, index) => (
+                      archivedShipments.map((shipment, index) => (
                         <tr key={shipment.docId} className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{shipment.packageNumber}</td>
-                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{shipment.shipperName}</td>
-                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{shipment.senderCountry || "N/A"}</td>
-                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{shipment.destinationCountry || "N/A"}</td>
-                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{shipment.transportMode || "N/A"}</td>
-                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{shipment.packageStatus}</td>
-                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{shipment.dateStarted ? new Date(shipment.dateStarted).toLocaleDateString() : "N/A"}</td>
-                            <td className="px-4 py-2 whitespace-nowrap text-sm text-center">
-                                <button onClick={() => openInfoModal(shipment)} className="text-blue-600 hover:text-blue-800 p-1 border border-blue-600 rounded bg-white" title="View Info">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    </svg>
-                                </button>
-                            </td>
-                            <td className="px-4 py-2 whitespace-nowrap text-sm text-center">
-                                <button
-                                    onClick={() => handleUnarchiveShipment(shipment)}
-                                    className="text-green-600 hover:text-green-800 p-1 border border-green-600 rounded bg-white" title="Unarchive"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
-                                    </svg>
-                                </button>
-                            </td>
-                            <td className="px-4 py-2 whitespace-nowrap text-sm text-center">
-                                <button
-                                    onClick={() => handleDeletePermanent(shipment)}
-                                    className="bg-red-500 hover:bg-red-600 text-white p-1 rounded transition"
-                                    title="Permanently Delete"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                                    </svg>
-                                </button>
-                            </td>
+                          <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{shipment.packageNumber}</td>
+                          <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{shipment.shipperName}</td>
+                          <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{shipment.senderCountry || "N/A"}</td>
+                          <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{shipment.destinationCountry || "N/A"}</td>
+                          <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{shipment.transportMode || "N/A"}</td>
+                          <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{shipment.packageStatus}</td>
+                          <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{shipment.dateStarted ? new Date(shipment.dateStarted).toLocaleDateString() : "N/A"}</td>
+                          <td className="px-4 py-2 whitespace-nowrap text-sm text-center">
+                            <button onClick={() => openInfoModal(shipment)} className="text-blue-600 hover:text-blue-800 p-1 border border-blue-600 rounded bg-white" title="View Info">
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              </svg>
+                            </button>
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap text-sm text-center">
+                            <button
+                              onClick={() => handleUnarchiveShipment(shipment)}
+                              className="text-green-600 hover:text-green-800 p-1 border border-green-600 rounded bg-white" title="Unarchive"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                              </svg>
+                            </button>
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap text-sm text-center">
+                            <button
+                              onClick={() => handleDeletePermanent(shipment)}
+                              className="bg-red-500 hover:bg-red-600 text-white p-1 rounded transition"
+                              title="Permanently Delete"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                              </svg>
+                            </button>
+                          </td>
                         </tr>
-                        ))
+                      ))
                     ) : (
-                        <tr>
+                      <tr>
                         <td colSpan="10" className="px-4 py-4 text-center text-gray-500">No archived shipments found.</td>
-                        </tr>
+                      </tr>
                     )}
-                    </tbody>
+                  </tbody>
                 </table>
-                </div>
-                <div className="flex justify-end mt-4">
+              </div>
+              <div className="flex justify-end mt-4">
                 <button
-                    className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
-                    onClick={() => setArchiveModal(false)}
+                  className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
+                  onClick={() => setArchiveModal(false)}
                 >
-                    Close
+                  Close
                 </button>
-                </div>
+              </div>
             </div>
-            </div>
+          </div>
         )}
         {/* Add Shipment Modal */}
         {showModal && (
@@ -1331,9 +1408,15 @@ const Shipments = () => {
                   <input type="checkbox" checked={formData.paid} name="paid" onChange={handleChange} className="mr-2" /><label className="font-medium text-gray-700">&nbsp;Paid</label>
                 </div>
               </form>
-              <div className="flex justify-end gap-2 mt-4">
-                <button className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded" onClick={() => setShowModal(false)}>Close</button>
-                <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded" onClick={handleAddShipment}>Add</button>
+              <div className="sticky bottom-0 bg-white border-t border-gray-200 mt-6 pt-4 pb-2 flex justify-end gap-2 -mx-6 px-6 rounded-b-lg">
+                <button className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded" onClick={() => setShowModal(false)} disabled={isSubmitting}>Close</button>
+                <button
+                  className={`bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded ${isSubmitting ? "opacity-50 cursor-not-allowed" : ""}`}
+                  onClick={handleAddShipment}
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? "Adding..." : "Add"}
+                </button>
               </div>
             </div>
           </div>
@@ -1350,14 +1433,26 @@ const Shipments = () => {
                 <div className="flex flex-col mb-3"><label className="mb-1 font-medium text-gray-700">Email</label><input type="email" className="p-2 border border-gray-300 rounded-md" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} /></div>
                 <div className="flex flex-col mb-3">
                   <label className="mb-1 font-medium text-gray-700">Package Status</label>
-                  <select className="p-2 border border-gray-300 rounded-md" value={formData.packageStatus} onChange={(e) => setFormData({ ...formData, packageStatus: e.target.value })}>
-                    <option>Processing</option><option>To Pickup</option><option>To Warehouse</option><option>In warehouse</option><option>On transit</option><option>Landed</option><option>Delivering</option><option>Delivered</option>
+                  <select className="p-2 border border-gray-300 rounded-md" value={formData.packageStatus} onChange={(e) => setFormData({ ...formData, packageStatus: e.target.value, delayReason: e.target.value !== 'Delayed' ? '' : formData.delayReason })}>
+                    <option>Processing</option><option>To Pickup</option><option>To Warehouse</option><option>In warehouse</option><option>On transit</option><option>Landed</option><option>Delivering</option><option>Delivered</option><option value="Delayed">Delayed</option>
                   </select>
+                  {formData.packageStatus === 'Delayed' && (
+                    <div className="mt-2">
+                      <label className="mb-1 font-medium text-gray-700 text-sm">Reason for Delay <span className="text-red-500">*</span></label>
+                      <textarea
+                        className="w-full p-2 border border-orange-300 rounded-md text-sm focus:ring-orange-400 focus:outline-none"
+                        rows={3}
+                        placeholder="e.g. Customs hold, weather conditions, port congestion..."
+                        value={formData.delayReason || ''}
+                        onChange={(e) => setFormData({ ...formData, delayReason: e.target.value })}
+                      />
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center mb-3"><input type="checkbox" checked={formData.paid} onChange={(e) => setFormData({ ...formData, paid: e.target.checked })} className="mr-2" /><label className="font-medium text-gray-700">&nbsp;Paid</label></div>
               </form>
-              <div className="flex justify-end gap-2">
-                <button className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded" onClick={() => setEditModal(false)}>Close</button>
+              <div className="sticky bottom-0 bg-white border-t border-gray-200 mt-6 pt-4 pb-2 flex justify-end gap-2 -mx-6 px-6 rounded-b-lg">
+                <button className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded " onClick={() => setEditModal(false)}>Close</button>
                 <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded" onClick={handleEditShipment}>Save Changes</button>
               </div>
             </div>
@@ -1511,7 +1606,7 @@ const Shipments = () => {
                   )}
                 </div>
               </div>
-              <div className="flex justify-end mt-4">
+              <div className="sticky bottom-0 bg-white border-t border-gray-200 mt-6 pt-4 pb-2 flex justify-end -mx-6 px-6 rounded-b-lg">
                 <button className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded" onClick={() => setInfoModal(false)}>
                   Close
                 </button>

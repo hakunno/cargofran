@@ -8,7 +8,9 @@ import {
   sendPasswordResetEmail,
   signOut,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  setPersistence,
+  browserSessionPersistence
 } from "firebase/auth";
 import { auth, db } from "../jsfile/firebase";
 import { logActivity } from "./StaffActivity";
@@ -68,6 +70,12 @@ const LoginModal = forwardRef(({ hideTrigger = false }, ref) => {
     setIsLoading(true);
 
     try {
+      // 0. MUST clear old session ID to prevent race condition with useSessionSocket
+      localStorage.removeItem("sessionId");
+
+      // 1. Enforce Session Persistence (clears on browser close)
+      await setPersistence(auth, browserSessionPersistence);
+
       // 2. Firebase Login
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
@@ -204,6 +212,12 @@ const LoginModal = forwardRef(({ hideTrigger = false }, ref) => {
     setIsLoading(true);
 
     try {
+      // 0. MUST clear old session ID to prevent race condition with useSessionSocket
+      localStorage.removeItem("sessionId");
+
+      // 1. Enforce Session Persistence for Google Login
+      await setPersistence(auth, browserSessionPersistence);
+
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       const user = result.user;

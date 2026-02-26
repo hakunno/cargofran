@@ -23,7 +23,8 @@ import {
   FaUsers,
   FaHistory,
   FaCommentDots,
-  FaBell
+  FaBell,
+  FaTruck
 } from "react-icons/fa";
 
 const Sidebar = ({ mobileOpen, setMobileOpen }) => {
@@ -34,8 +35,8 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
   const [showStaffActivityModal, setShowStaffActivityModal] = useState(false);
 
   // Live notification counts from Firestore
-  const { shipmentRequests, messageRequests, liveChats } = useAdminNotifications();
-  const totalNotifications = shipmentRequests + messageRequests + liveChats;
+  const { shipmentRequests, messageRequests, liveChats, shipmentChats } = useAdminNotifications();
+  const totalNotifications = shipmentRequests + messageRequests + liveChats + shipmentChats;
 
   // Local state fallback
   const [localOpen, setLocalOpen] = useState(false);
@@ -166,7 +167,8 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
             </p>
             <div className="space-y-1">
               <NavItem to="/MessageRequest" icon={<FaEnvelope />} label="Inbox" location={location} badge={messageRequests} />
-              <NavItem to="/AdminMessages" icon={<FaCommentDots />} label="Live Chats" location={location} badge={liveChats} />
+              <NavItem to="/AdminShipmentMessages" icon={<FaTruck />} label="Contact User" location={location} badge={shipmentChats} />
+              <NavItem to="/AdminMessages" icon={<FaCommentDots />} label="Support Chat" location={location} badge={liveChats} />
             </div>
           </div>
 

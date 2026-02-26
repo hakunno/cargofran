@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Table, Button, Modal } from "react-bootstrap";
 import { auth, db } from "../jsfile/firebase";
 import { onAuthStateChanged } from "firebase/auth";
@@ -18,6 +19,8 @@ const UserShipmentHistory = () => {
   const [currentEntry, setCurrentEntry] = useState(null);
   const [infoHistory, setInfoHistory] = useState([]);
   const [infoLoading, setInfoLoading] = useState(false);
+  const [userChatPackages, setUserChatPackages] = useState([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
     setLoading(true);
@@ -31,38 +34,46 @@ const UserShipmentHistory = () => {
         return;
       }
 
-      const email = (user.email || "").toLowerCase().trim();
+      const authEmail = user.email || "";
+      const emailForFilter = authEmail.toLowerCase().trim();
       const uid = user.uid;
 
       try {
         // helper to safely query with fallback
-        // Note: Ensure Firebase indexes are set for efficient queries. See console for links if needed.
-        const safeQuery = async ({ collectionName, whereField, orderField }) => {
+        const safeQuery = async ({ collectionName, whereField, orderValue, orderField }) => {
           try {
             const q = query(
               collection(db, collectionName),
-              where(whereField, "==", email),
+              where(whereField, "==", orderValue),
               orderBy(orderField, "desc")
             );
             const snap = await getDocs(q);
             return snap.docs.map((d) => ({ docId: d.id, collection: collectionName, ...d.data() }));
           } catch (err) {
-            console.warn(`Query failed for ${collectionName} (maybe missing index). Falling back to client filter.`, err);
-            // fallback: fetch all and filter client-side
-            const snap = await getDocs(collection(db, collectionName));
-            return snap.docs
-              .map((d) => ({ docId: d.id, collection: collectionName, ...d.data() }))
-              .filter((doc) => {
-                const docEmail = (doc.email || "").toLowerCase().trim();
-                const docUid = doc.userUid || null;
-                return docEmail === email || (uid && docUid === uid);
-              });
+            console.warn(`Query failed for ${collectionName} (maybe missing index). Falling back to client sort.`, err);
+            // fallback: fetch using only 'where' clause (which relies on single-field index)
+            try {
+              const qFallback = query(
+                collection(db, collectionName),
+                where(whereField, "==", orderValue)
+              );
+              const snapFallback = await getDocs(qFallback);
+              return snapFallback.docs.map((d) => ({ docId: d.id, collection: collectionName, ...d.data() }))
+                .filter((doc) => {
+                  const docEmail = (doc.email || "").toLowerCase().trim();
+                  const docUid = doc.userUid || null;
+                  return docEmail === emailForFilter || (uid && docUid === uid);
+                });
+            } catch (fallbackErr) {
+              console.error(`Fallback query also failed for ${collectionName}: `, fallbackErr);
+              return [];
+            }
           }
         };
 
         const [packagesDocs, requestsDocs] = await Promise.all([
-          safeQuery({ collectionName: "Packages", whereField: "email", orderField: "createdTime" }),
-          safeQuery({ collectionName: "shipRequests", whereField: "email", orderField: "createdAt" }),
+          safeQuery({ collectionName: "Packages", whereField: "email", orderValue: authEmail, orderField: "createdTime" }),
+          safeQuery({ collectionName: "shipRequests", whereField: "email", orderValue: authEmail, orderField: "createdAt" }),
         ]);
 
         const normalizeTimestamp = (doc) => {
@@ -88,6 +99,18 @@ const UserShipmentHistory = () => {
         merged.sort((a, b) => b._ts - a._ts);
 
         setEntries(merged);
+
+        // Fetch user's shipment conversations to see which packages have active chats
+        if (uid) {
+          const chatQuery = query(
+            collection(db, "shipment_conversations"),
+            where("userId", "==", uid)
+          );
+          const chatSnap = await getDocs(chatQuery);
+          const packagesWithChats = chatSnap.docs.map(doc => doc.data().packageNumber);
+          setUserChatPackages(packagesWithChats);
+        }
+
       } catch (err) {
         console.error("Error loading history:", err);
         setError("Failed to load shipments. Please try again later.");
@@ -132,7 +155,7 @@ const UserShipmentHistory = () => {
     try {
       const d = new Date(ts);
       if (!isNaN(d.getTime())) return d.toLocaleString();
-    } catch (e) {}
+    } catch (e) { }
     return String(ts);
   };
 
@@ -187,9 +210,20 @@ const UserShipmentHistory = () => {
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{e.email || "N/A"}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{formatTimestamp(e.createdTime || e.createdAt || e.requestTime || e.dateStarted)}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                    <Button size="sm" variant="info" onClick={() => openInfoModal(e)}>
-                      View
-                    </Button>
+                    <div className="flex justify-center space-x-2">
+                      <Button size="sm" variant="info" onClick={() => openInfoModal(e)}>
+                        View
+                      </Button>
+                      {getAcceptanceStatus(e) === "Accepted" && userChatPackages.includes(getPackageNumber(e)) && (
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          onClick={() => navigate('/ShipmentMessages', { state: { packageNumber: getPackageNumber(e) } })}
+                        >
+                          Message
+                        </Button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

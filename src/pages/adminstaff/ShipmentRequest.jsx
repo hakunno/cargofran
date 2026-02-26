@@ -36,6 +36,7 @@ const ShipmentInquiryRequests = () => {
 
   const [packageNumberInput, setPackageNumberInput] = useState('');
   const [inquiryToAccept, setInquiryToAccept] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [zoomedImage, setZoomedImage] = useState(null);
 
   const [adminName, setAdminName] = useState('');
@@ -189,12 +190,29 @@ const ShipmentInquiryRequests = () => {
   };
 
   const confirmAcceptWithPackageNumber = async () => {
+    if (isSubmitting) return;
+
     if (!packageNumberInput.trim()) {
       toast.warning('Please enter a package number.');
       return;
     }
 
+    setIsSubmitting(true);
+
     try {
+      // --- NEW: Uniqueness Check ---
+      const checkQuery = query(
+        collection(db, "Packages"),
+        where("packageNumber", "==", packageNumberInput.trim())
+      );
+      const checkSnapshot = await getDocs(checkQuery);
+
+      if (!checkSnapshot.empty) {
+        toast.error(`A shipment with tracking number "${packageNumberInput.trim()}" already exists!`);
+        setIsSubmitting(false);
+        return; // Stop execution
+      }
+
       const { adminFirstName, adminLastName } = await fetchAdminDetails();
       const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
 
@@ -231,6 +249,44 @@ const ShipmentInquiryRequests = () => {
         packageNumber: packageNumberInput.trim(),
       });
 
+      // --- NEW: Generate User Notification & Shipment Conversation ---
+      if (inquiryToAccept.userUid) {
+        try {
+          // 1. Notification
+          await addDoc(collection(db, 'userNotifications'), {
+            userId: inquiryToAccept.userUid,
+            title: 'Shipment Request Accepted',
+            message: `Your shipment request has been accepted. Tracking #: ${packageNumberInput.trim()}`,
+            read: false,
+            createdAt: serverTimestamp(),
+            relatedId: docRef.id,
+            type: 'shipment_update'
+          });
+
+          // 2. Shipment Conversation Thread
+          const convoDocRef = await addDoc(collection(db, 'shipment_conversations'), {
+            userId: inquiryToAccept.userUid,
+            userFullName: inquiryToAccept.name || "Unknown User",
+            userEmail: inquiryToAccept.email || "",
+            packageId: docRef.id,
+            packageNumber: packageNumberInput.trim(),
+            status: 'open',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+
+          // 3. Initial System Welcome Message
+          await addDoc(collection(db, 'shipment_conversations', convoDocRef.id, 'messages'), {
+            text: `Your shipment request has been formally accepted! Your tracking number is ${packageNumberInput.trim()}. You can discuss any details regarding this specific shipment directly with an admin here.`,
+            senderId: 'system',
+            senderName: 'System',
+            timestamp: serverTimestamp(),
+          });
+        } catch (automationErr) {
+          console.error("Failed to generate user automations:", automationErr);
+        }
+      }
+
       await logActivity(adminFullName, `Accepted shipment inquiry ${inquiryToAccept.id} and created package ${packageNumberInput.trim()}`);
 
       setInquiries((prev) => prev.filter((i) => i.id !== inquiryToAccept.id));
@@ -242,6 +298,8 @@ const ShipmentInquiryRequests = () => {
     } catch (error) {
       console.error('Error accepting request:', error);
       toast.error('Failed to accept request. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -331,19 +389,23 @@ const ShipmentInquiryRequests = () => {
 
   // --- PRINT CONFIGURATION ---
   const printStyle = `
-    @page { size: landscape; margin: 10mm; }
+    @page { size: landscape; margin: 15mm; }
     @media print {
-      body { font-family: Arial, sans-serif; -webkit-print-color-adjust: exact; }
-      .print-header { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #ddd; }
-      .print-header h2 { text-align: center; font-size: 20px; margin-bottom: 5px; color: #333; }
-      .print-header .header-details { display: flex; justify-content: space-between; font-size: 12px; color: #666; margin-top: 5px; }
-      table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 9pt; }
-      th, td { border: 1px solid #ddd; padding: 6px; text-align: left; word-wrap: break-word; }
-      th { background-color: #f2f2f2; }
-      tr { break-inside: auto; page-break-inside: auto; }
-      .overflow-x-auto { overflow: visible !important; height: auto !important; }
+      * { box-sizing: border-box; }
+      body { font-family: Arial, sans-serif; font-size: 9pt; color: #1e293b; -webkit-print-color-adjust: exact; margin: 0; }
+      .print-header { margin-bottom: 14px; padding-bottom: 10px; border-bottom: 2px solid #1e293b; }
+      .print-header h2 { font-size: 16pt; font-weight: bold; margin: 0 0 2px 0; }
+      .print-header .subtitle { font-size: 8pt; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 6px 0; }
+      .print-header .narrative { font-size: 9pt; color: #334155; margin: 6px 0 4px 0; line-height: 1.5; }
+      .print-header .meta { display: flex; justify-content: space-between; font-size: 8pt; color: #64748b; margin-top: 4px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 8pt; table-layout: fixed; }
+      thead { display: table-header-group; }
+      th { background-color: #f1f5f9 !important; font-weight: 700; color: #475569; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.05em; padding: 5px 8px; border: 1px solid #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+      td { border: 1px solid #e2e8f0; padding: 5px 8px; vertical-align: top; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      tr:nth-child(even) td { background-color: #f8fafc; }
+      .overflow-x-auto, .overflow-y-auto { overflow: visible !important; max-height: none !important; }
       .no-print { display: none !important; }
-      .prepared-by { margin-top: 30px; text-align: right; font-size: 12px; color: #333; page-break-inside: avoid; }
+      .print-footer { margin-top: 28px; padding-top: 12px; border-top: 1px solid #94a3b8; display: flex; justify-content: space-between; font-size: 9pt; color: #475569; }
     }
   `;
 
@@ -384,10 +446,12 @@ const ShipmentInquiryRequests = () => {
 
             {/* PRINT HEADER */}
             <div className="print-header hidden print:block">
-              <h2 className="text-2xl font-bold text-gray-900 text-center">SHIPMENT INQUIRY REPORTS</h2>
-              <div className="header-details">
-                <span>Date: {currentDate}</span>
-                <span>Status: Pending</span>
+              <h2>Shipment Inquiry Report</h2>
+              <p className="subtitle">Logistics Management System</p>
+              <p className="narrative">This report lists all pending shipment inquiry requests awaiting review and action. Printed on {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.</p>
+              <div className="meta">
+                <span>Status: <strong>Pending</strong></span>
+                <span>Printed: {currentDate}</span>
               </div>
             </div>
 
@@ -432,8 +496,9 @@ const ShipmentInquiryRequests = () => {
             </div>
 
             {/* PRINT FOOTER */}
-            <div className="prepared-by hidden print:block">
-              <p>Prepared by: {adminName.toUpperCase()}</p>
+            <div className="print-footer hidden print:flex">
+              <span>Produced by: <strong>{adminName.toUpperCase()}</strong></span>
+              <span>Date: {currentDate}</span>
             </div>
           </div>
         )}
@@ -592,10 +657,12 @@ const ShipmentInquiryRequests = () => {
 
               {/* HISTORY PRINT HEADER */}
               <div className="print-header hidden print:block">
-                <h2 className="text-2xl font-bold text-gray-900 text-center">SHIPMENT INQUIRY REPORTS</h2>
-                <div className="header-details">
-                  <span>Date: {currentDate}</span>
-                  <span>Status: History (Accepted/Rejected)</span>
+                <h2>Shipment Inquiry Report — History</h2>
+                <p className="subtitle">Logistics Management System</p>
+                <p className="narrative">This report contains a history of all processed shipment inquiry requests (Accepted / Rejected). Printed on {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.</p>
+                <div className="meta">
+                  <span>Status: <strong>History (Accepted / Rejected)</strong></span>
+                  <span>Printed: {currentDate}</span>
                 </div>
               </div>
 
@@ -649,8 +716,9 @@ const ShipmentInquiryRequests = () => {
               </div>
 
               {/* HISTORY PRINT FOOTER */}
-              <div className="prepared-by hidden print:block">
-                <p>Prepared by: {adminName.toUpperCase()}</p>
+              <div className="print-footer hidden print:flex">
+                <span>Produced by: <strong>{adminName.toUpperCase()}</strong></span>
+                <span>Date: {currentDate}</span>
               </div>
             </div>
 
@@ -693,31 +761,32 @@ const ShipmentInquiryRequests = () => {
       )}
 
       {isAcceptModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 no-print">
-          <div className="bg-white rounded-lg shadow-lg w-11/12 max-w-md p-6">
-            <h3 className="text-xl font-bold mb-4">Enter Package Number</h3>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-50 no-print">
+          <div className="bg-white rounded-lg p-6 shadow-xl w-11/12 max-w-sm text-center">
+            <h4 className="text-xl font-bold mb-4">Accept Request</h4>
+            <p className="mb-4 text-gray-700">Enter a package number for this shipment.</p>
             <input
               type="text"
-              className="w-full p-2 border border-gray-300 rounded mb-4"
               placeholder="Package Number"
+              className="w-full p-2 border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
               value={packageNumberInput}
               onChange={(e) => setPackageNumberInput(e.target.value)}
+              disabled={isSubmitting}
             />
-            <div className="flex justify-end gap-2">
+            <div className="flex gap-2 justify-center">
               <button
-                onClick={() => {
-                  setIsAcceptModalOpen(false);
-                  setInquiryToAccept(null);
-                }}
-                className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded"
+                onClick={() => setIsAcceptModalOpen(false)}
+                className="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded font-semibold"
+                disabled={isSubmitting}
               >
                 Cancel
               </button>
               <button
                 onClick={confirmAcceptWithPackageNumber}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
+                className={`bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded font-semibold ${isSubmitting ? "opacity-50 cursor-not-allowed" : ""}`}
+                disabled={isSubmitting}
               >
-                Confirm
+                {isSubmitting ? "Accepting..." : "Confirm & Accept"}
               </button>
             </div>
           </div>

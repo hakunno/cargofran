@@ -169,43 +169,59 @@ const ActivityModal = ({ show, onHide }) => {
     document.body.removeChild(link);
   };
 
-  // ==================== PRINT / SAVE AS PDF ====================
   const printTable = () => {
     if (filteredActivities.length === 0) {
       alert("No data to print");
       return;
     }
 
-    const printWindow = window.open("", "_blank", "width=900,height=700");
+    const printWindow = window.open("", "_blank", "width=1000,height=750");
 
     const tableRows = filteredActivities
       .map(
         (activity) => `
           <tr>
-            <td style="border:1px solid #ccc; padding:8px;">${activity.userName}</td>
-            <td style="border:1px solid #ccc; padding:8px;">${activity.displayedAction}</td> {/* Use displayedAction for print */}
-            <td style="border:1px solid #ccc; padding:8px;">${activity.formattedTimestamp}</td>
+            <td>${activity.userName}</td>
+            <td>${activity.displayedAction || activity.action}</td>
+            <td>${activity.formattedTimestamp}</td>
           </tr>`
       )
       .join("");
+
+    const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Activity Log</title>
+          <title>Staff Activity Log</title>
           <style>
-            body { font-family: Arial, sans-serif; padding: 20px; }
-            h1 { text-align: center; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th, td { border: 1px solid #ccc; padding: 10px; text-align: left; }
-            th { background-color: #f2f2f2; }
+            @page { size: landscape; margin: 15mm; }
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { font-family: Arial, sans-serif; font-size: 9pt; color: #1e293b; }
+            .print-header { margin-bottom: 14px; padding-bottom: 10px; border-bottom: 2px solid #1e293b; }
+            .print-header h1 { font-size: 16pt; font-weight: bold; margin-bottom: 2px; }
+            .subtitle { font-size: 8pt; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+            .narrative { font-size: 9pt; color: #334155; margin: 6px 0 4px 0; line-height: 1.5; }
+            .meta { display: flex; justify-content: space-between; font-size: 8pt; color: #64748b; margin-top: 4px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 8pt; }
+            thead { display: table-header-group; }
+            th { background-color: #f1f5f9; font-weight: 700; color: #475569; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.05em; padding: 5px 8px; border: 1px solid #e2e8f0; }
+            td { border: 1px solid #e2e8f0; padding: 5px 8px; vertical-align: top; word-break: break-word; }
+            tr:nth-child(even) td { background-color: #f8fafc; }
+            .print-footer { margin-top: 28px; padding-top: 12px; border-top: 1px solid #94a3b8; display: flex; justify-content: space-between; font-size: 9pt; color: #475569; }
           </style>
         </head>
         <body>
-          <h1>Activity Log</h1>
-          <p><strong>Exported on:</strong> ${new Date().toLocaleString()}</p>
-          <p><strong>Total records:</strong> ${filteredActivities.length}</p>
+          <div class="print-header">
+            <h1>Staff Activity Log</h1>
+            <p class="subtitle">Logistics Management System</p>
+            <p class="narrative">This report lists all recorded staff activities${searchQuery ? ' filtered by &quot;' + searchQuery + '&quot;' : ''}. Total records: ${filteredActivities.length}.</p>
+            <div class="meta">
+              <span>Records: <strong>${filteredActivities.length}</strong></span>
+              <span>Printed: ${dateStr}</span>
+            </div>
+          </div>
           <table>
             <thead>
               <tr>
@@ -218,6 +234,10 @@ const ActivityModal = ({ show, onHide }) => {
               ${tableRows}
             </tbody>
           </table>
+          <div class="print-footer">
+            <span>Produced by: System</span>
+            <span>Date: ${dateStr}</span>
+          </div>
         </body>
       </html>
     `);
@@ -225,7 +245,6 @@ const ActivityModal = ({ show, onHide }) => {
     printWindow.document.close();
     printWindow.focus();
     printWindow.print();
-    // printWindow.close(); // optional — let user keep it if they want
   };
 
   return (
@@ -345,7 +364,7 @@ const ActivityModal = ({ show, onHide }) => {
                 filteredActivities.map((activity) => (
                   <tr key={activity.id}>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{activity.userName}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{activity.displayedAction}</td> {/* Use displayedAction for display */}
+                    <td className="px-4 py-3 text-sm text-gray-900">{activity.displayedAction}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{activity.formattedTimestamp}</td>
                   </tr>
                 ))

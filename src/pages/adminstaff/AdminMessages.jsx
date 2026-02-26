@@ -9,16 +9,16 @@ import {
   where,
   onSnapshot,
   orderBy,
-  doc,
   getDoc,
   getDocs,
   setDoc,
+  addDoc,
   deleteDoc,
   serverTimestamp
 } from "firebase/firestore";
 import { db } from "../../jsfile/firebase";
 import ChatWindow from "../Messages";
-import { FaArrowLeft, FaSearch, FaUserCircle, FaCommentSlash, FaHistory, FaInbox, FaClock, FaCheckDouble, FaTimesCircle } from "react-icons/fa";
+import { FaArrowLeft, FaSearch, FaUserCircle, FaCommentSlash, FaHistory, FaInbox, FaClock, FaCheckDouble, FaTimesCircle, FaTruck } from "react-icons/fa";
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -164,12 +164,16 @@ const AdminConversations = () => {
   const sourceList = viewMode === 'active' ? conversations : historyConversations;
 
   const filteredConversations = sourceList
-    .filter((conv) => !conv.adminId || conv.adminId === currentUserId)
+    .filter((conv) => {
+      if (viewMode === 'shipments') return true;
+      return !conv.adminId || conv.adminId === currentUserId;
+    })
     .filter((conv) => {
       const name = (conv.userFullName || "").toLowerCase();
       const email = (conv.userEmail || "").toLowerCase();
+      const pkg = (conv.packageNumber || "").toLowerCase();
       const q = searchQuery.toLowerCase();
-      return name.includes(q) || email.includes(q);
+      return name.includes(q) || email.includes(q) || pkg.includes(q);
     });
 
   const handleConversationClick = (conv) => {
@@ -181,14 +185,14 @@ const AdminConversations = () => {
     }
   };
 
-  // Helper to get active user name for header
   const getActiveUserName = () => {
     const conv = filteredConversations.find(c => c.id === selectedConversationId);
-    return conv ? (conv.userFullName || conv.userEmail) : "Chat";
+    if (!conv) return "Chat";
+    return conv.userFullName || conv.userEmail;
   };
 
   return (
-    <div className="flex flex-col md:flex-row h-screen bg-gray-50 overflow-hidden">
+    <div className="flex flex-col md:flex-row h-screen bg-gray-50 text-gray-900 overflow-hidden">
       <Sidebar />
 
       {/* Main Content Area */}
@@ -210,18 +214,18 @@ const AdminConversations = () => {
             <div className="flex bg-gray-100 p-1 rounded-lg">
               <button
                 onClick={() => { setViewMode('active'); setSelectedConversationId(null); }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all ${viewMode === 'active'
-                    ? 'bg-white text-blue-600 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
+                className={`flex-1 flex items-center justify-center gap-1 py-1 px-1 text-xs font-medium rounded-md transition-all ${viewMode === 'active'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
                   }`}
               >
                 <FaInbox /> Inbox ({conversations.length})
               </button>
               <button
                 onClick={() => { setViewMode('history'); setSelectedConversationId(null); }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all ${viewMode === 'history'
-                    ? 'bg-white text-blue-600 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
+                className={`flex-1 flex items-center justify-center gap-1 py-1 px-1 text-xs font-medium rounded-md transition-all ${viewMode === 'history'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
                   }`}
               >
                 <FaHistory /> History
@@ -376,7 +380,6 @@ const AdminConversations = () => {
 
           {selectedConversationId ? (
             <div className="flex-1 h-full overflow-hidden flex flex-col">
-
               <ChatWindow
                 conversationId={selectedConversationId}
                 currentUserId={currentUserId}
@@ -385,7 +388,6 @@ const AdminConversations = () => {
                 isReadOnly={viewMode === 'history'}
                 archivedData={selectedArchivedData} // Pass the full saved object
               />
-
             </div>
           ) : (
             /* Empty State */
