@@ -7,7 +7,7 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import AddressSelector from './AddressSelector';
 import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
-import { ToastContainer, toast } from 'react-toastify';
+import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 const storage = getStorage(); // Added
@@ -480,10 +480,10 @@ export default function ShippingServiceRequestForm() {
 
   const isRoad = formData.transportMode === 'Road';
 
-  const availableModes = formData.shipmentDirection === 'Domestic' 
-    ? ['Air', 'Sea', 'Road'] 
-    : formData.shipmentDirection 
-      ? ['Air', 'Sea'] 
+  const availableModes = formData.shipmentDirection === 'Domestic'
+    ? ['Air', 'Sea', 'Road']
+    : formData.shipmentDirection
+      ? ['Air', 'Sea']
       : ['Air', 'Sea', 'Road'];
 
   return (
@@ -1014,7 +1014,7 @@ export default function ShippingServiceRequestForm() {
           />
         </div>
       )}
-      <ToastContainer />
+
     </div>
   );
 }

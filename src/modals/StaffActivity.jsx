@@ -27,6 +27,8 @@ const ActivityModal = ({ show, onHide }) => {
     canceled: false,
     acceptedMessage: false,
     acceptedShipment: false,
+    loggedIn: false,
+    loggedOut: false,
   });
 
   useEffect(() => {
@@ -37,7 +39,7 @@ const ActivityModal = ({ show, onHide }) => {
       const activityList = snapshot.docs.map((doc) => {
         const data = doc.data();
         const date = data.timestamp?.toDate();
-        return {
+        const baseActivity = {
           id: doc.id,
           userName: data.userName || "Unknown",
           action: data.action || "",
@@ -45,6 +47,15 @@ const ActivityModal = ({ show, onHide }) => {
           dateString: date ? date.toLocaleDateString("sv-SE") : null,
           formattedTimestamp: date ? date.toLocaleString() : "N/A",
         };
+
+        // Remove any 20-character alphanumeric IDs (Firestore-style) from the displayed action
+        const idPattern = /\b[A-Za-z0-9]{20}\b/g;
+        baseActivity.displayedAction = baseActivity.action
+          .replace(idPattern, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        return baseActivity;
       });
       setActivities(activityList);
     });
@@ -67,7 +78,7 @@ const ActivityModal = ({ show, onHide }) => {
       // Hide if no valid timestamp
       if (!activity.dateString) return false;
 
-      // Search in userName OR action
+      // Search in userName OR action (use original action for search)
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         const matchesSearch =
@@ -80,7 +91,7 @@ const ActivityModal = ({ show, onHide }) => {
       if (startDate && activity.dateString < startDate) return false;
       if (endDate && activity.dateString > endDate) return false;
 
-      // Checkbox filters
+      // Checkbox filters (use original action for filters)
       const anyFilterActive = Object.values(filters).some((f) => f);
       if (anyFilterActive) {
         let matches = false;
@@ -89,6 +100,8 @@ const ActivityModal = ({ show, onHide }) => {
         if (filters.canceled && activity.action.includes("Canceled")) matches = true;
         if (filters.acceptedMessage && activity.action.includes("Approved conversation")) matches = true;
         if (filters.acceptedShipment && activity.action.includes("Accepted shipment")) matches = true;
+        if (filters.loggedIn && activity.action.includes("Logged in")) matches = true;
+        if (filters.loggedOut && activity.action.includes("Logged out")) matches = true;
         if (!matches) return false;
       }
 
@@ -113,6 +126,8 @@ const ActivityModal = ({ show, onHide }) => {
       canceled: false,
       acceptedMessage: false,
       acceptedShipment: false,
+      loggedIn: false,
+      loggedOut: false,
     });
   };
 
@@ -128,7 +143,7 @@ const ActivityModal = ({ show, onHide }) => {
     const headers = ["User Name", "Action", "Timestamp"];
     const rows = filteredActivities.map((activity) => [
       activity.userName,
-      activity.action,
+      activity.displayedAction, // Use displayedAction for export
       activity.formattedTimestamp,
     ]);
 
@@ -154,43 +169,59 @@ const ActivityModal = ({ show, onHide }) => {
     document.body.removeChild(link);
   };
 
-  // ==================== PRINT / SAVE AS PDF ====================
   const printTable = () => {
     if (filteredActivities.length === 0) {
       alert("No data to print");
       return;
     }
 
-    const printWindow = window.open("", "_blank", "width=900,height=700");
+    const printWindow = window.open("", "_blank", "width=1000,height=750");
 
     const tableRows = filteredActivities
       .map(
         (activity) => `
           <tr>
-            <td style="border:1px solid #ccc; padding:8px;">${activity.userName}</td>
-            <td style="border:1px solid #ccc; padding:8px;">${activity.action}</td>
-            <td style="border:1px solid #ccc; padding:8px;">${activity.formattedTimestamp}</td>
+            <td>${activity.userName}</td>
+            <td>${activity.displayedAction || activity.action}</td>
+            <td>${activity.formattedTimestamp}</td>
           </tr>`
       )
       .join("");
+
+    const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Activity Log</title>
+          <title>Staff Activity Log</title>
           <style>
-            body { font-family: Arial, sans-serif; padding: 20px; }
-            h1 { text-align: center; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th, td { border: 1px solid #ccc; padding: 10px; text-align: left; }
-            th { background-color: #f2f2f2; }
+            @page { size: landscape; margin: 15mm; }
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { font-family: Arial, sans-serif; font-size: 9pt; color: #1e293b; }
+            .print-header { margin-bottom: 14px; padding-bottom: 10px; border-bottom: 2px solid #1e293b; }
+            .print-header h1 { font-size: 16pt; font-weight: bold; margin-bottom: 2px; }
+            .subtitle { font-size: 8pt; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+            .narrative { font-size: 9pt; color: #334155; margin: 6px 0 4px 0; line-height: 1.5; }
+            .meta { display: flex; justify-content: space-between; font-size: 8pt; color: #64748b; margin-top: 4px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 8pt; }
+            thead { display: table-header-group; }
+            th { background-color: #f1f5f9; font-weight: 700; color: #475569; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.05em; padding: 5px 8px; border: 1px solid #e2e8f0; }
+            td { border: 1px solid #e2e8f0; padding: 5px 8px; vertical-align: top; word-break: break-word; }
+            tr:nth-child(even) td { background-color: #f8fafc; }
+            .print-footer { margin-top: 28px; padding-top: 12px; border-top: 1px solid #94a3b8; display: flex; justify-content: space-between; font-size: 9pt; color: #475569; }
           </style>
         </head>
         <body>
-          <h1>Activity Log</h1>
-          <p><strong>Exported on:</strong> ${new Date().toLocaleString()}</p>
-          <p><strong>Total records:</strong> ${filteredActivities.length}</p>
+          <div class="print-header">
+            <h1>Staff Activity Log</h1>
+            <p class="subtitle">Logistics Management System</p>
+            <p class="narrative">This report lists all recorded staff activities${searchQuery ? ' filtered by &quot;' + searchQuery + '&quot;' : ''}. Total records: ${filteredActivities.length}.</p>
+            <div class="meta">
+              <span>Records: <strong>${filteredActivities.length}</strong></span>
+              <span>Printed: ${dateStr}</span>
+            </div>
+          </div>
           <table>
             <thead>
               <tr>
@@ -203,6 +234,10 @@ const ActivityModal = ({ show, onHide }) => {
               ${tableRows}
             </tbody>
           </table>
+          <div class="print-footer">
+            <span>Produced by: System</span>
+            <span>Date: ${dateStr}</span>
+          </div>
         </body>
       </html>
     `);
@@ -210,7 +245,6 @@ const ActivityModal = ({ show, onHide }) => {
     printWindow.document.close();
     printWindow.focus();
     printWindow.print();
-    // printWindow.close(); // optional — let user keep it if they want
   };
 
   return (
@@ -276,6 +310,18 @@ const ActivityModal = ({ show, onHide }) => {
               checked={filters.acceptedShipment}
               onChange={() => handleFilterChange('acceptedShipment')}
             />
+            <Form.Check
+              type="checkbox"
+              label="Logged In"
+              checked={filters.loggedIn}
+              onChange={() => handleFilterChange('loggedIn')}
+            />
+            <Form.Check
+              type="checkbox"
+              label="Logged Out"
+              checked={filters.loggedOut}
+              onChange={() => handleFilterChange('loggedOut')}
+            />
           </div>
 
           {/* Clear Filters + Export Buttons */}
@@ -298,32 +344,34 @@ const ActivityModal = ({ show, onHide }) => {
           </div>
         </div>
 
-        <Table striped bordered hover responsive>
-          <thead>
-            <tr>
-              <th>User Name</th>
-              <th>Action</th>
-              <th>Timestamp</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredActivities.length === 0 ? (
+        <div className="overflow-x-auto overflow-y-auto max-h-[70vh] border rounded-lg">
+          <Table className="min-w-full divide-y divide-gray-200 mb-0" responsive>
+            <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
               <tr>
-                <td colSpan="3" className="text-center text-muted py-4">
-                  No activities match the current filters.
-                </td>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">User Name</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Action</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Timestamp</th>
               </tr>
-            ) : (
-              filteredActivities.map((activity) => (
-                <tr key={activity.id}>
-                  <td>{activity.userName}</td>
-                  <td>{activity.action}</td>
-                  <td>{activity.formattedTimestamp}</td>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredActivities.length === 0 ? (
+                <tr>
+                  <td colSpan="3" className="text-center text-muted py-4">
+                    No activities match the current filters.
+                  </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </Table>
+              ) : (
+                filteredActivities.map((activity) => (
+                  <tr key={activity.id}>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{activity.userName}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900">{activity.displayedAction}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{activity.formattedTimestamp}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </Table>
+        </div>
       </Modal.Body>
       <Modal.Footer>
         <Button variant="secondary" onClick={onHide}>

@@ -1,5 +1,18 @@
+@import "tailwindcss";
+@plugin "tailwind-scrollbar";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-slate-900: #0f172a;
+}
+
 body {
     background-color: #9fbcc7;
+}
+
+:is(.dark) body {
+    background-color: var(--color-slate-900);
 }
 
 ::-webkit-scrollbar {
@@ -47,9 +60,3 @@ body {
   font-style: normal;
 }
 
-@import "tailwindcss";
-
-@custom-variant dark (&:where(.dark, .dark *));
-@tailwind base;
-@tailwind components;
-@tailwind utilities;

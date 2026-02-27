@@ -9,36 +9,38 @@ import {
   query,
   orderBy,
   where,
+  getDoc,
   getDocs,
   onSnapshot,
+  deleteDoc,
 } from "firebase/firestore";
 
 // Helper imports
 import { fetchUserData } from "../helpers/AuthHelpers";
-import { 
-  createNewConversation, 
-  updateConversationStatus, 
-  archiveConversation 
+import {
+  createNewConversation,
+  updateConversationStatus,
+  archiveConversation
 } from "../helpers/ConversationHelpers";
-import { faqStep1Options, faqFollowUp } from "../helpers/FaqHelpers"; 
+import { faqStep1Options, faqFollowUp } from "../helpers/FaqHelpers";
 import { sendMessage } from "../helpers/MessageHelpers";
 
 // Import your Login Modal
 import LoginModal from "../modals/Login";
 
-const ChatWindow = ({ 
-  conversationId: propConversationId, 
+const ChatWindow = ({
+  conversationId: propConversationId,
   widgetMode = false,
-  isReadOnly = false, 
+  isReadOnly = false,
   archivedData = null,
-  role: propRole = "user" 
+  role: propRole = "user"
 }) => {
-  
+
   // --- State ---
   const [authUser, setAuthUser] = useState(null);
-  const [role, setRole] = useState(propRole); 
+  const [role, setRole] = useState(propRole);
   const [userData, setUserData] = useState(null);
-  
+
   // Conversation State
   const [localConversationId, setLocalConversationId] = useState(
     propConversationId || localStorage.getItem("conversationId") || null
@@ -46,17 +48,17 @@ const ChatWindow = ({
   const [conversationData, setConversationData] = useState(null);
   const [conversationStatus, setConversationStatus] = useState(null);
   const [messages, setMessages] = useState([]);
-  
+
   // Input & UI State
   const [newMessage, setNewMessage] = useState("");
-  const [isPreChat, setIsPreChat] = useState(!localConversationId); 
+  const [isPreChat, setIsPreChat] = useState(!localConversationId);
   const messagesEndRef = useRef(null);
-  
+
   // Ref for the Login Modal
   const loginModalRef = useRef(null);
 
   // FAQ State
-  const [faqStep, setFaqStep] = useState(0); 
+  const [faqStep, setFaqStep] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [showMoreQuestionPrompt, setShowMoreQuestionPrompt] = useState(false);
 
@@ -74,7 +76,7 @@ const ChatWindow = ({
         const data = await fetchUserData(db, user);
         setUserData(data);
         if (propRole === "user") {
-            setRole(data?.role || "user");
+          setRole(data?.role || "user");
         }
       } else {
         setAuthUser(null);
@@ -92,7 +94,7 @@ const ChatWindow = ({
       setConversationData(archivedData);
       setConversationStatus('ended');
       setIsPreChat(false);
-      return; 
+      return;
     }
 
     if (!localConversationId) {
@@ -111,8 +113,8 @@ const ChatWindow = ({
       const data = docSnap.data();
       setConversationStatus(data.status);
       setConversationData(data);
-      
-      if(data.status === 'faqchat') setFaqStep(1); 
+
+      if (data.status === 'faqchat') setFaqStep(1);
     });
 
     const messagesRef = collection(db, "conversations", localConversationId, "messages");
@@ -268,15 +270,46 @@ const ChatWindow = ({
     }
   };
 
+  // --- GARBAGE COLLECTION FOR ABANDONED FAQS ---
+  const cleanupAbandonedFaqChats = async (userObj) => {
+    if (!userObj || !userObj.uid) return;
+    try {
+      const q = query(
+        collection(db, "conversations"),
+        where("userId", "==", userObj.uid),
+        where("status", "==", "faqchat")
+      );
+      const snapshot = await getDocs(q);
+
+      const deletePromises = snapshot.docs.map(async (convoDoc) => {
+        // Delete all messages in the subcollection first
+        const messagesRef = collection(db, "conversations", convoDoc.id, "messages");
+        const msgSnap = await getDocs(messagesRef);
+        const msgDeletes = msgSnap.docs.map(msgDoc => deleteDoc(doc(db, "conversations", convoDoc.id, "messages", msgDoc.id)));
+        await Promise.all(msgDeletes);
+
+        // Delete the parent conversation document
+        return deleteDoc(doc(db, "conversations", convoDoc.id));
+      });
+
+      await Promise.all(deletePromises);
+    } catch (error) {
+      console.error("Error cleaning up abandoned FAQ chats:", error);
+    }
+  };
+
   // --- ACTIONS ---
   const startFaqChat = async () => {
     try {
       const currentUser = authUser || {
-        uid: `guest_${Date.now()}`, 
+        uid: `guest_${Date.now()}`,
         displayName: "Guest",
         email: "guest@example.com",
         isAnonymous: true
       };
+
+      // Clean up previous abandoned FAQ chats first
+      await cleanupAbandonedFaqChats(currentUser);
 
       const convoId = await createNewConversation(db, currentUser, userData, "Started FAQ Session");
       await updateConversationStatus(db, convoId, "faqchat");
@@ -299,23 +332,60 @@ const ChatWindow = ({
 
   const requestLiveAgent = async () => {
     if (!authUser) {
-      if(loginModalRef.current) {
-        loginModalRef.current.openModal(); 
+      if (loginModalRef.current) {
+        loginModalRef.current.openModal();
       }
       return;
     }
 
     try {
+      // 0. Clean up any abandoned FAQ sessions before they enter a live queue
+      await cleanupAbandonedFaqChats(authUser);
+
+      // 1. Prevent overlapping requests by checking if they already have an active pending one
+      const existingQueries = query(
+        collection(db, "conversations"),
+        where("userId", "==", authUser.uid),
+        where("status", "==", "pending")
+      );
+
+      const snapshot = await getDocs(existingQueries);
+      const now = new Date().getTime();
+      let activeRequestId = null;
+
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        if (data.requestExpiresAt) {
+          const expiryTime = new Date(data.requestExpiresAt).getTime();
+          if (now < expiryTime) {
+            activeRequestId = docSnap.id;
+          }
+        }
+      });
+
+      // If they already have an active request, just reopen that chat window for them
+      if (activeRequestId) {
+        setLocalConversationId(activeRequestId);
+        localStorage.setItem("conversationId", activeRequestId);
+        setFaqStep(0);
+        setShowMoreQuestionPrompt(false);
+        return;
+      }
+
+      // 2. Set Expiry Timestamp (5 Minutes from now)
+      const expiresAt = new Date(now + 5 * 60 * 1000).toISOString();
+
       const convoId = await createNewConversation(db, authUser, userData, "I would like to speak to an agent.");
       await updateDoc(doc(db, "conversations", convoId), {
         status: "pending",
         request: "sent",
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        requestExpiresAt: expiresAt
       });
 
       setLocalConversationId(convoId);
       localStorage.setItem("conversationId", convoId);
-      setFaqStep(0); 
+      setFaqStep(0);
       setShowMoreQuestionPrompt(false);
     } catch (error) {
       console.error("Error requesting agent:", error);
@@ -492,7 +562,7 @@ const ChatWindow = ({
     }
 
     if (!authUser) {
-      if(loginModalRef.current) {
+      if (loginModalRef.current) {
         loginModalRef.current.openModal();
       }
       return;
@@ -512,22 +582,22 @@ const ChatWindow = ({
 
   // --- Logic for Admin/Staff ---
   const isAdminOrStaff = role === 'admin' || role === 'staff';
-  
-  const isInputDisabled = 
-    conversationStatus === "ended" || 
-    conversationStatus === "rejected" || 
-    (conversationStatus === "pending" && !isAdminOrStaff); 
+
+  const isInputDisabled =
+    conversationStatus === "ended" ||
+    conversationStatus === "rejected" ||
+    (conversationStatus === "pending" && !isAdminOrStaff);
 
   let inputPlaceholder = "Type your message...";
   if (!authUser) inputPlaceholder = "Log in to chat...";
   else if (conversationStatus === 'faqchat' && !isTrackingInput) inputPlaceholder = "Type to request an agent...";
   else if (conversationStatus === 'pending' && !isAdminOrStaff) inputPlaceholder = "Waiting for an agent to accept...";
   else if (isTrackingInput) inputPlaceholder = "Enter your package number";
-  
+
   const renderMessage = (msg) => {
     const isSystem = msg.senderId === "system";
     const isMe = msg.senderId === authUser?.uid || msg.senderId === "guest";
-    
+
     return (
       <div key={msg.id} className={`flex flex-col mb-3 ${isSystem ? 'items-center' : (isMe ? 'items-end' : 'items-start')}`}>
         <div className={`
@@ -540,8 +610,8 @@ const ChatWindow = ({
         </div>
         {!isSystem && (
           <span className="text-[10px] text-gray-400 mt-1 px-1">
-            {msg.timestamp?.seconds 
-              ? new Date(msg.timestamp.seconds * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+            {msg.timestamp?.seconds
+              ? new Date(msg.timestamp.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
               : "Just now"}
           </span>
         )}
@@ -551,15 +621,15 @@ const ChatWindow = ({
 
   return (
     <div className={`flex flex-col w-full bg-gray-50 ${widgetMode ? "h-full" : "h-screen md:h-full"}`}>
-      
+
       {/* --- HEADER --- */}
       {!isAdminOrStaff && (
         <div className="p-4 bg-white border-b border-gray-200 flex items-center justify-between shadow-sm z-10">
           <div>
             <h4 className="font-bold text-gray-800 text-lg">Support Chat</h4>
             <p className="text-xs text-gray-500">
-              {isReadOnly 
-                ? `Archived • Duration: ${conversationData?.duration || 'N/A'}` 
+              {isReadOnly
+                ? `Archived • Duration: ${conversationData?.duration || 'N/A'}`
                 : (conversationStatus === 'approved' ? 'Live with Agent' : 'Automated Support')
               }
             </p>
@@ -579,7 +649,7 @@ const ChatWindow = ({
             </div>
 
             <div className="w-full max-w-xs space-y-3">
-              <button 
+              <button
                 onClick={startFaqChat}
                 className="w-full p-4 bg-white border border-blue-200 rounded-xl shadow-sm hover:shadow-md hover:bg-blue-50 transition flex items-center gap-3 group"
               >
@@ -592,7 +662,7 @@ const ChatWindow = ({
                 </div>
               </button>
 
-              <button 
+              <button
                 onClick={requestLiveAgent}
                 className="w-full p-4 bg-white border border-green-200 rounded-xl shadow-sm hover:shadow-md hover:bg-green-50 transition flex items-center gap-3 group"
               >
@@ -601,7 +671,7 @@ const ChatWindow = ({
                 </div>
                 <div className="text-left">
                   <p className="font-semibold text-gray-800">
-                     {authUser ? "Chat with Support" : "Log in to Chat"}
+                    {authUser ? "Chat with Support" : "Log in to Chat"}
                   </p>
                   <p className="text-xs text-gray-500">Talk to a human agent</p>
                 </div>
@@ -613,12 +683,26 @@ const ChatWindow = ({
         {!isPreChat && (
           <>
             {messages.map((msg) => renderMessage(msg))}
-            
+
             {!isReadOnly && conversationStatus === 'pending' && (
               <div className="text-center py-2">
                 <span className="bg-yellow-100 text-yellow-800 text-xs px-3 py-1 rounded-full animate-pulse">
                   Waiting for an agent to join...
                 </span>
+              </div>
+            )}
+
+            {!isReadOnly && (conversationStatus === 'ended' || conversationStatus === 'rejected') && (
+              <div className="text-center py-6 flex flex-col items-center gap-3">
+                <span className="text-gray-500 text-sm italic bg-gray-100 px-4 py-2 rounded-full border border-gray-200">
+                  This conversation has ended.
+                </span>
+                <button
+                  onClick={resetChat}
+                  className="mt-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700 hover:shadow transition font-medium"
+                >
+                  Start New Chat
+                </button>
               </div>
             )}
 
@@ -638,7 +722,7 @@ const ChatWindow = ({
       {/* --- FOOTER / CONTROLS --- */}
       {!isPreChat && !isReadOnly && (
         <div className="p-3 bg-white border-t border-gray-200">
-          
+
           {conversationStatus === 'faqchat' && faqStep > 0 && !isTrackingInput && !showMoreQuestionPrompt && (
             <div className="flex flex-wrap gap-2 mb-3">
               {faqStep === 1 && faqStep1Options && faqStep1Options.map((opt) => (
@@ -662,8 +746,8 @@ const ChatWindow = ({
                       {opt.text}
                     </button>
                   ))}
-                  <button 
-                    onClick={() => setFaqStep(1)} 
+                  <button
+                    onClick={() => setFaqStep(1)}
                     className="px-3 py-2 text-gray-500 text-sm hover:text-gray-700 underline"
                   >
                     Back to Topics
@@ -702,7 +786,7 @@ const ChatWindow = ({
               onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
               disabled={isInputDisabled || (isTrackingInput && searchLoading)}
             />
-            <button 
+            <button
               onClick={handleSendMessage}
               disabled={isInputDisabled || (isTrackingInput && searchLoading)}
               className={`px-4 py-2 rounded-lg text-white font-medium transition shadow-sm
@@ -715,11 +799,11 @@ const ChatWindow = ({
         </div>
       )}
 
-      <LoginModal 
-        ref={loginModalRef} 
-        hideTrigger={true} 
-        isOpen={false} 
-        setIsOpen={() => {}} 
+      <LoginModal
+        ref={loginModalRef}
+        hideTrigger={true}
+        isOpen={false}
+        setIsOpen={() => { }}
       />
     </div>
   );

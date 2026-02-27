@@ -1,8 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { auth } from "../jsfile/firebase";
-import { doc, getDoc } from "firebase/firestore";
 import { db } from "../jsfile/firebase";
-import { fetchUserData } from "../helpers/AuthHelpers"; // if you have this helper
+import { fetchUserData } from "../helpers/AuthHelpers";
 
 const AuthContext = createContext();
 
@@ -12,19 +11,18 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (user) => {
-      if (user) {
-        setUser(user);
-        if (user.isAnonymous) {
+    const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+        if (currentUser.isAnonymous) {
           setRole("guest");
-          // Optionally, set some guest-specific data if needed
         } else {
           try {
-            const data = await fetchUserData(db, user);
+            const data = await fetchUserData(db, currentUser);
             setRole(data?.role || "user");
           } catch (error) {
             console.error("Error fetching user data:", error);
-            setRole(null);
+            setRole("user");
           }
         }
       } else {
@@ -33,8 +31,17 @@ export const AuthProvider = ({ children }) => {
       }
       setLoading(false);
     });
+
     return () => unsubscribe();
   }, []);
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', marginTop: '50px' }}>
+        Loading...
+      </div>
+    );
+  }
 
   return (
     <AuthContext.Provider value={{ user, role, loading }}>
@@ -43,5 +50,4 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-// Custom hook to use the auth context
 export const useAuth = () => useContext(AuthContext);

@@ -17,6 +17,8 @@ import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
 import "../assets/css/ManageUsers.css";
 import { useAuth } from "../utils/AuthContext"; // Import your auth context
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 function ManageUsers({ show, onHide }) {
   // Get current user's role and loading state from your auth context
@@ -61,9 +63,9 @@ function ManageUsers({ show, onHide }) {
   useEffect(() => {
     const fetchUsers = async () => {
       const snapshot = await getDocs(usersCollection);
-      const userList = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
+      const userList = snapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data(),
       }));
 
       // Sort users by createdAt (descending - newest first)
@@ -108,17 +110,17 @@ function ManageUsers({ show, onHide }) {
 
   const handleResetPassword = async (email) => {
     if (resetCooldown[email]) {
-      alert("Please wait before sending another reset email.");
+      toast.warning("Please wait before sending another reset email.");
       return;
     }
 
     try {
       await sendPasswordResetEmail(auth, email);
-      alert(`Password reset email sent to ${email}`);
+      toast.success(`Password reset email sent to ${email}`);
       setResetCooldown((prev) => ({ ...prev, [email]: 60 }));
     } catch (error) {
       console.error("Error sending reset email:", error.message);
-      alert("Failed to send reset email. Please try again.");
+      toast.error("Failed to send reset email. Please try again.");
     }
   };
 
@@ -133,12 +135,12 @@ function ManageUsers({ show, onHide }) {
       !newUserEmail ||
       !newUserPassword
     ) {
-      alert("Please fill in all fields.");
+      toast.warning("Please fill in all fields.");
       return;
     }
 
     if (newUserPassword.length < 6) {
-      alert("Password must be at least 6 characters long.");
+      toast.warning("Password must be at least 6 characters long.");
       return;
     }
 
@@ -175,7 +177,7 @@ function ManageUsers({ show, onHide }) {
           ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
         );
 
-        alert("User created successfully!");
+        toast.success("User created successfully!");
         setShowAddUserModal(false);
         setNewUserFirstName("");
         setNewUserLastName("");
@@ -183,11 +185,11 @@ function ManageUsers({ show, onHide }) {
         setNewUserPassword("");
         setNewUserRole("user");
       } else {
-        alert("Failed to create user: " + data.error);
+        toast.error("Failed to create user: " + data.error);
       }
     } catch (error) {
       console.error("Error:", error);
-      alert("Something went wrong.");
+      toast.error("Something went wrong.");
     }
   };
 
@@ -207,13 +209,13 @@ function ManageUsers({ show, onHide }) {
 
       if (response.ok) {
         setUsers((prevUsers) => prevUsers.filter((user) => user.id !== userId));
-        alert("User deleted successfully!");
+        toast.success("User deleted successfully!");
       } else {
-        alert("Failed to delete user: " + data.error);
+        toast.error("Failed to delete user: " + data.error);
       }
     } catch (error) {
       console.error("Error:", error);
-      alert("Something went wrong while deleting the user.");
+      toast.error("Something went wrong while deleting the user.");
     }
   };
 
@@ -230,7 +232,7 @@ function ManageUsers({ show, onHide }) {
       );
     } catch (error) {
       console.error("Error updating verification status:", error);
-      alert("Failed to update verification status.");
+      toast.error("Failed to update verification status.");
     }
   };
 
@@ -240,6 +242,7 @@ function ManageUsers({ show, onHide }) {
 
   return (
     <>
+
       {/* Main Manage Users Modal */}
       <Modal
         show={show}
@@ -259,32 +262,32 @@ function ManageUsers({ show, onHide }) {
             onChange={(e) => setSearch(e.target.value)}
             className="mb-3"
           />
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse border border-gray-300">
-              <thead>
-                <tr className="bg-gray-200">
-                  <th className="p-2 border">Email</th>
-                  <th className="p-2 border">Name</th>
-                  <th className="p-2 border">Role</th>
-                  <th className="p-2 border"></th>
-                  <th className="p-2 border">Reset Password</th>
-                  <th className="p-2 border">Delete</th>
+          <div className="overflow-x-auto overflow-y-auto max-h-[70vh] border rounded-lg">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Email</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Name</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Role</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50"></th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Reset Password</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Delete</th>
                 </tr>
               </thead>
-              <tbody className="max-h-[300px] overflow-y-auto">
+              <tbody className="bg-white divide-y divide-gray-200">
                 {users
                   .filter((user) => {
                     const fullName = `${user.firstName || ''} ${user.lastName || ''}`.toLowerCase();
-                    return fullName.includes(search.toLowerCase()) || 
-                           user.email.toLowerCase().includes(search.toLowerCase()) ||
-                           user.role.toLowerCase().includes(search.toLowerCase());
+                    return fullName.includes(search.toLowerCase()) ||
+                      user.email.toLowerCase().includes(search.toLowerCase()) ||
+                      user.role.toLowerCase().includes(search.toLowerCase());
                   })
                   .map((user) => (
-                    <tr key={user.id} className="text-center">
-                      <td className="p-2 border">{user.email}</td>
-                      <td className="p-2 border">{user.firstName} {user.lastName}</td>
-                      <td className="p-2 border">{user.role}</td>
-                      <td className="p-2 border">
+                    <tr key={user.id} className="text-center hover:bg-gray-50">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{user.email}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{user.firstName} {user.lastName}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{user.role}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                         <Button
                           variant={user.role === "staff" ? "danger" : "success"}
                           onClick={() =>
@@ -302,7 +305,7 @@ function ManageUsers({ show, onHide }) {
                             : `Change to ${user.role === "staff" ? "User" : "Staff"}`}
                         </Button>
                       </td>
-                      <td className="p-2 border">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                         <Button
                           variant="warning"
                           onClick={() => handleResetPassword(user.email)}
@@ -313,7 +316,7 @@ function ManageUsers({ show, onHide }) {
                             : "Send Reset Email"}
                         </Button>
                       </td>
-                      <td className="p-2 border">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                         {role === "admin" && user.role !== "admin" && (
                           <Button
                             variant="danger"
