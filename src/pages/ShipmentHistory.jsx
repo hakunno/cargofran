@@ -179,123 +179,124 @@ const UserShipmentHistory = () => {
   if (error) return <div className="p-4 text-center text-danger">{error}</div>;
 
   return (
-    <div className="p-4">
-      <h2 className="text-center mb-4">Your Shipment & Request History</h2>
+    <div className="min-h-screen bg-white">
+      <div className="p-4">
+        <h2 className="text-center mb-4">Your Shipment & Request History</h2>
 
-      {entries.length === 0 ? (
-        <p className="text-center">No shipments or requests found for your account.</p>
-      ) : (
-        <div className="overflow-x-auto overflow-y-auto max-h-[70vh] border rounded-lg">
-          <Table className="min-w-full divide-y divide-gray-200 mb-0">
-            <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
-              <tr>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Acceptance Status</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Package Number</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">From</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Destination</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Status</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Email</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Date</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {entries.map((e) => (
-                <tr key={`${e.collection}-${e.docId}`} className="text-center">
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{getAcceptanceStatus(e)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{getPackageNumber(e)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{e.senderCountry || "N/A"}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{e.destinationCountry || "N/A"}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{e.packageStatus || e.status || "N/A"}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{e.email || "N/A"}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{formatTimestamp(e.createdTime || e.createdAt || e.requestTime || e.dateStarted)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                    <div className="flex justify-center space-x-2">
-                      <Button size="sm" variant="info" onClick={() => openInfoModal(e)}>
-                        View
-                      </Button>
-                      {getAcceptanceStatus(e) === "Accepted" && userChatPackages.includes(getPackageNumber(e)) && (
-                        <Button
-                          size="sm"
-                          variant="primary"
-                          onClick={() => navigate('/ShipmentMessages', { state: { packageNumber: getPackageNumber(e) } })}
-                        >
-                          Message
-                        </Button>
-                      )}
-                    </div>
-                  </td>
+        {entries.length === 0 ? (
+          <p className="text-center">No shipments or requests found for your account.</p>
+        ) : (
+          <div className="overflow-x-auto overflow-y-auto max-h-[70vh] border rounded-lg">
+            <Table className="min-w-full divide-y divide-gray-200 mb-0">
+              <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
+                <tr>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Acceptance Status</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Package Number</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">From</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Destination</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Status</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Email</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Date</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </Table>
-        </div>
-      )}
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {entries.map((e) => (
+                  <tr key={`${e.collection}-${e.docId}`} className="text-center">
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{getAcceptanceStatus(e)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{getPackageNumber(e)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{e.senderCountry || "N/A"}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{e.destinationCountry || "N/A"}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{e.packageStatus || e.status || "N/A"}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{e.email || "N/A"}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{formatTimestamp(e.createdTime || e.createdAt || e.requestTime || e.dateStarted)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                      <div className="flex justify-center space-x-2">
+                        <Button size="sm" variant="info" onClick={() => openInfoModal(e)}>
+                          View
+                        </Button>
+                        {getAcceptanceStatus(e) === "Accepted" && userChatPackages.includes(getPackageNumber(e)) && (
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            onClick={() => navigate('/ShipmentMessages', { state: { packageNumber: getPackageNumber(e) } })}
+                          >
+                            Message
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
+        )}
 
-      <Modal show={infoModal} onHide={() => { setInfoModal(false); setCurrentEntry(null); setInfoHistory([]); }} size="lg" centered>
-        <Modal.Header closeButton>
-          <Modal.Title>
-            {currentEntry ? (currentEntry.collection === "Packages" ? `Shipment - #${getPackageNumber(currentEntry)}` : `Request - ${currentEntry.docId}`) : "Details"}
-          </Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          {infoLoading ? (
-            <p>Loading...</p>
-          ) : (
-            <>
-              {currentEntry && (
-                <div className="mb-3">
-                  <strong>Email:</strong> {currentEntry.email || "N/A"} <br />
-                  <strong>Status:</strong> {getAcceptanceStatus(currentEntry)} <br />
-                  <strong>Created:</strong> {formatTimestamp(currentEntry.createdTime || currentEntry.createdAt || currentEntry.requestTime)} <br />
-                </div>
-              )}
+        <Modal show={infoModal} onHide={() => { setInfoModal(false); setCurrentEntry(null); setInfoHistory([]); }} size="lg" centered>
+          <Modal.Header closeButton>
+            <Modal.Title>
+              {currentEntry ? `Shipment Number: ${getPackageNumber(currentEntry)}` : "Details"}
+            </Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            {infoLoading ? (
+              <p>Loading...</p>
+            ) : (
+              <>
+                {currentEntry && (
+                  <div className="mb-3">
+                    <strong>Email:</strong> {currentEntry.email || "N/A"} <br />
+                    <strong>Status:</strong> {getAcceptanceStatus(currentEntry)} <br />
+                    <strong>Created:</strong> {formatTimestamp(currentEntry.createdTime || currentEntry.createdAt || currentEntry.requestTime)} <br />
+                  </div>
+                )}
 
-              {currentEntry && currentEntry.collection === "Packages" ? (
-                <>
-                  <h6>Status History</h6>
-                  {infoHistory.length === 0 ? <p>No status history available.</p> : (
-                    <div className="overflow-x-auto overflow-y-auto max-h-[40vh] border rounded-lg">
-                      <Table size="sm" className="min-w-full divide-y divide-gray-200 mb-0">
-                        <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm"><tr><th className="px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50"></th><th className="px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Status</th><th className="px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Timestamp</th></tr></thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                          {infoHistory.map((h, idx) => (
-                            <tr key={h.id || idx}>
-                              <td className="px-3 py-2 text-sm text-gray-900">{infoHistory.length - idx}</td>
-                              <td className="px-3 py-2 text-sm text-gray-900">{h.status}</td>
-                              <td className="px-3 py-2 text-sm text-gray-900">{formatTimestamp(h.timestamp)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </Table>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div>
-                  <h6>Request Details</h6>
-                  {getAcceptanceStatus(currentEntry) === "Pending" ? (
-                    <p>Request is pending processing.</p>
-                  ) : getAcceptanceStatus(currentEntry) === "Rejected" ? (
-                    <>
-                      <p>This request was rejected.</p>
+                {currentEntry && currentEntry.collection === "Packages" ? (
+                  <>
+                    <h6>Status History</h6>
+                    {infoHistory.length === 0 ? <p>No status history available.</p> : (
+                      <div className="overflow-x-auto overflow-y-auto max-h-[40vh] border rounded-lg">
+                        <Table size="sm" className="min-w-full divide-y divide-gray-200 mb-0">
+                          <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm"><tr><th className="px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50"></th><th className="px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Status</th><th className="px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Timestamp</th></tr></thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {infoHistory.map((h, idx) => (
+                              <tr key={h.id || idx}>
+                                <td className="px-3 py-2 text-sm text-gray-900">{infoHistory.length - idx}</td>
+                                <td className="px-3 py-2 text-sm text-gray-900">{h.status}</td>
+                                <td className="px-3 py-2 text-sm text-gray-900">{formatTimestamp(h.timestamp)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </Table>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div>
+                    <h6>Request Details</h6>
+                    {getAcceptanceStatus(currentEntry) === "Pending" ? (
+                      <p>Request is pending processing.</p>
+                    ) : getAcceptanceStatus(currentEntry) === "Rejected" ? (
+                      <>
+                        <p>This request was rejected.</p>
+                        <pre style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(currentEntry, null, 2)}</pre>
+                      </>
+                    ) : (
                       <pre style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(currentEntry, null, 2)}</pre>
-                    </>
-                  ) : (
-                    <pre style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(currentEntry, null, 2)}</pre>
-                  )}
-                </div>
-              )}
-            </>
-          )}
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => { setInfoModal(false); setCurrentEntry(null); setInfoHistory([]); }}>Close</Button>
-        </Modal.Footer>
-      </Modal>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => { setInfoModal(false); setCurrentEntry(null); setInfoHistory([]); }}>Close</Button>
+          </Modal.Footer>
+        </Modal>
+      </div>
     </div>
   );
 };
 
 export default UserShipmentHistory;
-

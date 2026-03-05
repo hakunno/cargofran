@@ -99,7 +99,7 @@ const Navbar = () => {
 
   if (role === undefined) {
     return (
-      <nav className="border-gray-300 bg-white dark:bg-gray-800 dark:border-gray-700 font-semibold z-40">
+      <nav className="border-gray-300 bg-white font-semibold z-40">
       </nav>
     );
   }
@@ -665,7 +665,7 @@ const Navbar = () => {
                     ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
                       }
                     >
-                      Need help?
+                      Chat Us!
                     </NavLink>
                   </li>
                   <li className="w-full">
@@ -767,6 +767,18 @@ const Navbar = () => {
                       }
                     >
                       Track Package
+                    </NavLink>
+                  </li>
+                  <li className="w-full">
+                    <NavLink
+                      to="/Messages"
+                      onClick={() => setIsOpen(false)}
+                      className={({ isActive }) =>
+                        `kanit-regular md:hidden border-b border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
+                    ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
+                      }
+                    >
+                      Chat Us!
                     </NavLink>
                   </li>
                   <li className="w-full">

@@ -9,6 +9,7 @@ import {
   serverTimestamp,
   query,
   orderBy,
+  where,
   getDoc,
   deleteDoc,
 } from "firebase/firestore";
@@ -18,7 +19,7 @@ import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 import AddressSelector from '../AddressSelector';
 import { logActivity } from "../../modals/StaffActivity.jsx";
-import { getStorage, ref, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref, getDownloadURL, uploadBytes } from 'firebase/storage';
 import { useReactToPrint } from 'react-to-print';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -81,14 +82,27 @@ const Shipments = () => {
     paid: false,
     airwayBill: "",
     delayReason: "",
+    businessName: "",
+    businessPermitImage: null,
+    userUid: null,
   });
+  // Add Shipment step state
+  const [addStep, setAddStep] = useState(1);
+  const [shipperType, setShipperType] = useState("new"); // "existing" | "new"
+  const [userSearchQuery, setUserSearchQuery] = useState("");
+  const [userSearchResults, setUserSearchResults] = useState([]);
+  const [userSearchLoading, setUserSearchLoading] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+
   // Filtering & Sorting State
   const [searchQuery, setSearchQuery] = useState("");
   const [startDate, setStartDate] = useState(""); // Main Date Filter
   const [endDate, setEndDate] = useState(""); // Main Date Filter
-  const [sortField, setSortField] = useState("customId");
-  const [sortOrder, setSortOrder] = useState("asc");
+  const [sortField, setSortField] = useState("createdTime");
+  const [sortOrder, setSortOrder] = useState("desc");
   const [view, setView] = useState("all");
+  const [zoomedImage, setZoomedImage] = useState(null);
+
   // Archive Specific Filtering
   const [archiveSearch, setArchiveSearch] = useState("");
   const [archiveStartDate, setArchiveStartDate] = useState("");
@@ -253,8 +267,8 @@ const Shipments = () => {
     }
   }, [formData.transportMode]);
   useEffect(() => {
-    const isFullLoad = formData.loadType === 'FCL' || formData.loadType === 'FTL';
-    if (isFullLoad && formData.packages.length > 1) {
+    const isWeightOnly = !(formData.transportMode === 'Road' && formData.loadType === 'LTL');
+    if (isWeightOnly && formData.packages.length > 1) {
       setFormData((prev) => ({
         ...prev,
         packages: [{
@@ -267,7 +281,70 @@ const Shipments = () => {
         }],
       }));
     }
-  }, [formData.loadType]);
+  }, [formData.loadType, formData.transportMode]);
+
+  // Auto-set countries based on direction (mirrors ShippingInquiry.jsx)
+  useEffect(() => {
+    if (formData.shipmentDirection === 'Domestic') {
+      setFormData(prev => ({ ...prev, senderCountry: 'Philippines', destinationCountry: 'Philippines' }));
+    } else if (formData.shipmentDirection === 'Import') {
+      setFormData(prev => ({ ...prev, senderCountry: '', destinationCountry: 'Philippines' }));
+    } else if (formData.shipmentDirection === 'Export') {
+      setFormData(prev => ({ ...prev, senderCountry: 'Philippines', destinationCountry: '' }));
+    }
+  }, [formData.shipmentDirection]);
+
+  const handleBusinessPermitFileChange = (file) => {
+    if (file && file.size > 5 * 1024 * 1024) {
+      toast.warning('Business permit file must be less than 5MB');
+      return;
+    }
+    setFormData(prev => ({ ...prev, businessPermitImage: file }));
+  };
+
+  const handleUserSearch = async (q) => {
+    setUserSearchQuery(q);
+    if (!q.trim() || q.trim().length < 2) { setUserSearchResults([]); return; }
+    setUserSearchLoading(true);
+    try {
+      const snap = await getDocs(collection(db, "Users"));
+      const lower = q.toLowerCase();
+      const results = snap.docs
+        .map(d => ({ uid: d.id, ...d.data() }))
+        .filter(u => {
+          const full = `${u.firstName || ''} ${u.lastName || ''}`.toLowerCase();
+          const email = (u.email || '').toLowerCase();
+          return full.includes(lower) || email.includes(lower);
+        })
+        .slice(0, 8);
+      setUserSearchResults(results);
+    } catch (e) {
+      console.error("User search error:", e);
+    } finally {
+      setUserSearchLoading(false);
+    }
+  };
+
+  const handleSelectUser = (user) => {
+    setSelectedUser(user);
+    setFormData(prev => ({
+      ...prev,
+      shipperName: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+      email: user.email || '',
+      mobile: user.mobile || user.phone || '',
+      userUid: user.uid,
+    }));
+    setUserSearchQuery('');
+    setUserSearchResults([]);
+  };
+
+  const resetAddModal = () => {
+    setAddStep(1);
+    setShipperType("new");
+    setUserSearchQuery("");
+    setUserSearchResults([]);
+    setSelectedUser(null);
+  };
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
@@ -326,14 +403,14 @@ const Shipments = () => {
   const isDomestic = formData.senderCountry === formData.destinationCountry && formData.senderCountry !== '';
   const availableTransportModes = isDomestic ? ['Air', 'Sea', 'Road'] : ['Air', 'Sea'];
   const isLoadTypeVisible = formData.transportMode === 'Sea' || formData.transportMode === 'Road';
-  const isFullLoad = formData.loadType === 'FCL' || formData.loadType === 'FTL';
+  const isWeightOnly = !(formData.transportMode === 'Road' && formData.loadType === 'LTL');
   const isRoad = formData.transportMode === 'Road';
   const handleSort = (field) => {
     if (sortField === field) {
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
     } else {
       setSortField(field);
-      setSortOrder("asc");
+      setSortOrder("desc"); // Default to newest/highest first when switching columns
     }
   };
   // --- FILTER LOGIC (Main Table) ---
@@ -373,8 +450,15 @@ const Shipments = () => {
     }
   });
   const sortedShipments = filteredShipments.sort((a, b) => {
-    const aVal = a[sortField] || "";
-    const bVal = b[sortField] || "";
+    const resolveVal = (item, field) => {
+      const raw = item[field];
+      if (!raw && raw !== 0) return "";
+      // Handle Firestore Timestamps
+      if (raw && typeof raw.toDate === "function") return raw.toDate().getTime();
+      return raw;
+    };
+    const aVal = resolveVal(a, sortField);
+    const bVal = resolveVal(b, sortField);
     if (aVal < bVal) return sortOrder === "asc" ? -1 : 1;
     if (aVal > bVal) return sortOrder === "asc" ? 1 : -1;
     return 0;
@@ -427,7 +511,7 @@ const Shipments = () => {
       return;
     }
 
-    if (isFullLoad) {
+    if (isWeightOnly) {
       if (formData.packages.length === 0 || !formData.packages[0].weight) {
         toast.warning('Please enter the total weight.');
         return;
@@ -444,17 +528,35 @@ const Shipments = () => {
       }
     }
 
-    // --- NEW: Uniqueness Check ---
+    // --- Uniqueness Check (Package Number + Airway Bill) ---
     try {
-      const q = query(
+      const pkgNumQuery = query(
         collection(db, "Packages"),
         where("packageNumber", "==", formData.packageNumber.trim())
       );
-      const querySnapshot = await getDocs(q);
 
-      if (!querySnapshot.empty) {
+      const checks = [getDocs(pkgNumQuery)];
+
+      // Only check airwayBill if one was entered
+      const trimmedBill = formData.airwayBill?.trim();
+      let billQuery = null;
+      if (trimmedBill) {
+        billQuery = query(
+          collection(db, "Packages"),
+          where("airwayBill", "==", trimmedBill)
+        );
+        checks.push(getDocs(billQuery));
+      }
+
+      const [pkgNumSnap, billSnap] = await Promise.all(checks);
+
+      if (!pkgNumSnap.empty) {
         toast.error(`A shipment with tracking number "${formData.packageNumber.trim()}" already exists!`);
-        return; // Stop execution
+        return;
+      }
+      if (billSnap && !billSnap.empty) {
+        toast.error(`A shipment with Airway Bill "${trimmedBill}" already exists!`);
+        return;
       }
     } catch (err) {
       console.error("Error checking for duplicate package numbers:", err);
@@ -505,6 +607,9 @@ const Shipments = () => {
         packageStatus: formData.packageStatus,
         paid: formData.paid,
         airwayBill: formData.airwayBill,
+        businessName: formData.businessName || "",
+        businessPermitImage: null, // will be updated after upload
+        userUid: formData.userUid || null, // Link to user if existing
         customId: newCustomId,
         dateStarted: new Date().toISOString(),
         createdTime: serverTimestamp(),
@@ -514,6 +619,20 @@ const Shipments = () => {
       const { adminFirstName, adminLastName } = await fetchAdminDetails();
       const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
       const docRef = await addDoc(collection(db, "Packages"), newShipment);
+
+      // Upload business permit if provided
+      if (formData.businessPermitImage) {
+        try {
+          const permitRef = ref(storage, `shipRequests/${docRef.id}/businessPermit/${formData.businessPermitImage.name}`);
+          await uploadBytes(permitRef, formData.businessPermitImage);
+          const permitUrl = await getDownloadURL(permitRef);
+          await updateDoc(doc(db, "Packages", docRef.id), { businessPermitImage: permitUrl });
+          newShipment.businessPermitImage = permitUrl;
+        } catch (uploadErr) {
+          console.error("Failed to upload business permit:", uploadErr);
+          toast.warning("Shipment added, but business permit upload failed.");
+        }
+      }
       await logActivity(adminFullName, `Added new shipment ${newCustomId}`);
       setShipments((prev) => [
         ...prev,
@@ -554,6 +673,9 @@ const Shipments = () => {
         packageStatus: "Processing",
         paid: false,
         airwayBill: "",
+        businessName: "",
+        businessPermitImage: null,
+        userUid: null,
       });
       toast.success("Shipment added successfully!");
     } catch (error) {
@@ -904,7 +1026,7 @@ const Shipments = () => {
     }
     const headers = [
       "ID",
-      "Package Number",
+      "Shipment Number",
       "Shipper Name",
       "Sender Country",
       "Destination Country",
@@ -1062,8 +1184,8 @@ const Shipments = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
                 <tr>
-                  <th className="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer bg-gray-50" onClick={() => handleSort("customId")}>#</th>
-                  <th className="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Package Number</th>
+                  <th className="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer bg-gray-50" onClick={() => handleSort("createdTime")}>#</th>
+                  <th className="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Shipment Number</th>
                   <th className="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Shipper</th>
                   <th className="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Sender Country</th>
                   <th className="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Destination Country</th>
@@ -1081,7 +1203,9 @@ const Shipments = () => {
                     const isCanceled = shipment.canceled;
                     return (
                       <tr key={shipment.docId} className={`hover:bg-gray-50 ${isCanceled ? "bg-gray-100" : (index % 2 === 0 ? "bg-white" : "bg-gray-50")}`}>
-                        <td className="px-2 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{index + 1}</td>
+                        <td className="px-2 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {sortOrder === "desc" ? index + 1 : sortedShipments.length - index}
+                        </td>
                         <td className="px-2 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shipment.packageNumber}</td>
                         <td className="px-2 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shipment.shipperName}</td>
                         <td className="px-2 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shipment.senderCountry || "N/A"}</td>
@@ -1216,7 +1340,7 @@ const Shipments = () => {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-purple-100">
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Package #</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Shipment #</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Shipper</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Sender Country</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Dest. Country</th>
@@ -1290,133 +1414,287 @@ const Shipments = () => {
           </div>
         )}
         {/* Add Shipment Modal */}
+        {/* Add Shipment Modal */}
         {showModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 overflow-y-auto no-print">
-            <div className="bg-white rounded-lg shadow-lg w-11/12 max-w-4xl p-6 max-h-[80vh] overflow-y-auto">
+            <div className="bg-white rounded-lg shadow-lg w-11/12 max-w-4xl p-6 pb-0 max-h-[80vh] overflow-y-auto">
               <h3 className="text-xl font-bold mb-4">Add Shipment</h3>
+
+              {/* Tab Indicators */}
+              <div className="flex justify-around mb-6 border-b pb-4">
+                <div className={`px-4 py-2 text-sm md:text-base ${addStep === 1 ? 'border-b-2 border-blue-500 font-bold text-blue-700' : 'text-gray-500'}`}>
+                  1: Shipment Type
+                </div>
+                <div className={`px-4 py-2 text-sm md:text-base ${addStep === 2 ? 'border-b-2 border-blue-500 font-bold text-blue-700' : 'text-gray-500'}`}>
+                  2: Shipper Details
+                </div>
+                <div className={`px-4 py-2 text-sm md:text-base ${addStep === 3 ? 'border-b-2 border-blue-500 font-bold text-blue-700' : 'text-gray-500'}`}>
+                  3: Shipment & Pickup
+                </div>
+              </div>
+
               <form className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* ... (Same Form Fields) ... */}
-                <div className="flex flex-col">
-                  <label className="mb-1 font-medium text-gray-700">Package Number</label>
-                  <input type="text" className="p-2 border border-gray-300 rounded-md" value={formData.packageNumber} name="packageNumber" onChange={handleChange} required />
-                </div>
-                <div className="flex flex-col">
-                  <label className="mb-1 font-medium text-gray-700">Shipper Full Name</label>
-                  <input type="text" className="p-2 border border-gray-300 rounded-md" value={formData.shipperName} name="shipperName" onChange={handleChange} required />
-                </div>
-                <div className="flex flex-col">
-                  <label className="mb-1 font-medium text-gray-700">Mobile Number</label>
-                  <PhoneInput international defaultCountry="PH" placeholder="Enter phone number" value={formData.mobile} onChange={(value) => setFormData((prev) => ({ ...prev, mobile: value }))} required className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div className="flex flex-col">
-                  <label className="mb-1 font-medium text-gray-700">Email</label>
-                  <input type="email" className="p-2 border border-gray-300 rounded-md" value={formData.email} name="email" onChange={handleChange} />
-                </div>
-                <div className="flex flex-col">
-                  <label className="mb-1 font-medium text-gray-700">Sender Country</label>
-                  <select name="senderCountry" value={formData.senderCountry} onChange={handleChange} required className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="">Select country</option>
-                    {countries.map((country) => (<option key={country.value} value={country.label}>{country.label}</option>))}
-                  </select>
-                </div>
-                <div className="flex flex-col">
-                  <label className="mb-1 font-medium text-gray-700">Destination Country</label>
-                  <select name="destinationCountry" value={formData.destinationCountry} onChange={handleChange} required className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="">Select country</option>
-                    {countries.map((country) => (<option key={country.value} value={country.label}>{country.label}</option>))}
-                  </select>
-                </div>
-                <div className="md:col-span-2 flex flex-col">
-                  <label className="mb-1 font-medium text-gray-700">Destination Address</label>
-                  <textarea name="destinationAddress" value={formData.destinationAddress} onChange={handleChange} required placeholder="Enter full destination address" className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" rows="3" />
-                </div>
-                <div className="flex flex-col">
-                  <label className="mb-1 font-medium text-gray-700">Mode of Transport</label>
-                  <select name="transportMode" value={formData.transportMode} onChange={handleChange} required className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="">Select mode</option>
-                    {availableTransportModes.map((m) => (<option key={m} value={m}>{m} Freight</option>))}
-                  </select>
-                </div>
-                <div className="flex flex-col">
-                  <label className="mb-1 font-medium text-gray-700">Shipment Direction</label>
-                  {isDomestic || isRoad ? (
-                    <input type="text" value="Domestic" disabled className="p-2 border border-gray-300 rounded-md bg-gray-100" />
-                  ) : (
-                    <select name="shipmentDirection" value={formData.shipmentDirection} onChange={handleChange} required disabled={!formData.transportMode} className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                      <option value="">Select direction</option>
-                      <option value="Import">Import</option>
-                      <option value="Export">Export</option>
-                    </select>
-                  )}
-                </div>
-                {isLoadTypeVisible && (
-                  <div className="flex flex-col">
-                    <label className="mb-1 font-medium text-gray-700">Load Type</label>
-                    <select name="loadType" value={formData.loadType} onChange={handleChange} required className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                      <option value="">Select load type</option>
-                      {LOAD_OPTIONS[formData.transportMode].map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
-                    </select>
-                  </div>
-                )}
-                <div className="flex flex-col">
-                  <label className="mb-1 font-medium text-gray-700">Way Bill# (Optional)</label>
-                  <input type="text" className="p-2 border border-gray-300 rounded-md" value={formData.airwayBill} name="airwayBill" onChange={handleChange} />
-                </div>
-                {!isRoad && (
-                  <div className="md:col-span-2 flex flex-col mt-2">
-                    <label className="mb-1 font-medium text-gray-700">Additional Services</label>
-                    <div className="flex flex-wrap gap-4">
-                      <label className="flex items-center gap-1 text-sm"><input type="checkbox" name="documentation" checked={formData.additionalServices.documentation} onChange={handleAdditionalServiceChange} />&nbsp;Documentation</label>
-                      <label className="flex items-center gap-1 text-sm"><input type="checkbox" name="customsClearance" checked={formData.additionalServices.customsClearance} onChange={handleAdditionalServiceChange} />&nbsp;Customs Clearance</label>
-                      <label className="flex items-center gap-1 text-sm"><input type="checkbox" name="brokerage" checked={formData.additionalServices.brokerage} onChange={handleAdditionalServiceChange} />&nbsp;Brokerage</label>
-                      <label className="flex items-center gap-1 text-sm"><input type="checkbox" name="consolidation" checked={formData.additionalServices.consolidation} onChange={handleAdditionalServiceChange} />&nbsp;Consolidation</label>
+                {/* STEP 1: SHIPMENT TYPE */}
+                {addStep === 1 && (
+                  <>
+                    <div className="flex flex-col">
+                      <label className="mb-1 font-medium text-gray-700">Shipment Direction</label>
+                      <select name="shipmentDirection" value={formData.shipmentDirection} onChange={handleChange} required className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">Select direction</option>
+                        <option value="Domestic">Domestic</option>
+                        <option value="Import">Import</option>
+                        <option value="Export">Export</option>
+                      </select>
                     </div>
-                  </div>
-                )}
-                {formData.pickupOption === 'needPickup' && (
-                  <div className="md:col-span-2 mt-4">
-                    <h3 className="text-xl font-semibold mb-4">Pickup Address</h3>
-                    <AddressSelector onSelect={handlePickupAddressSelect} />
-                    <div className="flex flex-col mt-4">
-                      <label className="mb-1 font-medium text-gray-700">Street Address</label>
-                      <textarea name="pickupDetailedAddress" value={formData.pickupDetailedAddress} onChange={handleChange} placeholder="Enter street, house number, etc." className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" rows="3" />
+                    <div className="flex flex-col">
+                      <label className="mb-1 font-medium text-gray-700">Mode of Transport</label>
+                      <select name="transportMode" value={formData.transportMode} onChange={handleChange} required disabled={!formData.shipmentDirection} className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">Select mode</option>
+                        {availableTransportModes.map((m) => (<option key={m} value={m}>{m} Freight</option>))}
+                      </select>
                     </div>
-                  </div>
-                )}
-                <div className="md:col-span-2 mt-4">
-                  <h3 className="text-xl font-semibold mb-4">Packages</h3>
-                  {formData.packages.map((pkg, index) => (
-                    <div key={index} className="border border-gray-300 p-4 mb-4 rounded-md relative">
-                      {!isFullLoad ? (
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                          <div className="flex flex-col"><label className="mb-1 font-medium text-gray-700">Length (cm)</label><input type="number" placeholder="Length" value={pkg.length} onChange={(e) => updatePackage(index, 'length', e.target.value)} required className="p-2 border border-gray-300 rounded-md" /></div>
-                          <div className="flex flex-col"><label className="mb-1 font-medium text-gray-700">Width (cm)</label><input type="number" placeholder="Width" value={pkg.width} onChange={(e) => updatePackage(index, 'width', e.target.value)} required className="p-2 border border-gray-300 rounded-md" /></div>
-                          <div className="flex flex-col"><label className="mb-1 font-medium text-gray-700">Height (cm)</label><input type="number" placeholder="Height" value={pkg.height} onChange={(e) => updatePackage(index, 'height', e.target.value)} required className="p-2 border border-gray-300 rounded-md" /></div>
-                          <div className="flex flex-col"><label className="mb-1 font-medium text-gray-700">Weight (kg)</label><input type="number" placeholder="Weight" value={pkg.weight} onChange={(e) => updatePackage(index, 'weight', e.target.value)} required className="p-2 border border-gray-300 rounded-md" /></div>
-                        </div>
+                    <div className="flex flex-col">
+                      <label className="mb-1 font-medium text-gray-700">Sender Country</label>
+                      {formData.shipmentDirection === 'Export' || formData.shipmentDirection === 'Domestic' ? (
+                        <input type="text" value={formData.senderCountry} disabled className="p-2 border border-gray-300 rounded-md bg-gray-100" />
                       ) : (
-                        <div className="flex flex-col mb-4"><label className="mb-1 font-medium text-gray-700">Total Weight (kg)</label><input type="number" placeholder="Total Weight" value={pkg.weight} onChange={(e) => updatePackage(index, 'weight', e.target.value)} required className="p-2 border border-gray-300 rounded-md" /></div>
+                        <select name="senderCountry" value={formData.senderCountry} onChange={handleChange} required className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                          <option value="">Select country</option>
+                          {countries.map((country) => (<option key={country.value} value={country.label}>{country.label}</option>))}
+                        </select>
                       )}
-                      <div className="flex flex-col mb-4"><label className="mb-1 font-medium text-gray-700">Contents (optional)</label><textarea placeholder="Describe contents" value={pkg.contents} onChange={(e) => updatePackage(index, 'contents', e.target.value)} className="p-2 border border-gray-300 rounded-md" /></div>
-                      <div className="flex flex-col"><label className="mb-1 font-medium text-gray-700">Upload Item Image (Optional, max 5MB)</label><input type="file" accept="image/*" onChange={(e) => handlePackageFileChange(index, e.target.files[0])} className="p-2 border border-gray-300 rounded-md" /></div>
-                      {!isFullLoad && formData.packages.length > 1 && (<button type="button" onClick={() => removePackage(index)} className="absolute top-2 right-2 bg-red-600 text-white font-semibold py-1 px-2 rounded-md hover:bg-red-700 transition">Remove</button>)}
                     </div>
-                  ))}
-                  {!isFullLoad && (<button type="button" onClick={addPackage} className="bg-green-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-green-700 transition">Add Another Package</button>)}
-                </div>
-                <div className="flex items-center mb-3">
-                  <input type="checkbox" checked={formData.paid} name="paid" onChange={handleChange} className="mr-2" /><label className="font-medium text-gray-700">&nbsp;Paid</label>
-                </div>
+                    <div className="flex flex-col">
+                      <label className="mb-1 font-medium text-gray-700">Destination Country</label>
+                      {formData.shipmentDirection === 'Import' || formData.shipmentDirection === 'Domestic' ? (
+                        <input type="text" value={formData.destinationCountry} disabled className="p-2 border border-gray-300 rounded-md bg-gray-100" />
+                      ) : (
+                        <select name="destinationCountry" value={formData.destinationCountry} onChange={handleChange} required className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                          <option value="">Select country</option>
+                          {countries.map((country) => (<option key={country.value} value={country.label}>{country.label}</option>))}
+                        </select>
+                      )}
+                    </div>
+                    {isLoadTypeVisible && (
+                      <div className="flex flex-col">
+                        <label className="mb-1 font-medium text-gray-700">Load Type</label>
+                        <select name="loadType" value={formData.loadType} onChange={handleChange} required className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                          <option value="">Select load type</option>
+                          {LOAD_OPTIONS[formData.transportMode].map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
+                        </select>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* STEP 2: SHIPPER DETAILS */}
+                {addStep === 2 && (
+                  <div className="md:col-span-2 space-y-6">
+                    <div className="flex gap-4 p-1 bg-gray-100 rounded-lg w-fit">
+                      <button type="button" onClick={() => setShipperType("existing")} className={`px-4 py-2 rounded-md transition ${shipperType === "existing" ? "bg-white shadow text-blue-600 font-bold" : "text-gray-500"}`}>Existing User</button>
+                      <button type="button" onClick={() => { setShipperType("new"); setSelectedUser(null); }} className={`px-4 py-2 rounded-md transition ${shipperType === "new" ? "bg-white shadow text-blue-600 font-bold" : "text-gray-500"}`}>New User</button>
+                    </div>
+
+                    {shipperType === "existing" && (
+                      <div className="relative">
+                        <label className="mb-1 font-medium text-gray-700 block">Search Existing User (Email or Name)</label>
+                        <input
+                          type="text"
+                          className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                          placeholder="Type at least 2 characters..."
+                          value={userSearchQuery}
+                          onChange={(e) => handleUserSearch(e.target.value)}
+                        />
+                        {userSearchLoading && <p className="text-xs text-gray-500 mt-1">Searching...</p>}
+                        {userSearchResults.length > 0 && (
+                          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                            {userSearchResults.map(u => (
+                              <button
+                                key={u.uid}
+                                type="button"
+                                className="w-full text-left p-2 hover:bg-blue-50 border-b border-gray-100 last:border-0"
+                                onClick={() => handleSelectUser(u)}
+                              >
+                                <div className="font-bold text-gray-900">{u.firstName} {u.lastName}</div>
+                                <div className="text-sm text-gray-500">{u.email}</div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {selectedUser && (
+                          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-md flex justify-between items-center">
+                            <div>
+                              <p className="text-sm font-bold text-blue-800">Selected Shipper:</p>
+                              <p className="text-gray-700">{selectedUser.firstName} {selectedUser.lastName} ({selectedUser.email})</p>
+                            </div>
+                            <button type="button" className="text-red-500 hover:text-red-700 text-sm font-bold" onClick={() => setSelectedUser(null)}>Remove</button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="flex flex-col">
+                        <label className="mb-1 font-medium text-gray-700">Shipper Full Name</label>
+                        <input type="text" className="p-2 border border-gray-300 rounded-md disabled:bg-gray-100" value={formData.shipperName} name="shipperName" onChange={handleChange} required disabled={shipperType === "existing"} />
+                      </div>
+                      <div className="flex flex-col">
+                        <label className="mb-1 font-medium text-gray-700">Email</label>
+                        <input type="email" className="p-2 border border-gray-300 rounded-md disabled:bg-gray-100" value={formData.email} name="email" onChange={handleChange} disabled={shipperType === "existing"} />
+                      </div>
+                      <div className="flex flex-col">
+                        <label className="mb-1 font-medium text-gray-700">Mobile Number</label>
+                        <PhoneInput international defaultCountry="PH" placeholder="Enter phone number" value={formData.mobile} onChange={(value) => setFormData((prev) => ({ ...prev, mobile: value || "" }))} required className={`p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${shipperType === "existing" ? "bg-gray-100" : ""}`} />
+                      </div>
+                      <div className="flex flex-col">
+                        <label className="mb-1 font-medium text-gray-700">Business Name <span className="text-gray-400 text-xs">(optional)</span></label>
+                        <input type="text" className="p-2 border border-gray-300 rounded-md" value={formData.businessName} name="businessName" onChange={handleChange} />
+                      </div>
+                      <div className="flex flex-col">
+                        <label className="mb-1 font-medium text-gray-700">Business Permit Image <span className="text-gray-400 text-xs">(optional, max 5MB)</span></label>
+                        <input type="file" accept="image/*" className="p-2 border border-gray-300 rounded-md" onChange={(e) => handleBusinessPermitFileChange(e.target.files[0])} />
+                        {formData.businessPermitImage && (
+                          <img
+                            src={URL.createObjectURL(formData.businessPermitImage)}
+                            alt="Business Permit Preview"
+                            title="Click to zoom"
+                            className="mt-2 h-20 w-auto object-cover rounded-md cursor-pointer border border-gray-300 hover:opacity-90"
+                            onClick={() => setZoomedImage(URL.createObjectURL(formData.businessPermitImage))}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* STEP 3: PACKAGE & PICKUP */}
+                {addStep === 3 && (
+                  <>
+                    <div className="flex flex-col">
+                      <label className="mb-1 font-medium text-gray-700">Shipment Number</label>
+                      <input type="text" className="p-2 border border-gray-300 rounded-md" value={formData.packageNumber} name="packageNumber" onChange={handleChange} required />
+                    </div>
+                    <div className="flex flex-col">
+                      <label className="mb-1 font-medium text-gray-700">Way Bill# <span className="text-gray-400 text-xs">(optional)</span></label>
+                      <input type="text" className="p-2 border border-gray-300 rounded-md" value={formData.airwayBill} name="airwayBill" onChange={handleChange} />
+                    </div>
+                    <div className="md:col-span-2 flex flex-col">
+                      <label className="mb-1 font-medium text-gray-700">Destination Address</label>
+                      <textarea name="destinationAddress" value={formData.destinationAddress} onChange={handleChange} required placeholder="Enter full destination address" className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" rows="3" />
+                    </div>
+                    {!isRoad && (
+                      <div className="md:col-span-2 flex flex-col mt-2">
+                        <label className="mb-1 font-medium text-gray-700">Additional Services</label>
+                        <div className="flex flex-wrap gap-4">
+                          <label className="flex items-center gap-1 text-sm"><input type="checkbox" name="documentation" checked={formData.additionalServices.documentation} onChange={handleAdditionalServiceChange} />&nbsp;Documentation</label>
+                          <label className="flex items-center gap-1 text-sm"><input type="checkbox" name="customsClearance" checked={formData.additionalServices.customsClearance} onChange={handleAdditionalServiceChange} />&nbsp;Customs Clearance</label>
+                          <label className="flex items-center gap-1 text-sm"><input type="checkbox" name="brokerage" checked={formData.additionalServices.brokerage} onChange={handleAdditionalServiceChange} />&nbsp;Brokerage</label>
+                          <label className="flex items-center gap-1 text-sm"><input type="checkbox" name="consolidation" checked={formData.additionalServices.consolidation} onChange={handleAdditionalServiceChange} />&nbsp;Consolidation</label>
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex flex-col">
+                      <label className="mb-1 font-medium text-gray-700">Pickup Option</label>
+                      <select name="pickupOption" value={formData.pickupOption} onChange={handleChange} className="p-2 border border-gray-300 rounded-md">
+                        <option value="deliverToWarehouse">Deliver to Warehouse</option>
+                        <option value="needPickup">Need Pickup</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center mb-3 mt-8">
+                      <input type="checkbox" checked={formData.paid} name="paid" onChange={handleChange} className="mr-2" /><label className="font-medium text-gray-700">&nbsp;Paid</label>
+                    </div>
+
+                    {formData.pickupOption === 'needPickup' && (
+                      <div className="md:col-span-2 mt-4">
+                        <h3 className="text-lg font-semibold mb-4 text-blue-700 border-b pb-1">Pickup Address</h3>
+                        <AddressSelector onSelect={handlePickupAddressSelect} />
+                        <div className="flex flex-col mt-4">
+                          <label className="mb-1 font-medium text-gray-700">Street Address</label>
+                          <textarea name="pickupDetailedAddress" value={formData.pickupDetailedAddress} onChange={handleChange} placeholder="Enter street, house number, etc." className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" rows="3" />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="md:col-span-2 mt-6">
+                      <h3 className="text-lg font-semibold mb-4 text-blue-700 border-b pb-1">Shipments</h3>
+                      {formData.packages.map((pkg, index) => (
+                        <div key={index} className="border border-gray-200 p-4 mb-4 rounded-md relative bg-gray-50">
+                          {!isWeightOnly ? (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                              <div className="flex flex-col"><label className="mb-1 text-xs font-medium text-gray-600">Length (cm)</label><input type="number" placeholder="L" value={pkg.length} onChange={(e) => updatePackage(index, 'length', e.target.value)} required className="p-2 border border-gray-300 rounded-md text-sm" /></div>
+                              <div className="flex flex-col"><label className="mb-1 text-xs font-medium text-gray-600">Width (cm)</label><input type="number" placeholder="W" value={pkg.width} onChange={(e) => updatePackage(index, 'width', e.target.value)} required className="p-2 border border-gray-300 rounded-md text-sm" /></div>
+                              <div className="flex flex-col"><label className="mb-1 text-xs font-medium text-gray-600">Height (cm)</label><input type="number" placeholder="H" value={pkg.height} onChange={(e) => updatePackage(index, 'height', e.target.value)} required className="p-2 border border-gray-300 rounded-md text-sm" /></div>
+                              <div className="flex flex-col"><label className="mb-1 text-xs font-medium text-gray-600">Weight (kg)</label><input type="number" placeholder="Kg" value={pkg.weight} onChange={(e) => updatePackage(index, 'weight', e.target.value)} required className="p-2 border border-gray-300 rounded-md text-sm" /></div>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col mb-4"><label className="mb-1 font-medium text-gray-700">Total Weight (kg)</label><input type="number" placeholder="Total Weight" value={pkg.weight} onChange={(e) => updatePackage(index, 'weight', e.target.value)} required className="p-2 border border-gray-300 rounded-md" /></div>
+                          )}
+                          <div className="flex flex-col mb-4"><label className="mb-1 font-medium text-gray-700">Contents (optional)</label><textarea placeholder="Describe contents..." value={pkg.contents} onChange={(e) => updatePackage(index, 'contents', e.target.value)} className="p-2 border border-gray-300 rounded-md text-sm" rows="2" /></div>
+                          <div className="flex flex-col"><label className="mb-1 font-medium text-gray-700">Item Image (optional)</label><input type="file" accept="image/*" onChange={(e) => handlePackageFileChange(index, e.target.files[0])} className="p-2 border border-gray-300 rounded-md text-xs" /></div>
+                          {!isWeightOnly && formData.packages.length > 1 && (<button type="button" onClick={() => removePackage(index)} className="absolute top-2 right-2 text-red-500 hover:text-red-700 font-bold p-1">✕</button>)}
+                        </div>
+                      ))}
+                      {!isWeightOnly && (<button type="button" onClick={addPackage} className="text-blue-600 text-sm font-bold hover:underline mb-4">+ Add Another Shipment</button>)}
+                    </div>
+                  </>
+                )}
               </form>
-              <div className="sticky bottom-0 bg-white border-t border-gray-200 mt-6 pt-4 pb-2 flex justify-end gap-2 -mx-6 px-6 rounded-b-lg">
-                <button className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded" onClick={() => setShowModal(false)} disabled={isSubmitting}>Close</button>
+
+              <div className="sticky bottom-0 bg-white border-t border-gray-200 mt-6 pt-4 pb-6 flex justify-between gap-2 -mx-6 px-6 rounded-b-lg z-10 font-bold">
                 <button
-                  className={`bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded ${isSubmitting ? "opacity-50 cursor-not-allowed" : ""}`}
-                  onClick={handleAddShipment}
+                  className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded"
+                  onClick={() => { setShowModal(false); resetAddModal(); }}
                   disabled={isSubmitting}
                 >
-                  {isSubmitting ? "Adding..." : "Add"}
+                  Close
                 </button>
+
+                <div className="flex gap-2">
+                  {addStep > 1 && (
+                    <button
+                      className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-6 py-2 rounded transition"
+                      onClick={() => setAddStep(prev => prev - 1)}
+                      disabled={isSubmitting}
+                    >
+                      Back
+                    </button>
+                  )}
+                  {addStep < 3 ? (
+                    <button
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2 rounded transition"
+                      onClick={() => {
+                        // Basic validation per step
+                        if (addStep === 1) {
+                          if (!formData.shipmentDirection || !formData.transportMode || !formData.senderCountry || !formData.destinationCountry) {
+                            toast.warning("Please fill in all shipment type requirements.");
+                            return;
+                          }
+                          if (isLoadTypeVisible && !formData.loadType) {
+                            toast.warning("Please select a load type.");
+                            return;
+                          }
+                        }
+                        if (addStep === 2) {
+                          if (!formData.shipperName || !formData.email || !formData.mobile) {
+                            toast.warning("Please fill in all shipper contact details.");
+                            return;
+                          }
+                        }
+                        setAddStep(prev => prev + 1);
+                      }}
+                    >
+                      Next
+                    </button>
+                  ) : (
+                    <button
+                      className={`bg-green-600 hover:bg-green-700 text-white px-8 py-2 rounded transition ${isSubmitting ? "opacity-50 cursor-not-allowed" : ""}`}
+                      onClick={handleAddShipment}
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? "Adding..." : "Add Shipment"}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -1424,15 +1702,15 @@ const Shipments = () => {
         {/* Edit Shipment Modal */}
         {editModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 no-print">
-            <div className="bg-white rounded-lg shadow-lg w-11/12 max-w-md p-6">
+            <div className="bg-white rounded-lg shadow-lg w-11/12 max-w-md p-6 pb-0 max-h-[80vh] overflow-y-auto">
               <h3 className="text-xl font-bold mb-4">Update Shipment</h3>
               <form>
-                <div className="flex flex-col mb-3"><label className="mb-1 font-medium text-gray-700">Package Number</label><p className="p-2 border border-gray-300 rounded-md bg-gray-100">{formData.packageNumber}</p></div>
+                <div className="flex flex-col mb-3"><label className="mb-1 font-medium text-gray-700">Shipment Number</label><p className="p-2 border border-gray-300 rounded-md bg-gray-100">{formData.packageNumber}</p></div>
                 <div className="flex flex-col mb-3"><label className="mb-1 font-medium text-gray-700">Shipper Full Name</label><p className="p-2 border border-gray-300 rounded-md bg-gray-100">{formData.shipperName}</p></div>
                 <div className="flex flex-col mb-3"><label className="mb-1 font-medium text-gray-700">Way Bill#</label><input type="text" className="p-2 border border-gray-300 rounded-md" value={formData.airwayBill} onChange={(e) => setFormData({ ...formData, airwayBill: e.target.value })} /></div>
                 <div className="flex flex-col mb-3"><label className="mb-1 font-medium text-gray-700">Email</label><input type="email" className="p-2 border border-gray-300 rounded-md" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} /></div>
                 <div className="flex flex-col mb-3">
-                  <label className="mb-1 font-medium text-gray-700">Package Status</label>
+                  <label className="mb-1 font-medium text-gray-700">Shipment Status</label>
                   <select className="p-2 border border-gray-300 rounded-md" value={formData.packageStatus} onChange={(e) => setFormData({ ...formData, packageStatus: e.target.value, delayReason: e.target.value !== 'Delayed' ? '' : formData.delayReason })}>
                     <option>Processing</option><option>To Pickup</option><option>To Warehouse</option><option>In warehouse</option><option>On transit</option><option>Landed</option><option>Delivering</option><option>Delivered</option><option value="Delayed">Delayed</option>
                   </select>
@@ -1451,7 +1729,7 @@ const Shipments = () => {
                 </div>
                 <div className="flex items-center mb-3"><input type="checkbox" checked={formData.paid} onChange={(e) => setFormData({ ...formData, paid: e.target.checked })} className="mr-2" /><label className="font-medium text-gray-700">&nbsp;Paid</label></div>
               </form>
-              <div className="sticky bottom-0 bg-white border-t border-gray-200 mt-6 pt-4 pb-2 flex justify-end gap-2 -mx-6 px-6 rounded-b-lg">
+              <div className="sticky bottom-0 bg-white border-t border-gray-200 mt-6 pt-4 pb-6 flex justify-end gap-2 -mx-6 px-6 rounded-b-lg z-10">
                 <button className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded " onClick={() => setEditModal(false)}>Close</button>
                 <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded" onClick={handleEditShipment}>Save Changes</button>
               </div>
@@ -1496,14 +1774,14 @@ const Shipments = () => {
         {/* Info Modal */}
         {infoModal && currentShipment && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 overflow-y-auto no-print">
-            <div className="bg-white rounded-lg shadow-lg w-11/12 max-w-4xl p-6 max-h-[80vh] overflow-y-auto">
+            <div className="bg-white rounded-lg shadow-lg w-11/12 max-w-4xl p-6 pb-0 max-h-[80vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-2xl font-bold text-gray-800">Shipment Details</h3>
                 <button onClick={() => setInfoModal(false)} className="text-gray-500 hover:text-gray-700 text-xl font-bold">&times;</button>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="flex flex-col">
-                  <label className="mb-1 font-medium text-gray-700">Package Number</label>
+                  <label className="mb-1 font-medium text-gray-700">Shipment Number</label>
                   <p className="p-2 border border-gray-300 rounded-md bg-gray-100">{currentShipment.packageNumber || "N/A"}</p>
                 </div>
                 <div className="flex flex-col">
@@ -1569,7 +1847,7 @@ const Shipments = () => {
                   </p>
                 </div>
                 <div className="md:col-span-2">
-                  <h4 className="text-lg font-semibold mb-2">Packages</h4>
+                  <h4 className="text-lg font-semibold mb-2">Shipments</h4>
                   {currentShipment.packages?.map((pkg, index) => (
                     <div key={index} className="border border-gray-300 p-4 mb-4 rounded-md">
                       <p><strong>Length:</strong> {pkg.length || "N/A"} cm</p>
@@ -1578,15 +1856,25 @@ const Shipments = () => {
                       <p><strong>Weight:</strong> {pkg.weight || "N/A"} kg</p>
                       <p><strong>Contents:</strong> {pkg.contents || "N/A"}</p>
                       {previewUrls[currentShipment.docId]?.[index] && (
-                        <img src={previewUrls[currentShipment.docId][index]} alt={`Package ${index + 1}`} className="w-32 h-auto mt-2" />
+                        <img
+                          src={previewUrls[currentShipment.docId][index]}
+                          alt={`Shipment ${index + 1}`}
+                          className="w-32 h-auto mt-2 cursor-pointer border border-gray-300 rounded hover:opacity-90"
+                          onClick={() => setZoomedImage(previewUrls[currentShipment.docId][index])}
+                        />
                       )}
                     </div>
-                  )) || <p>No packages</p>}
+                  )) || <p>No shipments</p>}
                 </div>
                 {businessPreviewUrls[currentShipment.docId] && (
                   <div className="md:col-span-2">
                     <h4 className="text-lg font-semibold mb-2">Business Permit</h4>
-                    <img src={businessPreviewUrls[currentShipment.docId]} alt="Business Permit" className="w-48 h-auto" />
+                    <img
+                      src={businessPreviewUrls[currentShipment.docId]}
+                      alt="Business Permit"
+                      className="w-48 h-auto cursor-pointer border border-gray-300 rounded hover:opacity-90"
+                      onClick={() => setZoomedImage(businessPreviewUrls[currentShipment.docId])}
+                    />
                   </div>
                 )}
                 <div className="md:col-span-2">
@@ -1606,7 +1894,7 @@ const Shipments = () => {
                   )}
                 </div>
               </div>
-              <div className="sticky bottom-0 bg-white border-t border-gray-200 mt-6 pt-4 pb-2 flex justify-end -mx-6 px-6 rounded-b-lg">
+              <div className="sticky bottom-0 bg-white border-t border-gray-200 mt-6 pt-4 pb-6 flex justify-end gap-2 -mx-6 px-6 rounded-b-lg z-10">
                 <button className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded" onClick={() => setInfoModal(false)}>
                   Close
                 </button>
@@ -1615,6 +1903,20 @@ const Shipments = () => {
           </div>
         )}
       </div>
+
+      {zoomedImage && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-80 cursor-pointer no-print"
+          onClick={() => setZoomedImage(null)}
+        >
+          <img
+            src={zoomedImage}
+            alt="Zoomed Image"
+            className="max-w-[90vw] max-h-[90vh] object-contain"
+          />
+        </div>
+      )}
+
     </div>
   );
 };

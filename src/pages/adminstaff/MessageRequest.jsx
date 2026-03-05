@@ -18,6 +18,7 @@ import { logActivity } from "../../modals/StaffActivity.jsx";
 import { useReactToPrint } from 'react-to-print';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { useAdminNotifications } from "../../hooks/useAdminNotifications";
 
 const ConversationsAdmin = () => {
   const [conversations, setConversations] = useState([]); // Pending conversations
@@ -37,6 +38,11 @@ const ConversationsAdmin = () => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
   }, []);
+
+  const { markAsSeen } = useAdminNotifications();
+  useEffect(() => {
+    markAsSeen('messageRequests');
+  }, [markAsSeen]);
 
   // 1. Fetch PENDING conversations (From active 'conversations' collection)
   useEffect(() => {

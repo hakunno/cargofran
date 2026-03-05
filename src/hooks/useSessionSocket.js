@@ -18,10 +18,9 @@ const INACTIVITY_LIMITS = {
 };
 
 const getWsUrl = () => {
-  const env = import.meta.env.VITE_WS_URL;
-  if (env) return env;
-  const proto = window.location.protocol === "https:" ? "wss" : "ws";
-  return `${proto}://localhost:5000`;
+  // Only connect if an explicit WS URL is provided (e.g. when backend is deployed).
+  // In production without a backend, the Firestore listener handles session management.
+  return import.meta.env.VITE_WS_URL || null;
 };
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -84,6 +83,8 @@ export const useSessionSocket = () => {
     stopFirestoreListener();
     closeSocket();
     localStorage.removeItem("sessionId");
+    localStorage.removeItem("lastActivity");
+    localStorage.removeItem("sessionRole");
 
     if (reason === "another_device") {
       toast.error(
@@ -158,6 +159,10 @@ export const useSessionSocket = () => {
       scheduleWarning();
       const now = Date.now();
       if (now - lastSentAt < ACTIVITY_THROTTLE_MS) return;
+
+      // Update local storage so if they close the tab, the new tab knows their last activity time
+      localStorage.setItem("lastActivity", now.toString());
+
       if (socket.readyState !== WebSocket.OPEN) return;
       socket.send(JSON.stringify({ type: "activity", at: now }));
       lastSentAt = now;
@@ -192,12 +197,19 @@ export const useSessionSocket = () => {
     if (socketRef.current) return;
     if (logoutInProgressRef.current) return;
 
+    const wsUrl = getWsUrl();
+    if (!wsUrl) {
+      // No WebSocket backend configured — rely purely on Firestore for session management.
+      // Activity tracking & inactivity logout is handled by useAutoLogout.js.
+      return;
+    }
+
     const user = auth.currentUser;
     if (!user || user.uid !== uid) return;
 
     try {
       const idToken = await user.getIdToken(true);
-      const socket = new WebSocket(getWsUrl());
+      const socket = new WebSocket(wsUrl);
       socketRef.current = socket;
 
       socket.onopen = () => {
@@ -265,6 +277,19 @@ export const useSessionSocket = () => {
         if (logoutInProgressRef.current) return; // aborted by logout
 
         const sessionId = localStorage.getItem("sessionId");
+
+        // Tab-agnostic offline inactivity checking
+        const lastActivityStr = localStorage.getItem("lastActivity");
+        const sessionRoleStr = localStorage.getItem("sessionRole") || "user";
+        if (lastActivityStr) {
+          const lastActivity = parseInt(lastActivityStr, 10);
+          const limit = INACTIVITY_LIMITS[sessionRoleStr] || INACTIVITY_LIMITS.user;
+          // If the time since last activity is greater than their limit, log them out
+          if (Date.now() - lastActivity > limit) {
+            forceLogout("inactivity_" + sessionRoleStr);
+            return; // Halt startup
+          }
+        }
 
         if (sessionId) {
           // Session is ready — start Firestore listener + WS

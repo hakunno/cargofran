@@ -1,117 +1,260 @@
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onMessagePublished } = require("firebase-functions/v2/pubsub");
 const { defineSecret } = require("firebase-functions/params");
-const admin = require('firebase-admin');
+const admin = require("firebase-admin");
 admin.initializeApp();
-const nodemailer = require('nodemailer');
+const nodemailer = require("nodemailer");
 
-const gmailEmail = defineSecret('GMAIL_EMAIL');
-const gmailPassword = defineSecret('GMAIL_PASSWORD');
+const gmailEmail = defineSecret("GMAIL_EMAIL");
+const gmailPassword = defineSecret("GMAIL_PASSWORD");
 
-// 1. Email on request submission (onCreate shipRequests)
-exports.sendRequestConfirmation = onDocumentCreated({
-  document: 'shipRequests/{requestId}',
-  secrets: [gmailEmail, gmailPassword]
-}, async (event) => {
-  const data = event.data.data();
-  console.log('Attempting to send email to:', data.email); // Debug
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: gmailEmail.value(),
-      pass: gmailPassword.value(),
-    },
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+
+const getTransporter = (email, password) =>
+  nodemailer.createTransport({
+    service: "gmail",
+    auth: { user: email, pass: password },
   });
-  const mailOptions = {
-    from: gmailEmail.value(),
-    to: data.email,
-    subject: 'Shipping Request Submitted',
-    text: `Dear ${data.name},\n\nYour shipping request has been submitted successfully. We will review it and get back to you soon.\n\nThank you!`,
-  };
 
-  try {
-    await transporter.sendMail(mailOptions);
-    console.log('Confirmation email sent to:', data.email);
-  } catch (error) {
-    console.error('Error sending confirmation email:', error);
+// ─── Email Triggers ────────────────────────────────────────────────────────────
+
+// 1. Email on request submission
+exports.sendRequestConfirmation = onDocumentCreated(
+  { document: "shipRequests/{requestId}", secrets: [gmailEmail, gmailPassword] },
+  async (event) => {
+    const data = event.data.data();
+    const transporter = getTransporter(gmailEmail.value(), gmailPassword.value());
+    await transporter.sendMail({
+      from: gmailEmail.value(),
+      to: data.email,
+      subject: "Shipping Request Submitted",
+      text: `Dear ${data.name},\n\nYour shipping request has been submitted successfully. We will review it and get back to you soon.\n\nThank you!`,
+    }).catch((err) => console.error("Error sending confirmation email:", err));
   }
-});
+);
 
-// 2. Email on request status update (Accepted or Rejected) (onUpdate shipRequests)
-exports.sendRequestStatusUpdate = onDocumentUpdated({
-  document: 'shipRequests/{requestId}',
-  secrets: [gmailEmail, gmailPassword]
-}, async (event) => {
-  const newData = event.data.after.data();
-  const oldData = event.data.before.data();
+// 2. Email on request status update (Accepted or Rejected)
+exports.sendRequestStatusUpdate = onDocumentUpdated(
+  { document: "shipRequests/{requestId}", secrets: [gmailEmail, gmailPassword] },
+  async (event) => {
+    const newData = event.data.after.data();
+    const oldData = event.data.before.data();
+    if (newData.status === oldData.status) return;
 
-  if (newData.status !== oldData.status) {
-    let subject = '';
-    let text = '';
-
-    if (newData.status === 'Accepted') {
-      subject = 'Shipping Request Accepted';
+    let subject = "";
+    let text = "";
+    if (newData.status === "Accepted") {
+      subject = "Shipping Request Accepted";
       text = `Dear ${newData.name},\n\nYour shipping request has been accepted. Your package number is ${newData.packageNumber}.\n\nWe will update you on the status soon.\n\nThank you!`;
-    } else if (newData.status === 'Rejected') {
-      subject = 'Shipping Request Rejected';
+    } else if (newData.status === "Rejected") {
+      subject = "Shipping Request Rejected";
       text = `Dear ${newData.name},\n\nWe regret to inform you that your shipping request has been rejected.\n\nPlease contact support for more details.\n\nThank you!`;
     }
 
-    if (subject) {
-      const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: gmailEmail.value(),
-          pass: gmailPassword.value(),
-        },
-      });
-      const mailOptions = {
-        from: gmailEmail.value(),
-        to: newData.email,
-        subject,
-        text,
-      };
+    if (!subject) return;
+    const transporter = getTransporter(gmailEmail.value(), gmailPassword.value());
+    await transporter.sendMail({
+      from: gmailEmail.value(),
+      to: newData.email,
+      subject,
+      text,
+    }).catch((err) => console.error("Error sending status update email:", err));
+  }
+);
 
-      try {
-        await transporter.sendMail(mailOptions);
-        console.log(`${newData.status} email sent to:`, newData.email);
-      } catch (error) {
-        console.error(`Error sending ${newData.status} email:`, error);
+// 3. Email on shipment status update
+exports.sendShipmentStatusUpdate = onDocumentCreated(
+  { document: "Packages/{packageId}/statusHistory/{historyId}", secrets: [gmailEmail, gmailPassword] },
+  async (event) => {
+    const newStatus = event.data.data().status;
+    const packageId = event.params.packageId;
+    const packageSnap = await admin.firestore().collection("Packages").doc(packageId).get();
+    const packageData = packageSnap.data();
+
+    const transporter = getTransporter(gmailEmail.value(), gmailPassword.value());
+    await transporter.sendMail({
+      from: gmailEmail.value(),
+      to: packageData.email,
+      subject: "Shipment Status Updated",
+      text: `Dear ${packageData.shipperName},\n\nYour shipment (Package Number: ${packageData.packageNumber}) status has been updated to: ${newStatus}.\n\nThank you!`,
+    }).catch((err) => console.error("Error sending shipment status email:", err));
+  }
+);
+
+// ─── Callable Functions (replacing Express REST endpoints) ────────────────────
+
+// 4. Create a new user (replaces POST /createUser)
+exports.createUser = onCall({ enforceAppCheck: false }, async (request) => {
+  // Only admins and staff can create users
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be logged in.");
+  }
+
+  const callerDoc = await admin.firestore().collection("Users").doc(request.auth.uid).get();
+  const callerRole = callerDoc.data()?.role;
+  if (callerRole !== "admin" && callerRole !== "staff") {
+    throw new HttpsError("permission-denied", "Only admins or staff can create users.");
+  }
+
+  const { firstName, lastName, email, password, role } = request.data;
+  if (!firstName || !lastName || !email || !password) {
+    throw new HttpsError("invalid-argument", "Missing required fields.");
+  }
+
+  const userRecord = await admin.auth().createUser({
+    email,
+    password,
+    displayName: `${firstName} ${lastName}`,
+    emailVerified: false,
+  });
+
+  await admin.firestore().collection("Users").doc(userRecord.uid).set({
+    firstName,
+    lastName,
+    email,
+    role: role || "user",
+    uid: userRecord.uid,
+    verified: false,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  return { uid: userRecord.uid, message: "User created successfully!" };
+});
+
+// 5. Delete a user (replaces DELETE /deleteUser/:uid)
+exports.deleteUser = onCall({ enforceAppCheck: false }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be logged in.");
+  }
+
+  const callerDoc = await admin.firestore().collection("Users").doc(request.auth.uid).get();
+  const callerRole = callerDoc.data()?.role;
+  if (callerRole !== "admin") {
+    throw new HttpsError("permission-denied", "Only admins can delete users.");
+  }
+
+  const { userId } = request.data;
+  if (!userId) {
+    throw new HttpsError("invalid-argument", "Missing userId.");
+  }
+
+  await admin.auth().deleteUser(userId);
+  await admin.firestore().collection("Users").doc(userId).delete();
+
+  return { message: "User deleted successfully!" };
+});
+
+// 6. Logout a session (replaces POST /logoutSession)
+exports.logoutSession = onCall({ enforceAppCheck: false }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be logged in.");
+  }
+
+  const uid = request.auth.uid;
+  const { sessionId } = request.data;
+  if (!sessionId) {
+    throw new HttpsError("invalid-argument", "Missing sessionId.");
+  }
+
+  // Clear session from Firestore if it still matches
+  const userRef = admin.firestore().collection("Users").doc(uid);
+  await admin.firestore().runTransaction(async (tx) => {
+    const snapshot = await tx.get(userRef);
+    if (!snapshot.exists) return;
+    const data = snapshot.data() || {};
+    if (data.currentSessionId === sessionId) {
+      tx.update(userRef, {
+        currentSessionId: null,
+        forceLogout: null,
+        lastLogoutAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+  });
+
+  return { success: true };
+});
+
+// ─── Scheduled Function (replaces setInterval in server.js) ──────────────────
+
+// 7. Clean up expired/orphaned conversations every 5 minutes
+exports.cleanupExpiredConversations = onSchedule("every 5 minutes", async () => {
+  const db = admin.firestore();
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+  const snapshot = await db.collection("conversations").get();
+  if (snapshot.empty) return;
+
+  const statusesToDelete = ["pending", "ended", "rejected", "faqchat"];
+  const deletePromises = [];
+
+  snapshot.forEach((docSnap) => {
+    const data = docSnap.data();
+
+    // Delete orphaned (empty) documents
+    if (Object.keys(data).length === 0) {
+      deletePromises.push(db.recursiveDelete(docSnap.ref));
+      return;
+    }
+
+    // Skip approved live-agent chats (admin ends those manually)
+    if (data.status === "approved") return;
+
+    if (!data.status || statusesToDelete.includes(data.status)) {
+      const lastActive = data.updatedAt?.toDate?.() || data.createdAt?.toDate?.();
+      if (!lastActive || lastActive <= fiveMinutesAgo) {
+        deletePromises.push(db.recursiveDelete(docSnap.ref));
       }
     }
-  }
-});
-
-// 3. Email on shipment status update (onCreate statusHistory)
-exports.sendShipmentStatusUpdate = onDocumentCreated({
-  document: 'Packages/{packageId}/statusHistory/{historyId}',
-  secrets: [gmailEmail, gmailPassword]
-}, async (event) => {
-  const newStatus = event.data.data().status;
-  const packageId = event.params.packageId;
-
-  // Get the package document
-  const packageRef = admin.firestore().collection('Packages').doc(packageId);
-  const packageSnap = await packageRef.get();
-  const packageData = packageSnap.data();
-
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: gmailEmail.value(),
-      pass: gmailPassword.value(),
-    },
   });
-  const mailOptions = {
-    from: gmailEmail.value(),
-    to: packageData.email,
-    subject: 'Shipment Status Updated',
-    text: `Dear ${packageData.shipperName},\n\nYour shipment (Package Number: ${packageData.packageNumber}) status has been updated to: ${newStatus}.\n\nThank you!`,
-  };
 
-  try {
-    await transporter.sendMail(mailOptions);
-    console.log('Status update email sent to:', packageData.email);
-  } catch (error) {
-    console.error('Error sending status update email:', error);
+  if (deletePromises.length > 0) {
+    await Promise.all(deletePromises);
+    console.log(`Cleaned up ${deletePromises.length} expired conversation(s).`);
   }
 });
+
+// ─── Billing Kill Switch ───────────────────────────────────────────────────────
+// Triggered when a Google Cloud Billing Budget alert is published to Pub/Sub.
+// Set up the billing budget in Google Cloud Console and point it to the
+// Pub/Sub topic: "billing-kill-switch" (create it in the same project).
+//
+// To MANUALLY turn off:  Set config/app { maintenanceMode: false } in Firestore.
+// To MANUALLY turn on:   Set config/app { maintenanceMode: true } in Firestore.
+
+exports.billingKillSwitch = onMessagePublished(
+  { topic: "billing-kill-switch" },
+  async (event) => {
+    const db = admin.firestore();
+
+    // Decode the Pub/Sub message from the billing budget alert
+    let budgetAlert;
+    try {
+      const raw = event.data.message.data;
+      budgetAlert = raw ? JSON.parse(Buffer.from(raw, "base64").toString()) : {};
+    } catch (err) {
+      console.error("Failed to parse billing alert message:", err);
+      budgetAlert = {};
+    }
+
+    const costAmount = budgetAlert.costAmount ?? 0;
+    const budgetAmount = budgetAlert.budgetAmount ?? Infinity;
+    const alertThresholdExceeded = budgetAlert.alertThresholdExceeded ?? 1.0;
+
+    console.log(`💰 Billing alert: $${costAmount} / $${budgetAmount} (threshold: ${alertThresholdExceeded * 100}%)`);
+
+    // Enable maintenance mode to take the site offline
+    await db.collection("config").doc("app").set(
+      {
+        maintenanceMode: true,
+        maintenanceTrigger: "billing_alert",
+        maintenanceTriggeredAt: admin.firestore.FieldValue.serverTimestamp(),
+        billingCostAmount: costAmount,
+        billingBudgetAmount: budgetAmount,
+      },
+      { merge: true }
+    );
+
+    console.log("🔴 KILL SWITCH ACTIVATED — Site is now in maintenance mode.");
+  }
+);

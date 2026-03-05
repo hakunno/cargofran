@@ -15,6 +15,7 @@ import {
 import Sidebar from '../../component/adminstaff/Sidebar';
 import { getStorage, ref, getDownloadURL } from 'firebase/storage';
 import { logActivity } from "../../modals/StaffActivity.jsx";
+import { useAdminNotifications } from "../../hooks/useAdminNotifications";
 import { useReactToPrint } from 'react-to-print';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -46,6 +47,11 @@ const ShipmentInquiryRequests = () => {
   const historyTableRef = useRef(); // For History Table
 
   // Fetch PENDING Inquiries (Main List)
+  const { markAsSeen } = useAdminNotifications();
+  useEffect(() => {
+    markAsSeen('shipmentRequests');
+  }, [markAsSeen]);
+
   useEffect(() => {
     const fetchInquiries = async () => {
       try {
@@ -249,7 +255,7 @@ const ShipmentInquiryRequests = () => {
         packageNumber: packageNumberInput.trim(),
       });
 
-      // --- NEW: Generate User Notification & Shipment Conversation ---
+      // --- NEW: Generate User Notification ---
       if (inquiryToAccept.userUid) {
         try {
           // 1. Notification
@@ -263,27 +269,10 @@ const ShipmentInquiryRequests = () => {
             type: 'shipment_update'
           });
 
-          // 2. Shipment Conversation Thread
-          const convoDocRef = await addDoc(collection(db, 'shipment_conversations'), {
-            userId: inquiryToAccept.userUid,
-            userFullName: inquiryToAccept.name || "Unknown User",
-            userEmail: inquiryToAccept.email || "",
-            packageId: docRef.id,
-            packageNumber: packageNumberInput.trim(),
-            status: 'open',
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-
-          // 3. Initial System Welcome Message
-          await addDoc(collection(db, 'shipment_conversations', convoDocRef.id, 'messages'), {
-            text: `Your shipment request has been formally accepted! Your tracking number is ${packageNumberInput.trim()}. You can discuss any details regarding this specific shipment directly with an admin here.`,
-            senderId: 'system',
-            senderName: 'System',
-            timestamp: serverTimestamp(),
-          });
+          // Note: Shipment Conversation Thread is no longer automatically created here
+          // as per admin request to handle it manually later.
         } catch (automationErr) {
-          console.error("Failed to generate user automations:", automationErr);
+          console.error("Failed to generate user notification:", automationErr);
         }
       }
 

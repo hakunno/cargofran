@@ -10,7 +10,7 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   setPersistence,
-  browserSessionPersistence
+  browserLocalPersistence
 } from "firebase/auth";
 import { auth, db } from "../jsfile/firebase";
 import { logActivity } from "./StaffActivity";
@@ -22,7 +22,6 @@ import {
   serverTimestamp
 } from "firebase/firestore";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 const LoginModal = forwardRef(({ hideTrigger = false }, ref) => {
   const [show, setShow] = useState(false);
@@ -73,8 +72,8 @@ const LoginModal = forwardRef(({ hideTrigger = false }, ref) => {
       // 0. MUST clear old session ID to prevent race condition with useSessionSocket
       localStorage.removeItem("sessionId");
 
-      // 1. Enforce Session Persistence (clears on browser close)
-      await setPersistence(auth, browserSessionPersistence);
+      // 1. Enforce Local Persistence (shared across tabs)
+      await setPersistence(auth, browserLocalPersistence);
 
       // 2. Firebase Login
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
@@ -90,6 +89,7 @@ const LoginModal = forwardRef(({ hideTrigger = false }, ref) => {
       // Any other device watching the same user doc will detect the change and log out.
       const sessionId = crypto.randomUUID();
       localStorage.setItem("sessionId", sessionId);
+      localStorage.setItem("lastActivity", Date.now().toString());
 
       await updateDoc(doc(db, "Users", user.uid), {
         currentSessionId: sessionId,
@@ -108,6 +108,8 @@ const LoginModal = forwardRef(({ hideTrigger = false }, ref) => {
       const userData = userDoc.data();
       const targetPath = redirectAfterLogin ||
         (userData.role === "admin" || userData.role === "staff" ? "/AdminDashboard" : "/");
+
+      localStorage.setItem("sessionRole", userData.role || "user");
 
       // 6. UI Updates
       toast.success(`Welcome back, ${userData.firstName || "User"}!`);
@@ -215,8 +217,8 @@ const LoginModal = forwardRef(({ hideTrigger = false }, ref) => {
       // 0. MUST clear old session ID to prevent race condition with useSessionSocket
       localStorage.removeItem("sessionId");
 
-      // 1. Enforce Session Persistence for Google Login
-      await setPersistence(auth, browserSessionPersistence);
+      // 1. Enforce Local Persistence for Google Login
+      await setPersistence(auth, browserLocalPersistence);
 
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
@@ -243,6 +245,7 @@ const LoginModal = forwardRef(({ hideTrigger = false }, ref) => {
       // Single-device session enforcement (same as email/password login)
       const sessionId = crypto.randomUUID();
       localStorage.setItem("sessionId", sessionId);
+      localStorage.setItem("lastActivity", Date.now().toString());
       await updateDoc(userDocRef, {
         currentSessionId: sessionId,
         lastLoginAt: serverTimestamp(),
@@ -253,6 +256,8 @@ const LoginModal = forwardRef(({ hideTrigger = false }, ref) => {
       const userData = latestSnap.data();
       const targetPath = redirectAfterLogin ||
         (userData.role === "admin" || userData.role === "staff" ? "/AdminDashboard" : "/");
+
+      localStorage.setItem("sessionRole", userData.role || "user");
 
       toast.success(`Welcome${userSnap.exists() ? " back" : ""}, ${userData.firstName || user.displayName || "User"}!`);
 
@@ -547,6 +552,8 @@ export const LogoutModal = forwardRef((props, ref) => {
       }
 
       localStorage.removeItem("sessionId");
+      localStorage.removeItem("lastActivity");
+      localStorage.removeItem("sessionRole");
 
       handleClose();
 

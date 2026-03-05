@@ -56,60 +56,62 @@ const TrackPackage = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto mt-5 p-10 bg-gray-50 rounded-lg mb-10 drop-shadow-[0px_2px_5px_rgba(0,0,0,1)] shadow-xl">
-      <h2 className="text-2xl font-semibold text-gray-800 mb-4">Shipment Status</h2>
+    <div className="min-h-screen bg-white">
+      <div className="max-w-4xl mx-auto mt-5 p-10 bg-gray-50 rounded-lg mb-10 drop-shadow-[0px_2px_5px_rgba(0,0,0,1)] shadow-xl">
+        <h2 className="text-2xl font-semibold text-gray-800 mb-4">Shipment Status</h2>
 
-      <div className="flex flex-col sm:flex-row items-center mb-10 gap-4 mb-6">
-        <input
-          type="text"
-          placeholder="Enter Shipment Number"
-          value={packageNumber}
-          onChange={(e) => setPackageNumber(e.target.value)}
-          className="w-full sm:flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <button
-          onClick={handleSearch}
-          disabled={loading}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-        >
-          {loading ? 'Searching...' : 'Track'}
-        </button>
-      </div>
-
-      {error && <p className="text-red-600 mb-4">{error}</p>}
-
-      {shipment && (
-        <div className="bg-white p-6 rounded-lg shadow-lg">
-          <h3 className="text-xl font-medium text-gray-700 mb-4">Package Details</h3>
-
-          <div className="space-y-2 mb-6">
-            <p><span className="font-semibold">Shipment Number:</span> {shipment.packageNumber}</p>
-            <p><span className="font-semibold">From:</span> {shipment.senderCountry || 'N/A'}</p>
-            <p><span className="font-semibold">To:</span> {shipment.destinationCountry || 'N/A'}</p>
-            <p><span className="font-semibold">Current Status:</span> {shipment.packageStatus}</p>
-            <p><span className="font-semibold">Airway Bill:</span> {shipment.airwayBill || 'N/A'}</p>
-          </div>
-
-          <h4 className="text-lg font-medium text-gray-600 mb-3">Status History</h4>
-
-          {statusHistory.length > 0 ? (
-            <ul className="pl-0! space-y-2">
-              {statusHistory.map((entry) => (
-                <li key={entry.id} className="flex justify-between bg-gray-200 p-3 rounded">
-                  <span>{entry.status}</span>
-                  <span className="text-sm text-gray-500">
-                    {entry.timestamp?.toDate
-                      ? entry.timestamp.toDate().toLocaleString()
-                      : 'Pending'}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-gray-500">No status history available.</p>
-          )}
+        <div className="flex flex-col sm:flex-row items-center mb-10 gap-4 mb-6">
+          <input
+            type="text"
+            placeholder="Enter Shipment Number"
+            value={packageNumber}
+            onChange={(e) => setPackageNumber(e.target.value)}
+            className="w-full sm:flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            onClick={handleSearch}
+            disabled={loading}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+          >
+            {loading ? 'Searching...' : 'Track'}
+          </button>
         </div>
-      )}
+
+        {error && <p className="text-red-600 mb-4">{error}</p>}
+
+        {shipment && (
+          <div className="bg-white p-6 rounded-lg shadow-lg">
+            <h3 className="text-xl font-medium text-gray-700 mb-4">Package Details</h3>
+
+            <div className="space-y-2 mb-6">
+              <p><span className="font-semibold">Shipment Number:</span> {shipment.packageNumber}</p>
+              <p><span className="font-semibold">From:</span> {shipment.senderCountry || 'N/A'}</p>
+              <p><span className="font-semibold">To:</span> {shipment.destinationCountry || 'N/A'}</p>
+              <p><span className="font-semibold">Current Status:</span> {shipment.packageStatus}</p>
+              <p><span className="font-semibold">Airway Bill:</span> {shipment.airwayBill || 'N/A'}</p>
+            </div>
+
+            <h4 className="text-lg font-medium text-gray-600 mb-3">Status History</h4>
+
+            {statusHistory.length > 0 ? (
+              <ul className="pl-0! space-y-2">
+                {statusHistory.map((entry) => (
+                  <li key={entry.id} className="flex justify-between bg-gray-200 p-3 rounded">
+                    <span>{entry.status}</span>
+                    <span className="text-sm text-gray-500">
+                      {entry.timestamp?.toDate
+                        ? entry.timestamp.toDate().toLocaleString()
+                        : 'Pending'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-gray-500">No status history available.</p>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

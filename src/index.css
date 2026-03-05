@@ -1,62 +1,53 @@
 @import "tailwindcss";
 @plugin "tailwind-scrollbar";
 
-@custom-variant dark (&:where(.dark, .dark *));
-
-@theme {
-  --color-slate-900: #0f172a;
-}
 
 body {
-    background-color: #9fbcc7;
-}
-
-:is(.dark) body {
-    background-color: var(--color-slate-900);
+  background-color: #ffffff;
 }
 
 ::-webkit-scrollbar {
-    display: none;
-  }
-  
-  /* Hide scrollbar for Firefox */
-  html {
-    scrollbar-width: none;
-  }
-  
-  /* Ensure scrolling still works */
-  html, body {
-    overflow: auto;
-  }
+  display: none;
+}
+
+/* Hide scrollbar for Firefox */
+html {
+  scrollbar-width: none;
+}
+
+/* Ensure scrolling still works */
+html,
+body {
+  overflow: auto;
+}
 
 
-  /* Fonts */
+/* Fonts */
 .oswald {
-    font-family: "Oswald", sans-serif;
+  font-family: "Oswald", sans-serif;
 }
 
 .kanit-thin {
-    font-family: "Kanit", sans-serif;
-    font-weight: 200;
+  font-family: "Kanit", sans-serif;
+  font-weight: 200;
 }
 
 .kanit-regular {
-    font-family: "Kanit", sans-serif;
-    font-weight: 400;
-    font-style: normal;
-}
-  
-.lexend{
-    font-family: "Lexend", sans-serif;
-    font-optical-sizing: auto;
-    font-weight: 400;
-    font-style: normal;
+  font-family: "Kanit", sans-serif;
+  font-weight: 400;
+  font-style: normal;
 }
 
-.lexend-thin{
+.lexend {
+  font-family: "Lexend", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 400;
+  font-style: normal;
+}
+
+.lexend-thin {
   font-family: "Lexend", sans-serif;
   font-optical-sizing: auto;
   font-weight: 300;
   font-style: normal;
 }
-

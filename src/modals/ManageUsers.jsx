@@ -11,12 +11,13 @@ import {
   sendPasswordResetEmail,
   createUserWithEmailAndPassword,
 } from "firebase/auth";
-import { db } from "../jsfile/firebase";
+import { db, functions } from "../jsfile/firebase";
+import { httpsCallable } from "firebase/functions";
 import Modal from "react-bootstrap/Modal";
 import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
 import "../assets/css/ManageUsers.css";
-import { useAuth } from "../utils/AuthContext"; // Import your auth context
+import { useAuth } from "../utils/AuthContext";
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -147,49 +148,41 @@ function ManageUsers({ show, onHide }) {
     const createdAt = new Date().toISOString();
 
     try {
-      const response = await fetch("http://localhost:5000/createUser", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          firstName: newUserFirstName,
-          lastName: newUserLastName,
-          email: newUserEmail,
-          password: newUserPassword,
-          role: newUserRole,
-          createdAt,
-        }),
+      const createUserFn = httpsCallable(functions, "createUser");
+      const result = await createUserFn({
+        firstName: newUserFirstName,
+        lastName: newUserLastName,
+        email: newUserEmail,
+        password: newUserPassword,
+        role: newUserRole,
       });
 
-      const data = await response.json();
+      const data = result.data;
 
-      if (response.ok) {
-        setUsers((prevUsers) =>
-          [
-            ...prevUsers,
-            {
-              id: data.uid,
-              firstName: newUserFirstName,
-              lastName: newUserLastName,
-              email: newUserEmail,
-              role: newUserRole,
-              createdAt,
-            },
-          ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-        );
+      setUsers((prevUsers) =>
+        [
+          ...prevUsers,
+          {
+            id: data.uid,
+            firstName: newUserFirstName,
+            lastName: newUserLastName,
+            email: newUserEmail,
+            role: newUserRole,
+            createdAt: new Date().toISOString(),
+          },
+        ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      );
 
-        toast.success("User created successfully!");
-        setShowAddUserModal(false);
-        setNewUserFirstName("");
-        setNewUserLastName("");
-        setNewUserEmail("");
-        setNewUserPassword("");
-        setNewUserRole("user");
-      } else {
-        toast.error("Failed to create user: " + data.error);
-      }
+      toast.success("User created successfully!");
+      setShowAddUserModal(false);
+      setNewUserFirstName("");
+      setNewUserLastName("");
+      setNewUserEmail("");
+      setNewUserPassword("");
+      setNewUserRole("user");
     } catch (error) {
       console.error("Error:", error);
-      toast.error("Something went wrong.");
+      toast.error("Failed to create user: " + (error.message || "Unknown error"));
     }
   };
 
@@ -201,21 +194,13 @@ function ManageUsers({ show, onHide }) {
     if (!confirmDelete) return;
 
     try {
-      const response = await fetch(`http://localhost:5000/deleteUser/${userId}`, {
-        method: "DELETE",
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setUsers((prevUsers) => prevUsers.filter((user) => user.id !== userId));
-        toast.success("User deleted successfully!");
-      } else {
-        toast.error("Failed to delete user: " + data.error);
-      }
+      const deleteUserFn = httpsCallable(functions, "deleteUser");
+      await deleteUserFn({ userId });
+      setUsers((prevUsers) => prevUsers.filter((user) => user.id !== userId));
+      toast.success("User deleted successfully!");
     } catch (error) {
       console.error("Error:", error);
-      toast.error("Something went wrong while deleting the user.");
+      toast.error("Failed to delete user: " + (error.message || "Unknown error"));
     }
   };
 

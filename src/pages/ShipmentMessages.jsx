@@ -14,7 +14,7 @@ import {
 import { auth, db } from "../jsfile/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { Form, Button, ListGroup } from "react-bootstrap";
-import { FaPaperPlane } from "react-icons/fa";
+import { FaPaperPlane, FaArrowLeft } from "react-icons/fa";
 
 const ShipmentMessages = () => {
     const [user, setUser] = useState(null);
@@ -132,7 +132,7 @@ const ShipmentMessages = () => {
     return (
         <div className="flex flex-col md:flex-row h-[calc(100vh-80px)] bg-gray-50 border-t">
             {/* Sidebar - Conversations List */}
-            <div className="w-full md:w-1/3 lg:w-1/4 bg-white border-r h-full overflow-y-auto hidden md:block">
+            <div className={`w-full md:w-1/3 lg:w-1/4 bg-white border-r h-full overflow-y-auto ${selectedConvo ? 'hidden md:block' : 'block'}`}>
                 <div className="p-4 border-b bg-gray-50 sticky top-0 z-10">
                     <h2 className="text-lg font-semibold text-gray-800">Active Shipments</h2>
                 </div>
@@ -143,7 +143,7 @@ const ShipmentMessages = () => {
                         conversations.map((c) => (
                             <ListGroup.Item
                                 key={c.id}
-                                className={`flex flex-col p-3 border-b cursor-pointer transition-colors ${selectedConvo?.id === c.id ? "bg-cyan-50" : "hover:bg-gray-50"}`}
+                                className={`flex flex-col p-3 border-b cursor-pointer transition-colors ${selectedConvo?.id === c.id ? "bg-blue-50" : "hover:bg-gray-50"}`}
                                 onClick={() => setSelectedConvo(c)}
                             >
                                 <div className="flex flex-col">
@@ -161,19 +161,28 @@ const ShipmentMessages = () => {
             </div>
 
             {/* Main Chat Area */}
-            <div className="flex-1 flex flex-col h-full bg-white relative">
+            <div className={`flex-1 flex flex-col h-full bg-white relative ${!selectedConvo ? 'hidden md:flex' : 'flex'}`}>
                 {selectedConvo ? (
                     <>
                         {/* Header */}
-                        <div className="flex flex-col p-4 border-b bg-gray-50 text-gray-800">
-                            <div className="font-bold text-lg">
-                                Shipment {selectedConvo.packageNumber}
-                            </div>
-                            {selectedConvo.status === "archived" && (
-                                <div className="text-sm font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded inline-block w-fit mt-1">
-                                    This conversation is archived.
+                        <div className="flex items-center p-4 border-b bg-gray-50 text-gray-800">
+                            <button
+                                onClick={() => setSelectedConvo(null)}
+                                className="mr-3 p-2 bg-gray-200 rounded-full text-gray-600 hover:bg-gray-300 transition-colors md:hidden"
+                                aria-label="Back to conversations list"
+                            >
+                                <FaArrowLeft />
+                            </button>
+                            <div className="flex flex-col">
+                                <div className="font-bold text-lg">
+                                    Shipment {selectedConvo.packageNumber}
                                 </div>
-                            )}
+                                {selectedConvo.status === "archived" && (
+                                    <div className="text-sm font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded inline-block w-fit mt-1">
+                                        This conversation is archived.
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         {/* Messages */}

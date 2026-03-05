@@ -131,8 +131,8 @@ export default function ShippingServiceRequestForm() {
 
   // when loadType changes to full load, reset packages to one if more
   useEffect(() => {
-    const isFullLoad = formData.loadType === 'FCL' || formData.loadType === 'FTL';
-    if (isFullLoad && formData.packages.length > 1) {
+    const isWeightOnly = !(formData.transportMode === 'Road' && formData.loadType === 'LTL');
+    if (isWeightOnly && formData.packages.length > 1) {
       setFormData((prev) => ({
         ...prev,
         packages: [{
@@ -450,10 +450,10 @@ export default function ShippingServiceRequestForm() {
       return;
     }
 
-    const isFullLoad = formData.loadType === 'FCL' || formData.loadType === 'FTL';
+    const isWeightOnly = !(formData.transportMode === 'Road' && formData.loadType === 'LTL');
 
     // Validate packages
-    if (isFullLoad) {
+    if (isWeightOnly) {
       if (formData.packages.length === 0 || !formData.packages[0].weight) {
         alert('Please enter the total weight.');
         return;
@@ -476,7 +476,7 @@ export default function ShippingServiceRequestForm() {
 
   const isLoadTypeVisible = formData.transportMode === 'Sea' || formData.transportMode === 'Road';
 
-  const isFullLoad = formData.loadType === 'FCL' || formData.loadType === 'FTL';
+  const isWeightOnly = !(formData.transportMode === 'Road' && formData.loadType === 'LTL');
 
   const isRoad = formData.transportMode === 'Road';
 
@@ -792,7 +792,7 @@ export default function ShippingServiceRequestForm() {
               <h3 className="text-xl font-semibold mb-4">Shipment</h3>
               {formData.packages.map((pkg, index) => (
                 <div key={index} className="border border-gray-300 p-4 mb-4 rounded-md relative">
-                  {!isFullLoad ? (
+                  {!isWeightOnly ? (
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                       <div className="flex flex-col">
                         <label className="mb-1 font-medium text-gray-700">Length (cm)</label>
@@ -870,7 +870,7 @@ export default function ShippingServiceRequestForm() {
                       className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
-                  {!isFullLoad && formData.packages.length > 1 && (
+                  {!isWeightOnly && formData.packages.length > 1 && (
                     <button
                       type="button"
                       onClick={() => removePackage(index)}
@@ -881,7 +881,7 @@ export default function ShippingServiceRequestForm() {
                   )}
                 </div>
               ))}
-              {!isFullLoad && (
+              {!isWeightOnly && (
                 <button
                   type="button"
                   onClick={addPackage}
@@ -948,11 +948,11 @@ export default function ShippingServiceRequestForm() {
               <p><strong>Additional Services:</strong> {Object.keys(formData.additionalServices).filter(key => formData.additionalServices[key]).join(', ') || 'None'}</p>
               <h4 className="text-lg font-semibold mt-4">Shipment:</h4>
               {formData.packages.map((pkg, index) => {
-                const isFullLoad = formData.loadType === 'FCL' || formData.loadType === 'FTL';
+                const isWeightOnly = !(formData.transportMode === 'Road' && formData.loadType === 'LTL');
                 return (
                   <div key={index} className="mb-4 border-b pb-2">
                     <p><strong>Package {index + 1}:</strong></p>
-                    {!isFullLoad ? (
+                    {!isWeightOnly ? (
                       <p>Dimensions: {pkg.length} x {pkg.width} x {pkg.height} cm</p>
                     ) : null}
                     <p>Weight: {pkg.weight} kg</p>

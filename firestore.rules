@@ -1,0 +1,129 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ==========================================
+    // Helper Functions
+    // ==========================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserRole() {
+      return get(/databases/$(database)/documents/Users/$(request.auth.uid)).data.role;
+    }
+    
+    function isAdminOrStaff() {
+      return isAuthenticated() && (getUserRole() == 'admin' || getUserRole() == 'staff');
+    }
+
+    // ==========================================
+    // Collection Rules
+    // ==========================================
+
+    // 1. Users Collection
+    match /Users/{userId} {
+      allow read, update: if isAuthenticated() && request.auth.uid == userId;
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow read, write: if isAdminOrStaff();
+    }
+    
+    // 2. Packages Collection
+    match /Packages/{packageId} {
+      // Authenticated users can read their own packages
+      allow read: if isAuthenticated() && (resource.data.userUid == request.auth.uid || resource.data.email == request.auth.token.email);
+      // Public read is required for the tracking page (users look up by packageNumber).
+      // This is intentional - tracking numbers are semi-public and needed for unauthenticated tracking.
+      allow read: if request.query.limit <= 1;
+      allow read, write: if isAdminOrStaff();
+      
+      // Allow public read on the statusHistory subcollection for tracking
+      match /statusHistory/{historyId} {
+        allow read: if true;
+        allow write: if isAdminOrStaff();
+      }
+    }
+    
+    // 3. Countries Collection
+    match /countries/{countryId} {
+      allow read: if true;
+      allow write: if isAdminOrStaff();
+    }
+    
+    // 4. Ship Requests
+    match /shipRequests/{requestId} {
+      // Anyone can create a new request (guests and registered users)
+      allow create: if true;
+      // Guests (no auth) can update their own just-created request to attach images.
+      // Authenticated users can only update their OWN requests.
+      allow update: if !isAuthenticated() || (isAuthenticated() && resource.data.userUid == request.auth.uid);
+      // Allow read if userUid matches OR if the email matches the authenticated user's email
+      allow read: if isAuthenticated() && (resource.data.userUid == request.auth.uid || resource.data.email == request.auth.token.email);
+      allow read, write: if isAdminOrStaff();
+    }
+    
+    // 5. Shipment Conversations
+    match /shipment_conversations/{conversationId} {
+      allow read, update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow read, write: if isAdminOrStaff();
+      
+      match /messages/{messageId} {
+        allow read, write: if isAuthenticated();
+      }
+    }
+    
+    // 6. Regular Conversations
+    match /conversations/{conversationId} {
+      // Anyone can create a conversation (guests for FAQ, users for Live Agent)
+      allow create: if true;
+      // Users can read, update, or delete their own active conversations
+      allow read, update, delete: if (isAuthenticated() && resource.data.userId == request.auth.uid) || resource.data.userId.matches('^guest_.*');
+      allow read, write: if isAdminOrStaff();
+      
+      match /messages/{messageId} {
+        // Anyone can create or delete messages (needed for FAQ chat & cleanup)
+        allow read, write: if true;
+      }
+    }
+    
+    // 7. Archived Histories & Conversation Requests
+    match /archived_conversations/{archivedId} {
+      // Users need to be able to save their chats to the archive when ending them
+      allow create: if true;
+      // Users can read their own archived history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow read, write: if isAdminOrStaff();
+    }
+    match /conversation_requests_history/{historyId} {
+      allow create: if true;
+      allow read, write: if isAdminOrStaff();
+    }
+    
+    // 8. Notifications & Activities
+    match /userNotifications/{notificationId} {
+      allow read, update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if true; 
+    }
+    match /adminNotifications/{notificationId} {
+      allow read, write: if isAdminOrStaff();
+      allow create: if true;
+    }
+    match /activities/{activityId} {
+      allow read, write: if isAdminOrStaff();
+    }
+    
+    // 9. Site Content
+    match /siteContent/{document=**} {
+      allow read: if true;
+      allow write: if isAdminOrStaff();
+    }
+
+    // 10. Config Collection (Kill Switch)
+    match /config/{document=**} {
+      allow read: if true;
+      allow write: if isAdminOrStaff();
+    }
+  }
+}

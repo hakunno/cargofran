@@ -19,6 +19,7 @@ import AdminShipmentChat from "../../component/adminstaff/AdminShipmentChat";
 import { FaArrowLeft, FaSearch, FaUserCircle, FaCommentSlash, FaTimesCircle, FaTruck, FaArchive, FaTrash } from "react-icons/fa";
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { useAdminNotifications } from "../../hooks/useAdminNotifications";
 
 const AdminShipmentMessages = () => {
     const [conversations, setConversations] = useState([]);
@@ -47,6 +48,11 @@ const AdminShipmentMessages = () => {
         });
         return () => unsubscribe();
     }, []);
+
+    const { markAsSeen } = useAdminNotifications();
+    useEffect(() => {
+        markAsSeen('shipmentChats');
+    }, [markAsSeen]);
 
     // Fetch Shipment Conversations
     useEffect(() => {

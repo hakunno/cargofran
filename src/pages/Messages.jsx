@@ -68,6 +68,22 @@ const ChatWindow = ({
   const [trackingAction, setTrackingAction] = useState(null);
   const [searchLoading, setSearchLoading] = useState(false);
 
+  // Rate limiting state (anti-spam)
+  const messageSentTimestamps = useRef([]);
+  const [isRateLimited, setIsRateLimited] = useState(false);
+  const rateLimitTimer = useRef(null);
+  const RATE_LIMIT_MAX = 5;       // Max messages
+  const RATE_LIMIT_WINDOW_MS = 10000; // Per 10 seconds
+  const RATE_LIMIT_COOLDOWN_MS = 10000; // Cooldown if exceeded
+
+  // Message cap anti-spam (50 messages → disable then delete)
+  const MESSAGE_CAP = 50;
+  const MESSAGE_CAP_DISABLE_MS = 2 * 60 * 1000; // 2 minutes
+  const [isCapLocked, setIsCapLocked] = useState(false);
+  const [capCountdown, setCapCountdown] = useState(0);
+  const capLockTimer = useRef(null);
+  const capCountdownInterval = useRef(null);
+
   // --- Auth Listener ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -125,6 +141,32 @@ const ChatWindow = ({
         ...docSnap.data(),
       }));
       setMessages(msgs);
+
+      // --- Message Cap Lock ---
+      if (msgs.length >= MESSAGE_CAP && !isCapLocked) {
+        setIsCapLocked(true);
+        let secondsLeft = MESSAGE_CAP_DISABLE_MS / 1000;
+        setCapCountdown(secondsLeft);
+
+        capCountdownInterval.current = setInterval(() => {
+          secondsLeft -= 1;
+          setCapCountdown(secondsLeft);
+          if (secondsLeft <= 0) clearInterval(capCountdownInterval.current);
+        }, 1000);
+
+        capLockTimer.current = setTimeout(async () => {
+          clearInterval(capCountdownInterval.current);
+          // Auto-delete the conversation after cooldown
+          if (localConversationId) {
+            try {
+              await deleteDoc(doc(db, "conversations", localConversationId));
+            } catch (e) {
+              console.error("Cap auto-delete failed:", e);
+            }
+          }
+          resetChat();
+        }, MESSAGE_CAP_DISABLE_MS);
+      }
     });
 
     return () => {
@@ -550,6 +592,24 @@ const ChatWindow = ({
   };
 
   const handleSendMessage = async () => {
+    // --- Rate Limit Check ---
+    const now = Date.now();
+    // Remove timestamps outside the window
+    messageSentTimestamps.current = messageSentTimestamps.current.filter(
+      (t) => now - t < RATE_LIMIT_WINDOW_MS
+    );
+    if (messageSentTimestamps.current.length >= RATE_LIMIT_MAX) {
+      setIsRateLimited(true);
+      clearTimeout(rateLimitTimer.current);
+      rateLimitTimer.current = setTimeout(() => {
+        setIsRateLimited(false);
+        messageSentTimestamps.current = [];
+      }, RATE_LIMIT_COOLDOWN_MS);
+      return;
+    }
+    messageSentTimestamps.current.push(now);
+    // --- End Rate Limit Check ---
+
     if (isTrackingInput) {
       if (!trackingPackageNumber.trim()) return;
       const success = await handleTrackSearch(trackingPackageNumber);
@@ -654,7 +714,7 @@ const ChatWindow = ({
                 className="w-full p-4 bg-white border border-blue-200 rounded-xl shadow-sm hover:shadow-md hover:bg-blue-50 transition flex items-center gap-3 group"
               >
                 <div className="p-2 bg-blue-100 text-blue-600 rounded-full group-hover:bg-blue-600 group-hover:text-white transition">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"></path></svg>
                 </div>
                 <div className="text-left">
                   <p className="font-semibold text-gray-800">Browse FAQs</p>
@@ -667,7 +727,7 @@ const ChatWindow = ({
                 className="w-full p-4 bg-white border border-green-200 rounded-xl shadow-sm hover:shadow-md hover:bg-green-50 transition flex items-center gap-3 group"
               >
                 <div className="p-2 bg-green-100 text-green-600 rounded-full group-hover:bg-green-600 group-hover:text-white transition">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"></path></svg>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8h2a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2v4l-4-4H9a1.994 1.994 0 0 1-1.414-.586m0 0L11 14h4a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2v4l.586-.586z"></path></svg>
                 </div>
                 <div className="text-left">
                   <p className="font-semibold text-gray-800">
@@ -774,23 +834,38 @@ const ChatWindow = ({
             </div>
           )}
 
+          {/* Message cap lock warning */}
+          {isCapLocked && (
+            <div className="mb-2 px-3 py-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg text-center space-y-1">
+              <p className="font-semibold">🚫 Chat limit reached (50 messages).</p>
+              <p>This chat will be closed in <strong>{Math.max(0, capCountdown)}s</strong>. Please start a new conversation.</p>
+            </div>
+          )}
+
+          {/* Rate limit warning */}
+          {isRateLimited && (
+            <div className="mb-2 px-3 py-2 bg-orange-50 border border-orange-200 text-orange-700 text-xs rounded-lg text-center">
+              ⚠️ You're sending messages too fast. Please wait a moment.
+            </div>
+          )}
+
           <div className="flex gap-2">
             <input
               type="text"
               className={`flex-1 p-2.5 bg-gray-100 border-transparent focus:bg-white focus:border-blue-500 border rounded-lg text-sm outline-none transition
-                ${isInputDisabled || (isTrackingInput && searchLoading) ? 'opacity-50 cursor-not-allowed' : ''}
+                ${isInputDisabled || isRateLimited || isCapLocked || (isTrackingInput && searchLoading) ? 'opacity-50 cursor-not-allowed' : ''}
               `}
-              placeholder={inputPlaceholder}
+              placeholder={isCapLocked ? "Chat limit reached. This chat will close soon..." : isRateLimited ? "Slow down! Wait before sending..." : inputPlaceholder}
               value={isTrackingInput ? trackingPackageNumber : newMessage}
               onChange={(e) => isTrackingInput ? setTrackingPackageNumber(e.target.value) : setNewMessage(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-              disabled={isInputDisabled || (isTrackingInput && searchLoading)}
+              disabled={isInputDisabled || isRateLimited || isCapLocked || (isTrackingInput && searchLoading)}
             />
             <button
               onClick={handleSendMessage}
-              disabled={isInputDisabled || (isTrackingInput && searchLoading)}
+              disabled={isInputDisabled || isRateLimited || isCapLocked || (isTrackingInput && searchLoading)}
               className={`px-4 py-2 rounded-lg text-white font-medium transition shadow-sm
-                ${(isInputDisabled || (isTrackingInput && searchLoading)) ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 active:scale-95'}
+                ${(isInputDisabled || isRateLimited || isCapLocked || (isTrackingInput && searchLoading)) ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 active:scale-95'}
               `}
             >
               {searchLoading ? 'Searching...' : (isTrackingInput ? 'Track' : 'Send')}

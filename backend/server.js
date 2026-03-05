@@ -271,39 +271,44 @@ setInterval(() => {
 
 const deleteExpiredConversations = async () => {
   try {
-    const olderThanOneMinute = new Date(Date.now() - 1 * 60 * 1000); // 1 minute ago
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
     const snapshot = await db.collection("conversations").get();
 
-    if (snapshot.empty) {
-      console.log("No conversations found.");
-      return;
-    }
+    if (snapshot.empty) return;
 
+    // Statuses that are OK to auto-delete after 5 minutes of inactivity
+    // "approved" is excluded — those are active live agent chats, admin must end them manually
     const statusesToDelete = ["pending", "ended", "rejected", "faqchat"];
     const deletePromises = [];
 
     snapshot.forEach((doc) => {
       const data = doc.data();
 
-      // Build a condition:
-      // 1. If the document is completely empty (likely orphaned).
-      // 2. Or if it has a createdAt field (and it's older than one minute)
-      //    and its status is either missing or one of the statuses to delete.
-      if (
-        Object.keys(data).length === 0 ||
-        (
-          (!data.createdAt || (data.createdAt.toDate && data.createdAt.toDate() <= olderThanOneMinute)) &&
-          (!data.status || statusesToDelete.includes(data.status))
-        )
-      ) {
-        console.log(`Deleting conversation: ${doc.id}`);
-        // Use recursiveDelete to completely remove the document and its subcollections.
+      // Delete orphaned (empty) documents
+      if (Object.keys(data).length === 0) {
+        console.log(`Deleting orphaned conversation: ${doc.id}`);
         deletePromises.push(admin.firestore().recursiveDelete(doc.ref));
+        return;
+      }
+
+      // Skip approved (live agent) chats — admin ends those manually
+      if (data.status === "approved") return;
+
+      // Check if it matches a deletable status and has been inactive for 5+ minutes
+      if (!data.status || statusesToDelete.includes(data.status)) {
+        // Prefer updatedAt for recency check, fall back to createdAt
+        const lastActive = data.updatedAt?.toDate?.() || data.createdAt?.toDate?.();
+        if (!lastActive || lastActive <= fiveMinutesAgo) {
+          console.log(`Deleting expired conversation (${data.status}): ${doc.id}`);
+          deletePromises.push(admin.firestore().recursiveDelete(doc.ref));
+        }
       }
     });
 
-    await Promise.all(deletePromises);
-    console.log("Deleted expired conversations (including subcollections) that met the conditions.");
+    if (deletePromises.length > 0) {
+      await Promise.all(deletePromises);
+      console.log(`Cleaned up ${deletePromises.length} expired conversation(s).`);
+    }
   } catch (error) {
     console.error("Error deleting expired conversations:", error);
   }

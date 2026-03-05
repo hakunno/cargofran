@@ -33,6 +33,7 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
 
   const [manageUsersShow, setManageUsersShow] = useState(false);
   const [showStaffActivityModal, setShowStaffActivityModal] = useState(false);
+  const [showNotifDropdown, setShowNotifDropdown] = useState(false);
 
   // Live notification counts from Firestore
   const { shipmentRequests, messageRequests, liveChats, shipmentChats } = useAdminNotifications();
@@ -119,14 +120,54 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
           </div>
 
           {/* Notification bell showing total unread */}
-          {totalNotifications > 0 && (
-            <div className="relative flex items-center justify-center mt-1">
+          <div className="relative flex items-center justify-center mt-1">
+            <button onClick={() => setShowNotifDropdown(!showNotifDropdown)} className="relative p-1 rounded-full hover:bg-slate-100 transition">
               <FaBell className="text-teal-600 text-lg" />
-              <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow">
-                {totalNotifications > 99 ? "99+" : totalNotifications}
-              </span>
-            </div>
-          )}
+              {totalNotifications > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow">
+                  {totalNotifications > 99 ? "99+" : totalNotifications}
+                </span>
+              )}
+            </button>
+
+            {showNotifDropdown && (
+              <div className="absolute top-full mt-2 w-56 bg-white rounded-lg shadow-xl border border-slate-200 left-1/2 -translate-x-1/2 z-50 overflow-hidden text-left">
+                <div className="px-4 py-2 border-b border-slate-100 bg-slate-50">
+                  <h3 className="text-sm font-semibold text-slate-800 text-center">Notifications</h3>
+                </div>
+                <div className="max-h-60 overflow-y-auto">
+                  {totalNotifications === 0 ? (
+                    <div className="px-4 py-4 text-center text-xs text-slate-500">
+                      No new notifications.
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-slate-100">
+                      {shipmentRequests > 0 && (
+                        <Link to="/ShipmentRequest" className="block px-4 py-3 hover:bg-slate-50 transition" onClick={() => setShowNotifDropdown(false)}>
+                          <div className="text-xs font-medium text-slate-800">📦 {shipmentRequests} New Shipment Requests</div>
+                        </Link>
+                      )}
+                      {messageRequests > 0 && (
+                        <Link to="/MessageRequest" className="block px-4 py-3 hover:bg-slate-50 transition" onClick={() => setShowNotifDropdown(false)}>
+                          <div className="text-xs font-medium text-slate-800">💬 {messageRequests} New Message Requests</div>
+                        </Link>
+                      )}
+                      {shipmentChats > 0 && (
+                        <Link to="/AdminShipmentMessages" className="block px-4 py-3 hover:bg-slate-50 transition" onClick={() => setShowNotifDropdown(false)}>
+                          <div className="text-xs font-medium text-slate-800">🚚 {shipmentChats} New Shipment Messages</div>
+                        </Link>
+                      )}
+                      {liveChats > 0 && (
+                        <Link to="/AdminMessages" className="block px-4 py-3 hover:bg-slate-50 transition" onClick={() => setShowNotifDropdown(false)}>
+                          <div className="text-xs font-medium text-slate-800">🟢 {liveChats} New Support Chats</div>
+                        </Link>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="px-3 py-0.5 bg-teal-50 text-teal-700 rounded-full text-[10px] font-bold tracking-widest uppercase border border-teal-100">
             {role === 'admin' ? 'Administrator' : 'Staff Portal'}

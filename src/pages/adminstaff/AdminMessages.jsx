@@ -9,9 +9,10 @@ import {
   where,
   onSnapshot,
   orderBy,
-  getDoc,
   getDocs,
   setDoc,
+  doc,
+  getDoc,
   addDoc,
   deleteDoc,
   serverTimestamp
@@ -21,6 +22,7 @@ import ChatWindow from "../Messages";
 import { FaArrowLeft, FaSearch, FaUserCircle, FaCommentSlash, FaHistory, FaInbox, FaClock, FaCheckDouble, FaTimesCircle, FaTruck } from "react-icons/fa";
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { useAdminNotifications } from "../../hooks/useAdminNotifications";
 
 const AdminConversations = () => {
   // Toggle State: 'active' or 'history'
@@ -35,6 +37,11 @@ const AdminConversations = () => {
 
   const [currentUserId, setCurrentUserId] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+
+  const { markAsSeen } = useAdminNotifications();
+  useEffect(() => {
+    markAsSeen('liveChats');
+  }, [markAsSeen]);
 
   // Get Current Admin ID
   useEffect(() => {
