@@ -3,6 +3,7 @@ import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "../jsfile/firebase";
 import { toast } from "react-toastify";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../utils/AuthContext";
 
 const STORAGE_KEY = "adminNotifSeen";
 
@@ -28,6 +29,7 @@ const saveSeen = (seen) => {
  */
 export const useAdminNotifications = () => {
   const navigate = useNavigate();
+  const { role, user } = useAuth();
 
   // Live counts from Firestore
   const [liveCounts, setLiveCounts] = useState({
@@ -46,6 +48,10 @@ export const useAdminNotifications = () => {
   const initializedRef = useRef({ shipmentRequests: false, messageRequests: false, liveChats: false, shipmentChats: false });
 
   useEffect(() => {
+    if (!user || (role !== "admin" && role !== "staff")) {
+      return;
+    }
+
     // ── 1. Shipment Requests (status == "Processing") ─────────────────────
     const shipQ = query(
       collection(db, "shipRequests"),
@@ -153,7 +159,7 @@ export const useAdminNotifications = () => {
       unsubChat();
       unsubShipmentChat();
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, role, navigate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * Call this when the user visits (clicks) a section.

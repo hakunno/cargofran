@@ -13,6 +13,7 @@ import {
   getDocs,
   onSnapshot,
   deleteDoc,
+  limit,
 } from "firebase/firestore";
 
 // Helper imports
@@ -83,6 +84,17 @@ const ChatWindow = ({
   const [capCountdown, setCapCountdown] = useState(0);
   const capLockTimer = useRef(null);
   const capCountdownInterval = useRef(null);
+
+  // Inactivity Timeout State
+  const INACTIVITY_WARNING_MS = 90 * 1000; // 1 min 30 sec
+  const INACTIVITY_DELETE_MS = 120 * 1000; // 2 mins
+  const lastActivityRef = useRef(Date.now());
+  const inactivityWarningSentRef = useRef(false);
+
+  const updateActivity = () => {
+    lastActivityRef.current = Date.now();
+    inactivityWarningSentRef.current = false;
+  };
 
   // --- Auth Listener ---
   useEffect(() => {
@@ -175,6 +187,54 @@ const ChatWindow = ({
     };
   }, [localConversationId, isReadOnly, archivedData]);
 
+  // --- Inactivity Timer ---
+  useEffect(() => {
+    if (!localConversationId || isReadOnly || isPreChat) return;
+
+    const interval = setInterval(async () => {
+      const timeSinceLastActivity = Date.now() - lastActivityRef.current;
+
+      // 1. Check for Delete condition (2 mins)
+      if (timeSinceLastActivity >= INACTIVITY_DELETE_MS) {
+        clearInterval(interval);
+
+        // Auto-delete the conversation due to inactivity
+        try {
+          // Delete all messages in the subcollection first
+          const messagesRef = collection(db, "conversations", localConversationId, "messages");
+          const msgSnap = await getDocs(messagesRef);
+          const msgDeletes = msgSnap.docs.map(msgDoc => deleteDoc(doc(db, "conversations", localConversationId, "messages", msgDoc.id)));
+          await Promise.all(msgDeletes);
+
+          // Delete the parent conversation document
+          await deleteDoc(doc(db, "conversations", localConversationId));
+        } catch (e) {
+          console.error("Inactivity auto-delete failed:", e);
+        }
+
+        resetChat();
+        return;
+      }
+
+      // 2. Check for Warning condition (1 min 30 secs)
+      if (timeSinceLastActivity >= INACTIVITY_WARNING_MS && !inactivityWarningSentRef.current) {
+        inactivityWarningSentRef.current = true;
+        try {
+          await addDoc(collection(db, "conversations", localConversationId, "messages"), {
+            text: "Are you still there? This chat will close in 30 seconds due to inactivity. Please reply or perform an action to keep it open.",
+            senderId: "system",
+            timestamp: new Date(),
+            status: "faqchat", // Default to faqchat for system message styling
+          });
+        } catch (e) {
+          console.error("Failed to send inactivity warning:", e);
+        }
+      }
+    }, 5000); // Check every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [localConversationId, isReadOnly, isPreChat]);
+
   // --- Auto Scroll ---
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -207,7 +267,8 @@ const ChatWindow = ({
 
       const q = query(
         collection(db, "Packages"),
-        where("packageNumber", "==", pkgNum)
+        where("packageNumber", "==", pkgNum),
+        limit(1)
       );
       const querySnapshot = await getDocs(q);
 
@@ -367,6 +428,7 @@ const ChatWindow = ({
       });
 
       setFaqStep(1);
+      updateActivity();
     } catch (error) {
       console.error("Error starting FAQ:", error);
     }
@@ -429,6 +491,7 @@ const ChatWindow = ({
       localStorage.setItem("conversationId", convoId);
       setFaqStep(0);
       setShowMoreQuestionPrompt(false);
+      updateActivity();
     } catch (error) {
       console.error("Error requesting agent:", error);
     }
@@ -449,6 +512,8 @@ const ChatWindow = ({
 
   const handleFaqSelection = async (option, step) => {
     if (!localConversationId) return;
+
+    updateActivity();
 
     await addDoc(collection(db, "conversations", localConversationId, "messages"), {
       text: option.text,
@@ -578,6 +643,7 @@ const ChatWindow = ({
 
   const handleMoreQuestions = async (wantsMore) => {
     setShowMoreQuestionPrompt(false);
+    updateActivity();
     if (wantsMore) {
       setFaqStep(1);
     } else {
@@ -637,6 +703,7 @@ const ChatWindow = ({
     if (localConversationId) {
       await sendMessage(db, localConversationId, newMessage, authUser.uid);
       setNewMessage("");
+      updateActivity();
     }
   };
 
@@ -857,7 +924,10 @@ const ChatWindow = ({
               `}
               placeholder={isCapLocked ? "Chat limit reached. This chat will close soon..." : isRateLimited ? "Slow down! Wait before sending..." : inputPlaceholder}
               value={isTrackingInput ? trackingPackageNumber : newMessage}
-              onChange={(e) => isTrackingInput ? setTrackingPackageNumber(e.target.value) : setNewMessage(e.target.value)}
+              onChange={(e) => {
+                isTrackingInput ? setTrackingPackageNumber(e.target.value) : setNewMessage(e.target.value);
+                updateActivity();
+              }}
               onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
               disabled={isInputDisabled || isRateLimited || isCapLocked || (isTrackingInput && searchLoading)}
             />

@@ -6,6 +6,7 @@ import {
   where,
   getDocs,
   orderBy,
+  limit,
 } from "firebase/firestore";
 
 const TrackPackage = () => {
@@ -23,7 +24,8 @@ const TrackPackage = () => {
     try {
       const q = query(
         collection(db, "Packages"),
-        where("packageNumber", "==", packageNumber)
+        where("packageNumber", "==", packageNumber),
+        limit(1)
       );
       const querySnapshot = await getDocs(q);
 

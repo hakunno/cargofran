@@ -6,6 +6,7 @@ import {
   where,
   getDocs,
   orderBy,
+  limit,
 } from "firebase/firestore";
 
 export const faqStep1Options = [
@@ -181,7 +182,8 @@ export default function FAQHelper() {
     try {
       const q = query(
         collection(db, "Packages"),
-        where("packageNumber", "==", pkgNum)
+        where("packageNumber", "==", pkgNum),
+        limit(1)
       );
       const querySnapshot = await getDocs(q);
       if (querySnapshot.empty) {
