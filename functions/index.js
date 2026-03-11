@@ -176,12 +176,78 @@ exports.logoutSession = onCall({ enforceAppCheck: false }, async (request) => {
   return { success: true };
 });
 
+// 7. Securely create a new shipment (prevents duplicate package numbers)
+exports.createShipment = onCall({ enforceAppCheck: false }, async (request) => {
+  // 1. Verify Authentication & Role
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be logged in to create a shipment.");
+  }
+
+  const callerUid = request.auth.uid;
+  const db = admin.firestore();
+
+  const callerDoc = await db.collection("Users").doc(callerUid).get();
+  const callerRole = callerDoc.data()?.role;
+
+  if (callerRole !== "admin" && callerRole !== "staff") {
+    throw new HttpsError("permission-denied", "Only admins or staff can create shipments.");
+  }
+
+  const shipmentData = request.data;
+  const packageNumber = shipmentData.packageNumber?.trim();
+  const airwayBill = shipmentData.airwayBill?.trim();
+
+  if (!packageNumber) {
+    throw new HttpsError("invalid-argument", "Missing package number.");
+  }
+
+  // 2. Transact safely or check for duplicates
+  // Using a lock/transaction isn't perfectly feasible across the whole collection without
+  // making packageNumber the actual Document ID. 
+  // But a robust query check in the backend is much safer than client-side.
+  const packageNumberSnap = await db.collection("Packages")
+    .where("packageNumber", "==", packageNumber)
+    .get();
+
+  if (!packageNumberSnap.empty) {
+    throw new HttpsError("already-exists", `A shipment with tracking number "${packageNumber}" already exists.`);
+  }
+
+  if (airwayBill) {
+    const airwayBillSnap = await db.collection("Packages")
+      .where("airwayBill", "==", airwayBill)
+      .get();
+
+    if (!airwayBillSnap.empty) {
+      throw new HttpsError("already-exists", `A shipment with Airway Bill "${airwayBill}" already exists.`);
+    }
+  }
+
+  // 3. Create the document safely
+  // We cannot use serverTimestamp() directly in nested objects via the SDK easily without FieldValue,
+  // but we can attach it at the top level
+  const newShipmentRef = db.collection("Packages").doc(); // Generate random ID
+
+  const formattedData = {
+    ...shipmentData,
+    dateStarted: new Date().toISOString(),
+    createdTime: admin.firestore.FieldValue.serverTimestamp(),
+    isArchived: false,
+  };
+
+  await newShipmentRef.set(formattedData);
+
+  // Return the auto-generated document ID back to the client
+  return { id: newShipmentRef.id, message: "Shipment created successfully" };
+});
+
+
 // ─── Scheduled Function (replaces setInterval in server.js) ──────────────────
 
-// 7. Clean up expired/orphaned conversations every 5 minutes
-exports.cleanupExpiredConversations = onSchedule("every 5 minutes", async () => {
+// 7. Clean up expired/orphaned conversations every 1 hour
+exports.cleanupExpiredConversations = onSchedule("every 60 minutes", async () => {
   const db = admin.firestore();
-  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
   const snapshot = await db.collection("conversations").get();
   if (snapshot.empty) return;
 
@@ -202,7 +268,7 @@ exports.cleanupExpiredConversations = onSchedule("every 5 minutes", async () => 
 
     if (!data.status || statusesToDelete.includes(data.status)) {
       const lastActive = data.updatedAt?.toDate?.() || data.createdAt?.toDate?.();
-      if (!lastActive || lastActive <= fiveMinutesAgo) {
+      if (!lastActive || lastActive <= oneHourAgo) {
         deletePromises.push(db.recursiveDelete(docSnap.ref));
       }
     }
@@ -237,24 +303,29 @@ exports.billingKillSwitch = onMessagePublished(
       budgetAlert = {};
     }
 
-    const costAmount = budgetAlert.costAmount ?? 0;
-    const budgetAmount = budgetAlert.budgetAmount ?? Infinity;
-    const alertThresholdExceeded = budgetAlert.alertThresholdExceeded ?? 1.0;
+    const costAmount = budgetAlert.costAmount || 0;
+    const budgetAmount = budgetAlert.budgetAmount || Infinity;
+    const alertThresholdExceeded = budgetAlert.alertThresholdExceeded || 1.0;
 
     console.log(`💰 Billing alert: $${costAmount} / $${budgetAmount} (threshold: ${alertThresholdExceeded * 100}%)`);
 
-    // Enable maintenance mode to take the site offline
-    await db.collection("config").doc("app").set(
-      {
-        maintenanceMode: true,
-        maintenanceTrigger: "billing_alert",
-        maintenanceTriggeredAt: admin.firestore.FieldValue.serverTimestamp(),
-        billingCostAmount: costAmount,
-        billingBudgetAmount: budgetAmount,
-      },
-      { merge: true }
-    );
-
-    console.log("🔴 KILL SWITCH ACTIVATED — Site is now in maintenance mode.");
+    // Ensure we ONLY kill the site if the actual cost has reached or exceeded the budget
+    if (costAmount >= budgetAmount) {
+      console.log("🔴 BUDGET EXCEEDED! Activating Kill Switch...");
+      // Enable maintenance mode to take the site offline
+      await db.collection("config").doc("app").set(
+        {
+          maintenanceMode: true,
+          maintenanceTrigger: "billing_alert",
+          maintenanceTriggeredAt: admin.firestore.FieldValue.serverTimestamp(),
+          billingCostAmount: costAmount,
+          billingBudgetAmount: budgetAmount,
+        },
+        { merge: true }
+      );
+      console.log("🔴 KILL SWITCH ACTIVATED — Site is now in maintenance mode.");
+    } else {
+      console.log(`🟢 Budget not reached yet. Current cost: $${costAmount}. No action taken.`);
+    }
   }
 );

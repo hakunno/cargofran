@@ -1,4 +1,4 @@
-import React, { useState, forwardRef, useImperativeHandle } from "react";
+import React, { useState, useEffect, forwardRef, useImperativeHandle } from "react";
 import { useNavigate } from "react-router-dom";
 import { Modal, Button, Form, Spinner } from "react-bootstrap"; // Added Spinner
 import { toast } from "react-toastify";
@@ -12,7 +12,8 @@ import {
   setPersistence,
   browserLocalPersistence
 } from "firebase/auth";
-import { auth, db } from "../jsfile/firebase";
+import { auth, db, functions } from "../jsfile/firebase";
+import { httpsCallable } from "firebase/functions";
 import { logActivity } from "./StaffActivity";
 import {
   doc,
@@ -37,10 +38,22 @@ const LoginModal = forwardRef(({ hideTrigger = false }, ref) => {
 
   // New Loading State
   const [isLoading, setIsLoading] = useState(false);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
   const navigate = useNavigate();
 
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
 
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   useImperativeHandle(ref, () => ({
     openModal: (redirect) => {
@@ -130,8 +143,14 @@ const LoginModal = forwardRef(({ hideTrigger = false }, ref) => {
 
     } catch (error) {
       console.error(error);
-      setError("Login failed. Check your credentials.");
-      toast.error("Login failed.");
+      if (error.code === "auth/network-request-failed") {
+        setError("You must be connected to the internet to log in.");
+        toast.warning("No internet connection.");
+        setIsOffline(true); // Force reveal the Offline Demo button if they click Login and it fails
+      } else {
+        setError("Login failed. Check your credentials.");
+        toast.error("Login failed.");
+      }
       setIsLoading(false); // Stop spinner on error
     }
   };
@@ -430,6 +449,39 @@ const LoginModal = forwardRef(({ hideTrigger = false }, ref) => {
                   First time? Sign up
                 </a>
               </div>
+
+              {/* OFFLINE DEMO BYPASS BUTTONS */}
+              {isOffline && (
+                <div className="mt-4 text-center">
+                  <div className="text-sm text-yellow-600 font-semibold mb-2">
+                    ⚠️ You are currently offline
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        localStorage.setItem("offlineDemoMode", "admin");
+                        handleClose();
+                        window.location.href = "/AdminDashboard"; // Force full reload to trigger Context
+                      }}
+                      className="text-xs text-blue-600 hover:text-blue-800 underline bg-transparent border-none p-0 cursor-pointer p-2 bg-blue-50 rounded"
+                    >
+                      Enter Offline Admin Mode
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        localStorage.setItem("offlineDemoMode", "user");
+                        handleClose();
+                        window.location.href = "/"; // Force full reload to trigger Context
+                      }}
+                      className="text-xs text-green-600 hover:text-green-800 underline bg-transparent border-none p-0 cursor-pointer p-2 bg-green-50 rounded"
+                    >
+                      Enter Offline User Mode
+                    </button>
+                  </div>
+                </div>
+              )}
             </Form>
           )}
 
@@ -537,15 +589,8 @@ export const LogoutModal = forwardRef((props, ref) => {
 
       if (currentUser && sessionId) {
         try {
-          const idToken = await currentUser.getIdToken();
-          await fetch(`${API_BASE_URL}/logoutSession`, {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${idToken}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ sessionId }),
-          });
+          const logoutSessionFn = httpsCallable(functions, 'logoutSession');
+          await logoutSessionFn({ sessionId });
         } catch (error) {
           console.error("Server logout session cleanup failed:", error);
         }
@@ -554,6 +599,7 @@ export const LogoutModal = forwardRef((props, ref) => {
       localStorage.removeItem("sessionId");
       localStorage.removeItem("lastActivity");
       localStorage.removeItem("sessionRole");
+      localStorage.removeItem("offlineDemoMode"); // Clear Demo Mode
 
       handleClose();
 

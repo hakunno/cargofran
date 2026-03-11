@@ -10,6 +10,20 @@ const ProtectedRoute = ({ children, requiredRoles, redirectForAdmin = false }) =
   const [user, setUser] = useState(null);
 
   useEffect(() => {
+    // === OFFLINE DEMO MODE BYPASS ===
+    const offlineMode = localStorage.getItem("offlineDemoMode");
+    if (offlineMode === "admin" || offlineMode === "true") {
+      setUser({ uid: "demo-admin-uid" });
+      setRole("admin");
+      setLoading(false);
+      return;
+    } else if (offlineMode === "user") {
+      setUser({ uid: "demo-user-uid" });
+      setRole("user");
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (user) {
         setUser(user);
@@ -32,7 +46,9 @@ const ProtectedRoute = ({ children, requiredRoles, redirectForAdmin = false }) =
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, []);
 
   if (loading) {

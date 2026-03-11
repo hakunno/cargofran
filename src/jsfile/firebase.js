@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, enableMultiTabIndexedDbPersistence } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getFunctions } from "firebase/functions";
 
@@ -20,6 +20,15 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 const functions = getFunctions(app);
+
+// Enable offline persistence across multiple tabs
+enableMultiTabIndexedDbPersistence(db).catch((err) => {
+  if (err.code === "failed-precondition") {
+    console.warn("Multiple tabs open, persistence can only be enabled in one tab at a time.");
+  } else if (err.code === "unimplemented") {
+    console.warn("The current browser does not support all of the features required to enable persistence.");
+  }
+});
 
 // ✅ Set persistence AFTER authentication instance is created
 (async () => {

@@ -82,8 +82,16 @@ const Navbar = () => {
     try {
       setIconIsOpen(false);
       setIsOpen(false);
+
+      // Clear all local session and demo mode flags
+      localStorage.removeItem("sessionId");
+      localStorage.removeItem("lastActivity");
+      localStorage.removeItem("sessionRole");
+      localStorage.removeItem("offlineDemoMode");
+
       await signOut(auth);
       navigate('/')  // Sign the user out
+      window.location.reload(); // Force a hard reload to clear the AuthContext bypass
     } catch (error) {
       console.error("Error signing out: ", error);
     }
@@ -108,7 +116,7 @@ const Navbar = () => {
     <>
       {role !== undefined && (
         <nav className={`font-semibold z-40 
-        ${role === "admin" || role === "staff" ? "md:hidden bg-blue-300 border-b-2" : "bg-white"} 
+        ${role === "admin" ? "hidden" : role === "staff" ? "md:hidden bg-blue-300 border-b-2" : "bg-white"} 
         `}>
           <div className="max-w-screen-xl flex items-center justify-between mx-auto p-3">
             {/* Logo with conditional navigation based on user role */}

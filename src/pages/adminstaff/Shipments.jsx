@@ -230,6 +230,12 @@ const Shipments = () => {
   };
   useEffect(() => {
     const fetchAdmin = async () => {
+      // Check if we are in Offline Demo Mode first before hitting auth
+      if (localStorage.getItem("offlineDemoMode") === "true") {
+        setAdminName("Admin (Offline Demo)");
+        return;
+      }
+
       const { adminFirstName, adminLastName } = await fetchAdminDetails();
       setAdminName(`${adminFirstName} ${adminLastName}`.trim());
     };
@@ -237,62 +243,93 @@ const Shipments = () => {
   }, []);
   // Form Logic Effects
   useEffect(() => {
-    if (formData.senderCountry === formData.destinationCountry && formData.senderCountry !== '') {
-      setFormData((prev) => ({ ...prev, shipmentDirection: 'Domestic' }));
-    } else if (formData.shipmentDirection === 'Domestic') {
-      setFormData((prev) => ({ ...prev, shipmentDirection: '' }));
-    }
-    if (formData.senderCountry !== formData.destinationCountry && formData.transportMode === 'Road') {
-      setFormData((prev) => ({ ...prev, transportMode: '' }));
-    }
-  }, [formData.senderCountry, formData.destinationCountry]);
-  useEffect(() => {
-    if (!formData.transportMode) return;
-    if (!LOAD_OPTIONS[formData.transportMode] && formData.loadType !== '') {
-      setFormData((prev) => ({ ...prev, loadType: '' }));
-    }
-  }, [formData.transportMode]);
-  useEffect(() => {
-    if (formData.transportMode === 'Road') {
-      setFormData((prev) => ({
-        ...prev,
-        shipmentDirection: 'Domestic',
-        additionalServices: {
-          documentation: false,
-          customsClearance: false,
-          brokerage: false,
-          consolidation: false,
-        },
-      }));
-    }
-  }, [formData.transportMode]);
-  useEffect(() => {
-    const isWeightOnly = !(formData.transportMode === 'Road' && formData.loadType === 'LTL');
-    if (isWeightOnly && formData.packages.length > 1) {
-      setFormData((prev) => ({
-        ...prev,
-        packages: [{
-          length: '',
-          width: '',
-          height: '',
-          weight: '',
-          contents: '',
-          image: null,
-        }],
-      }));
-    }
-  }, [formData.loadType, formData.transportMode]);
+    setFormData((prev) => {
+      let updates = {};
+      let needsUpdate = false;
 
-  // Auto-set countries based on direction (mirrors ShippingInquiry.jsx)
-  useEffect(() => {
-    if (formData.shipmentDirection === 'Domestic') {
-      setFormData(prev => ({ ...prev, senderCountry: 'Philippines', destinationCountry: 'Philippines' }));
-    } else if (formData.shipmentDirection === 'Import') {
-      setFormData(prev => ({ ...prev, senderCountry: '', destinationCountry: 'Philippines' }));
-    } else if (formData.shipmentDirection === 'Export') {
-      setFormData(prev => ({ ...prev, senderCountry: 'Philippines', destinationCountry: '' }));
-    }
-  }, [formData.shipmentDirection]);
+      // 1. Auto-set Direction based on Countries
+      if (prev.senderCountry === prev.destinationCountry && prev.senderCountry !== '') {
+        if (prev.shipmentDirection !== 'Domestic') {
+          updates.shipmentDirection = 'Domestic';
+          needsUpdate = true;
+        }
+      } else if (prev.shipmentDirection === 'Domestic' && prev.senderCountry !== prev.destinationCountry) {
+        // Only clear direction if it's currently domestic but countries don't match
+        updates.shipmentDirection = '';
+        needsUpdate = true;
+      }
+
+      // 2. Transport Mode restrictions
+      if (prev.senderCountry !== prev.destinationCountry && prev.transportMode === 'Road') {
+        updates.transportMode = '';
+        needsUpdate = true;
+      }
+
+      // 3. Load Type Restrictions based on Transport Mode
+      if (prev.transportMode && !LOAD_OPTIONS[prev.transportMode] && prev.loadType !== '') {
+        updates.loadType = '';
+        needsUpdate = true;
+      }
+
+      // 4. Force settings for Road transport
+      if (prev.transportMode === 'Road') {
+        if (prev.shipmentDirection !== 'Domestic') {
+          updates.shipmentDirection = 'Domestic';
+          needsUpdate = true;
+        }
+
+        // Only reset services if any of them are true
+        const hasServices = prev.additionalServices.documentation ||
+          prev.additionalServices.customsClearance ||
+          prev.additionalServices.brokerage ||
+          prev.additionalServices.consolidation;
+
+        if (hasServices) {
+          updates.additionalServices = {
+            documentation: false,
+            customsClearance: false,
+            brokerage: false,
+            consolidation: false,
+          };
+          needsUpdate = true;
+        }
+      }
+
+      // 5. Packages cleanup if not LTL Road
+      const isWeightOnly = !(prev.transportMode === 'Road' && prev.loadType === 'LTL');
+      if (isWeightOnly && prev.packages.length > 1) {
+        updates.packages = [{
+          length: '', width: '', height: '', weight: '', contents: '', image: null,
+        }];
+        needsUpdate = true;
+      }
+
+      // 6. Auto-set countries based on direction (mirrors ShippingInquiry.jsx)
+      // Only do this if they aren't already set to avoid loops
+      if (prev.shipmentDirection === 'Domestic' && (prev.senderCountry !== 'Philippines' || prev.destinationCountry !== 'Philippines')) {
+        updates.senderCountry = 'Philippines';
+        updates.destinationCountry = 'Philippines';
+        needsUpdate = true;
+      } else if (prev.shipmentDirection === 'Import' && prev.destinationCountry !== 'Philippines') {
+        updates.senderCountry = '';
+        updates.destinationCountry = 'Philippines';
+        needsUpdate = true;
+      } else if (prev.shipmentDirection === 'Export' && prev.senderCountry !== 'Philippines') {
+        updates.senderCountry = 'Philippines';
+        updates.destinationCountry = '';
+        needsUpdate = true;
+      }
+
+      return needsUpdate ? { ...prev, ...updates } : prev;
+    });
+  }, [
+    formData.senderCountry,
+    formData.destinationCountry,
+    formData.transportMode,
+    formData.loadType,
+    formData.shipmentDirection
+    // Removed formData.packages.length which was triggering an infinite loop
+  ]);
 
   const handleBusinessPermitFileChange = (file) => {
     if (file && file.size > 5 * 1024 * 1024) {
@@ -528,55 +565,13 @@ const Shipments = () => {
       }
     }
 
-    // --- Uniqueness Check (Package Number + Airway Bill) ---
-    try {
-      const pkgNumQuery = query(
-        collection(db, "Packages"),
-        where("packageNumber", "==", formData.packageNumber.trim())
-      );
-
-      const checks = [getDocs(pkgNumQuery)];
-
-      // Only check airwayBill if one was entered
-      const trimmedBill = formData.airwayBill?.trim();
-      let billQuery = null;
-      if (trimmedBill) {
-        billQuery = query(
-          collection(db, "Packages"),
-          where("airwayBill", "==", trimmedBill)
-        );
-        checks.push(getDocs(billQuery));
-      }
-
-      const [pkgNumSnap, billSnap] = await Promise.all(checks);
-
-      if (!pkgNumSnap.empty) {
-        toast.error(`A shipment with tracking number "${formData.packageNumber.trim()}" already exists!`);
-        return;
-      }
-      if (billSnap && !billSnap.empty) {
-        toast.error(`A shipment with Airway Bill "${trimmedBill}" already exists!`);
-        return;
-      }
-    } catch (err) {
-      console.error("Error checking for duplicate package numbers:", err);
-      toast.error("Failed to verify tracking number uniqueness. Please try again.");
-      return;
-    }
-
-    const confirmAdd = window.confirm(
-      "Are you sure you want to add this shipment?"
-    );
-    if (!confirmAdd) return;
-
-    setIsSubmitting(true);
-
     try {
       const maxId = shipments.reduce(
         (acc, s) => Math.max(acc, s.customId || 0),
         0
       );
       const newCustomId = maxId + 1;
+
       const newShipment = {
         packageNumber: formData.packageNumber,
         shipperName: formData.shipperName,
@@ -611,22 +606,51 @@ const Shipments = () => {
         businessPermitImage: null, // will be updated after upload
         userUid: formData.userUid || null, // Link to user if existing
         customId: newCustomId,
-        dateStarted: new Date().toISOString(),
-        createdTime: serverTimestamp(),
-        isArchived: false,
       };
 
       const { adminFirstName, adminLastName } = await fetchAdminDetails();
       const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
-      const docRef = await addDoc(collection(db, "Packages"), newShipment);
+
+      // CALL CLOUD FUNCTION instead of `addDoc` to ensure uniqueness securely
+      // If we are offline, the Cloud Function will fail immediately. We must fall back to local Firestore writes.
+      let docId;
+      try {
+        const createShipmentFn = httpsCallable(functions, "createShipment");
+        const result = await createShipmentFn(newShipment);
+        docId = result.data.id;
+      } catch (funcError) {
+        console.warn("Cloud function failed (likely offline). Falling back to local offline persistence.", funcError);
+
+        // Ensure uniqueness locally as best effort while offline
+        const existsQuery = query(collection(db, "Packages"), where("packageNumber", "==", formData.packageNumber));
+        const existsSnapshot = await getDocs(existsQuery);
+
+        if (!existsSnapshot.empty) {
+          toast.error("Package Number already exists locally!");
+          return;
+        }
+
+        // Generate a random 20-char Firestore-like ID locally
+        const generateId = () => {
+          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+          let autoId = '';
+          for (let i = 0; i < 20; i++) {
+            autoId += chars.charAt(Math.floor(Math.random() * chars.length));
+          }
+          return autoId;
+        };
+
+        docId = generateId();
+        await setDoc(doc(db, "Packages", docId), newShipment);
+      }
 
       // Upload business permit if provided
       if (formData.businessPermitImage) {
         try {
-          const permitRef = ref(storage, `shipRequests/${docRef.id}/businessPermit/${formData.businessPermitImage.name}`);
+          const permitRef = ref(storage, `shipRequests/${docId}/businessPermit/${formData.businessPermitImage.name}`);
           await uploadBytes(permitRef, formData.businessPermitImage);
           const permitUrl = await getDownloadURL(permitRef);
-          await updateDoc(doc(db, "Packages", docRef.id), { businessPermitImage: permitUrl });
+          await updateDoc(doc(db, "Packages", docId), { businessPermitImage: permitUrl });
           newShipment.businessPermitImage = permitUrl;
         } catch (uploadErr) {
           console.error("Failed to upload business permit:", uploadErr);
@@ -634,9 +658,16 @@ const Shipments = () => {
         }
       }
       await logActivity(adminFullName, `Added new shipment ${newCustomId}`);
+
       setShipments((prev) => [
         ...prev,
-        { customId: newCustomId, docId: docRef.id, ...newShipment },
+        {
+          customId: newCustomId,
+          docId: docId,
+          ...newShipment,
+          dateStarted: new Date().toISOString(),
+          isArchived: false
+        },
       ]);
       setShowModal(false);
       setFormData({
@@ -680,7 +711,11 @@ const Shipments = () => {
       toast.success("Shipment added successfully!");
     } catch (error) {
       console.error("Error adding shipment:", error);
-      toast.error("Failed to add shipment. Please try again.");
+      if (error.code === "functions/already-exists" || error.message.includes("already exists")) {
+        toast.error(error.message);
+      } else {
+        toast.error("Failed to add shipment. Please try again.");
+      }
     } finally {
       setIsSubmitting(false);
     }
