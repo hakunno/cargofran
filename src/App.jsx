@@ -8,7 +8,7 @@ import Footer from "./component/Footer";
 import ChatWidget from "./component/ChatWidget";
 
 // Toastify
-import { ToastContainer } from "react-toastify";
+import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 // Pages
@@ -46,6 +46,38 @@ const App = () => {
 
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [maintenanceLoading, setMaintenanceLoading] = useState(true);
+
+  // Online / Offline notifications
+  useEffect(() => {
+    const handleOffline = () => {
+      toast.warning("No internet connection. You are in offline mode. Changes will be saved locally and synced when you reconnect.", {
+        toastId: "offline-toast",
+        autoClose: false,
+        closeOnClick: true,
+      });
+    };
+
+    const handleOnline = () => {
+      toast.dismiss("offline-toast");
+      toast.success("Internet connection restored. Data has been synced.", {
+        toastId: "online-toast",
+        autoClose: 5000,
+      });
+    };
+
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("online", handleOnline);
+
+    // Check initial state
+    if (!navigator.onLine) {
+      handleOffline();
+    }
+
+    return () => {
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online", handleOnline);
+    };
+  }, []);
 
   // Subscribe to the kill switch in real-time
   useEffect(() => {
