@@ -98,6 +98,15 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
     return () => navElement?.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // Listen for hamburger menu toggle from Navbar
+  useEffect(() => {
+    const handleToggle = (e) => {
+      toggleSidebar(e.detail);
+    };
+    window.addEventListener('toggleAdminSidebar', handleToggle);
+    return () => window.removeEventListener('toggleAdminSidebar', handleToggle);
+  }, []);
+
   if (loading) return null;
   if (!user || (role !== "admin" && role !== "staff")) return null;
 

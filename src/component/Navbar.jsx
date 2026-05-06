@@ -116,7 +116,7 @@ const Navbar = () => {
     <>
       {role !== undefined && (
         <nav className={`font-semibold z-40 
-        ${role === "admin" ? "hidden" : role === "staff" ? "md:hidden bg-blue-300 border-b-2" : "bg-white"} 
+        ${(role === "admin" || role === "staff") ? "md:hidden bg-white border-b shadow-sm" : "bg-white"} 
         `}>
           <div className="max-w-screen-xl flex items-center justify-between mx-auto p-3">
             {/* Logo with conditional navigation based on user role */}
@@ -268,7 +268,13 @@ const Navbar = () => {
               <div className="md:hidden flex items-center space-x-2 md:space-x-3">
                 {/* Hamburger Button */}
                 <button
-                  onClick={() => setIsOpen(true)}
+                  onClick={() => {
+                    if (role === "admin" || role === "staff") {
+                      window.dispatchEvent(new CustomEvent('toggleAdminSidebar', { detail: true }));
+                    } else {
+                      setIsOpen(true);
+                    }
+                  }}
                   className="p-2 text-black rounded-lg hover:bg-gray-100 focus:outline-none"
                 >
                   <svg

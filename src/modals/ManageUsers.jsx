@@ -25,6 +25,19 @@ function ManageUsers({ show, onHide }) {
   // Get current user's role and loading state from your auth context
   const { role, loading } = useAuth();
 
+  // If authorized, render the ManageUsers modal
+  const [users, setUsers] = useState([]);
+  const [search, setSearch] = useState("");
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [newUserFirstName, setNewUserFirstName] = useState("");
+  const [newUserLastName, setNewUserLastName] = useState("");
+  const [newUserEmail, setNewUserEmail] = useState("");
+  const [newUserPassword, setNewUserPassword] = useState("");
+  const [newUserRole, setNewUserRole] = useState("user");
+  const [resetCooldown, setResetCooldown] = useState({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
   // Only allow admin or staff to access this modal.
   if (loading) {
     return (
@@ -37,26 +50,8 @@ function ManageUsers({ show, onHide }) {
   }
 
   if (!(role === "admin" || role === "staff")) {
-    return null; // Or you could return a message, e.g.,
-    // return (
-    //   <Modal show={show} onHide={onHide} centered>
-    //     <Modal.Body className="text-center">
-    //       You are not authorized to view this content.
-    //     </Modal.Body>
-    //   </Modal>
-    // );
+    return null;
   }
-
-  // If authorized, render the ManageUsers modal
-  const [users, setUsers] = useState([]);
-  const [search, setSearch] = useState("");
-  const [showAddUserModal, setShowAddUserModal] = useState(false);
-  const [newUserFirstName, setNewUserFirstName] = useState("");
-  const [newUserLastName, setNewUserLastName] = useState("");
-  const [newUserEmail, setNewUserEmail] = useState("");
-  const [newUserPassword, setNewUserPassword] = useState("");
-  const [newUserRole, setNewUserRole] = useState("user");
-  const [resetCooldown, setResetCooldown] = useState({});
 
   const usersCollection = collection(db, "Users");
   const auth = getAuth();
