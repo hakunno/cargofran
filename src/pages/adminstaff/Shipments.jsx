@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { useConfirm } from "../../component/ConfirmModal";
 import { db, auth } from "../../jsfile/firebase";
 import {
   collection,
@@ -34,6 +35,7 @@ import { Pie } from "react-chartjs-2";
 ChartJS.register(ArcElement, Tooltip, Legend);
 const storage = getStorage();
 const Shipments = () => {
+  const [confirm, ConfirmUI] = useConfirm();
   const [shipments, setShipments] = useState([]);
   const [previewUrls, setPreviewUrls] = useState({});
   const [businessPreviewUrls, setBusinessPreviewUrls] = useState({});
@@ -738,10 +740,13 @@ const Shipments = () => {
     if (isSubmitting) return;
 
     if (currentShipment) {
-      const confirmEdit = window.confirm(
-        "Are you sure you want to save changes?"
-      );
-      if (confirmEdit) {
+      const ok = await confirm({
+        title: "Save Changes?",
+        message: "Are you sure you want to save changes to this shipment?",
+        variant: "warning",
+        confirmLabel: "Save",
+      });
+      if (ok) {
         setIsSubmitting(true);
         try {
           const { adminFirstName, adminLastName } = await fetchAdminDetails();
@@ -806,10 +811,13 @@ const Shipments = () => {
       toast.info("Shipment is already Delivered.");
       return;
     }
-    const confirmDone = window.confirm(
-      "Are you sure you want to mark this shipment as Delivered? This will automatically mark it as Paid."
-    );
-    if (confirmDone) {
+    const ok = await confirm({
+      title: "Mark as Delivered?",
+      message: "Are you sure you want to mark this shipment as Delivered? It will also be marked as Paid.",
+      variant: "success",
+      confirmLabel: "Mark Delivered",
+    });
+    if (ok) {
       try {
         const { adminFirstName, adminLastName } = await fetchAdminDetails();
         const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
@@ -860,10 +868,13 @@ const Shipments = () => {
     }
   };
   const handleArchiveShipment = async (shipment) => {
-    const confirmArchive = window.confirm(
-      "Are you sure you want to ARCHIVE this shipment? It will be moved to the Archive Modal."
-    );
-    if (confirmArchive) {
+    const ok = await confirm({
+      title: "Archive Shipment?",
+      message: "This shipment will be moved to the Archive. You can unarchive it later.",
+      variant: "warning",
+      confirmLabel: "Archive",
+    });
+    if (ok) {
       try {
         const { adminFirstName, adminLastName } = await fetchAdminDetails();
         const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
@@ -897,10 +908,13 @@ const Shipments = () => {
     }
   };
   const handleUnarchiveShipment = async (shipment) => {
-    const confirmUnarchive = window.confirm(
-      "Are you sure you want to UNARCHIVE this shipment? It will be moved back to the main table."
-    );
-    if (confirmUnarchive) {
+    const ok = await confirm({
+      title: "Unarchive Shipment?",
+      message: "This shipment will be moved back to the main shipments table.",
+      variant: "info",
+      confirmLabel: "Unarchive",
+    });
+    if (ok) {
       try {
         const { adminFirstName, adminLastName } = await fetchAdminDetails();
         const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
@@ -934,10 +948,13 @@ const Shipments = () => {
     }
   };
   const handleDeletePermanent = async (shipment) => {
-    const confirmDelete = window.confirm(
-      `Are you sure you want to PERMANENTLY DELETE shipment ${shipment.packageNumber}? This cannot be undone.`
-    );
-    if (confirmDelete) {
+    const ok = await confirm({
+      title: "Permanently Delete?",
+      message: `This will permanently delete shipment ${shipment.packageNumber}. This action cannot be undone.`,
+      variant: "danger",
+      confirmLabel: "Delete",
+    });
+    if (ok) {
       try {
         const { adminFirstName, adminLastName } = await fetchAdminDetails();
         const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
@@ -952,8 +969,13 @@ const Shipments = () => {
     }
   };
   const handleSetPaid = async (shipment, paid) => {
-    const confirmSet = window.confirm(`Are you sure you want to set paid to ${paid ? 'Yes' : 'No'}?`);
-    if (!confirmSet) return;
+    const ok = await confirm({
+      title: "Update Payment Status?",
+      message: `Set this shipment's paid status to "${paid ? 'Paid' : 'Unpaid'}"?`,
+      variant: "warning",
+      confirmLabel: "Confirm",
+    });
+    if (!ok) return;
     try {
       const { adminFirstName, adminLastName } = await fetchAdminDetails();
       const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
@@ -1053,7 +1075,13 @@ const Shipments = () => {
     }
   };
   const handleRemoveCountry = async (countryId, countryName) => {
-    if (!window.confirm(`Are you sure you want to remove ${countryName}?`)) return;
+    const ok = await confirm({
+      title: "Remove Country?",
+      message: `"${countryName}" will be removed from the country list.`,
+      variant: "danger",
+      confirmLabel: "Remove",
+    });
+    if (!ok) return;
     try {
       await deleteDoc(doc(db, "countries", countryId));
       toast.success("Country removed successfully.");
@@ -1169,6 +1197,7 @@ const Shipments = () => {
   });
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-gray-100">
+      {ConfirmUI}
       <Sidebar />
       <div className="flex-1 p-4 md:p-6 md:ml-64">
 

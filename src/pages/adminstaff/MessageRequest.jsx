@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useConfirm } from "../../component/ConfirmModal";
 import { Table, Button, Modal, Badge } from "react-bootstrap";
 import {
   collection,
@@ -21,6 +22,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import { useAdminNotifications } from "../../hooks/useAdminNotifications";
 
 const ConversationsAdmin = () => {
+  const [confirm, ConfirmUI] = useConfirm();
   const [conversations, setConversations] = useState([]); // Pending conversations
   const [historyConversations, setHistoryConversations] = useState([]); // History from separate DB
   const [showModal, setShowModal] = useState(false); // Detail modal
@@ -144,8 +146,13 @@ const ConversationsAdmin = () => {
   // --- APPROVE LOGIC ---
   const handleApprove = async () => {
     if (!selectedConversation) return;
-    const confirmApprove = window.confirm("Approve this conversation?");
-    if (!confirmApprove) return;
+    const ok = await confirm({
+      title: "Approve Conversation?",
+      message: "This will approve the conversation and connect the user with a live agent.",
+      variant: "success",
+      confirmLabel: "Approve",
+    });
+    if (!ok) return;
 
     try {
       const currentAdmin = auth.currentUser;
@@ -191,8 +198,13 @@ const ConversationsAdmin = () => {
   // --- REJECT LOGIC ---
   const handleReject = async () => {
     if (!selectedConversation) return;
-    const confirmReject = window.confirm("Reject this conversation?");
-    if (!confirmReject) return;
+    const ok = await confirm({
+      title: "Reject Conversation?",
+      message: "This conversation request will be rejected and the user will be notified.",
+      variant: "danger",
+      confirmLabel: "Reject",
+    });
+    if (!ok) return;
     try {
       const { adminFirstName, adminLastName } = await fetchAdminDetails();
       const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
@@ -322,6 +334,7 @@ const ConversationsAdmin = () => {
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-gray-50 text-gray-900">
+      {ConfirmUI}
       <Sidebar />
       <div className="flex-1 p-4 md:p-6 md:ml-64">
 

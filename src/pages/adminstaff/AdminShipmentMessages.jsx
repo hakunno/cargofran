@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useConfirm } from "../../component/ConfirmModal";
 import Sidebar from "../../component/adminstaff/Sidebar";
 import { auth } from "../../jsfile/firebase";
 import {
@@ -22,6 +23,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import { useAdminNotifications } from "../../hooks/useAdminNotifications";
 
 const AdminShipmentMessages = () => {
+    const [confirm, ConfirmUI] = useConfirm();
     const [conversations, setConversations] = useState([]);
     const [selectedConversationId, setSelectedConversationId] = useState(null);
     const [currentUserId, setCurrentUserId] = useState(null);
@@ -226,7 +228,13 @@ const AdminShipmentMessages = () => {
     };
 
     const deleteConversation = async (convId) => {
-        if (!window.confirm("Are you sure you want to permanently delete this conversation and all its messages?")) return;
+        const ok = await confirm({
+          title: "Delete Conversation?",
+          message: "This will permanently delete this conversation and all its messages. This cannot be undone.",
+          variant: "danger",
+          confirmLabel: "Delete",
+        });
+        if (!ok) return;
         try {
             const messagesSnap = await getDocs(collection(db, "shipment_conversations", convId, "messages"));
             const deletePromises = messagesSnap.docs.map((docSnap) =>
@@ -271,6 +279,7 @@ const AdminShipmentMessages = () => {
 
     return (
         <div className="flex flex-col md:flex-row h-screen bg-gray-50 text-gray-900 overflow-hidden">
+            {ConfirmUI}
             <Sidebar />
 
             <div className="flex-1 flex flex-col md:flex-row md:ml-64 h-full relative">

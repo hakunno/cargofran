@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useConfirm } from '../../component/ConfirmModal';
 import { db, auth } from '../../jsfile/firebase';
 import {
   collection,
@@ -23,6 +24,7 @@ import 'react-toastify/dist/ReactToastify.css';
 const storage = getStorage();
 
 const ShipmentInquiryRequests = () => {
+  const [confirm, ConfirmUI] = useConfirm();
   const [inquiries, setInquiries] = useState([]); // Pending Inquiries
   const [historyInquiries, setHistoryInquiries] = useState([]); // Accepted & Rejected Inquiries
 
@@ -296,8 +298,13 @@ const ShipmentInquiryRequests = () => {
   };
 
   const rejectInquiry = async (inquiry) => {
-    const confirmReject = window.confirm('Reject this request? This will move it to the Requests History.');
-    if (!confirmReject) return;
+    const ok = await confirm({
+      title: "Reject Request?",
+      message: "This request will be moved to the Requests History and the customer will be notified.",
+      variant: "danger",
+      confirmLabel: "Reject",
+    });
+    if (!ok) return;
     try {
       const { adminFirstName, adminLastName } = await fetchAdminDetails();
       const adminFullName = `${adminFirstName} ${adminLastName}`.trim();
@@ -451,6 +458,7 @@ const ShipmentInquiryRequests = () => {
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-gray-100">
+      {ConfirmUI}
       <Sidebar />
       <div className="flex-1 p-4 md:p-6 md:ml-64">
 

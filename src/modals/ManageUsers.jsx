@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useConfirm } from "../component/ConfirmModal";
 import {
   getDocs,
   updateDoc,
@@ -22,6 +23,7 @@ import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 function ManageUsers({ show, onHide }) {
+  const [confirm, ConfirmUI] = useConfirm();
   // Get current user's role and loading state from your auth context
   const { role, loading } = useAuth();
 
@@ -182,11 +184,13 @@ function ManageUsers({ show, onHide }) {
   };
 
   const handleDeleteUser = async (userId) => {
-    const confirmDelete = window.confirm(
-      "Are you sure you want to delete this user? This action cannot be undone."
-    );
-
-    if (!confirmDelete) return;
+    const ok = await confirm({
+      title: "Delete User?",
+      message: "This user will be permanently deleted and cannot be recovered.",
+      variant: "danger",
+      confirmLabel: "Delete",
+    });
+    if (!ok) return;
 
     try {
       const deleteUserFn = httpsCallable(functions, "deleteUser");
@@ -222,6 +226,7 @@ function ManageUsers({ show, onHide }) {
 
   return (
     <>
+      {ConfirmUI}
 
       {/* Main Manage Users Modal */}
       <Modal

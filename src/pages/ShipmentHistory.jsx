@@ -115,7 +115,13 @@ const UserShipmentHistory = () => {
           return isNaN(parsed) ? 0 : parsed;
         };
 
-        let merged = [...packagesDocs, ...requestsDocs]
+        // Exclude accepted shipRequests — they already have a corresponding Packages doc.
+        // Showing both causes duplicate entries (one "Accepted" + one "Processing").
+        const filteredRequests = requestsDocs.filter(
+          (r) => r.status !== "Accepted"
+        );
+
+        let merged = [...packagesDocs, ...filteredRequests]
           .map((d) => ({ ...d, _ts: normalizeTimestamp(d) }))
           .filter((d) => d && d.collection);
         merged.sort((a, b) => b._ts - a._ts);

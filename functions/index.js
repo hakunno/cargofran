@@ -46,8 +46,8 @@ exports.sendRequestStatusUpdate = onDocumentUpdated(
     let subject = "";
     let text = "";
     if (newData.status === "Accepted") {
-      subject = "Shipping Request Accepted";
-      text = `Dear ${newData.name},\n\nYour shipping request has been accepted. Your package number is ${newData.packageNumber}.\n\nWe will update you on the status soon.\n\nThank you!`;
+      subject = "Shipping Request Accepted & Now Processing";
+      text = `Dear ${newData.name},\n\nGreat news! Your shipping request has been accepted and is now being processed.\n\nYour package number is: ${newData.packageNumber}\nCurrent Status: Processing\n\nWe will keep you updated as your shipment progresses.\n\nThank you for choosing our service!`;
     } else if (newData.status === "Rejected") {
       subject = "Shipping Request Rejected";
       text = `Dear ${newData.name},\n\nWe regret to inform you that your shipping request has been rejected.\n\nPlease contact support for more details.\n\nThank you!`;
@@ -64,11 +64,23 @@ exports.sendRequestStatusUpdate = onDocumentUpdated(
   }
 );
 
-// 3. Email on shipment status update
+// 3. Email on shipment status update (skip initial 'Processing' from acceptance — covered by email #2)
 exports.sendShipmentStatusUpdate = onDocumentCreated(
   { document: "Packages/{packageId}/statusHistory/{historyId}", secrets: [gmailEmail, gmailPassword] },
   async (event) => {
     const newStatus = event.data.data().status;
+
+    // Skip the very first "Processing" status — it's the acceptance step and
+    // the customer already received a combined accepted + processing email.
+    if (newStatus === "Processing") {
+      // Only skip if this is the FIRST and only statusHistory entry
+      const packageId = event.params.packageId;
+      const historySnap = await admin.firestore()
+        .collection("Packages").doc(packageId)
+        .collection("statusHistory").get();
+      if (historySnap.size <= 1) return; // First entry — skip duplicate email
+    }
+
     const packageId = event.params.packageId;
     const packageSnap = await admin.firestore().collection("Packages").doc(packageId).get();
     const packageData = packageSnap.data();

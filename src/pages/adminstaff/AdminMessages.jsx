@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useConfirm } from "../../component/ConfirmModal";
 import { Link } from "react-router-dom";
 import Sidebar from "../../component/adminstaff/Sidebar";
 import { auth } from "../../jsfile/firebase";
@@ -25,6 +26,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import { useAdminNotifications } from "../../hooks/useAdminNotifications";
 
 const AdminConversations = () => {
+  const [confirm, ConfirmUI] = useConfirm();
   // Toggle State: 'active' or 'history'
   const [viewMode, setViewMode] = useState('active');
 
@@ -89,8 +91,13 @@ const AdminConversations = () => {
   const handleEndConversation = async () => {
     if (!selectedConversationId) return;
 
-    const confirmEnd = window.confirm("Are you sure you want to end this conversation? It will be moved to history.");
-    if (!confirmEnd) return;
+    const ok = await confirm({
+      title: "End Conversation?",
+      message: "This conversation will be moved to history and closed for the user.",
+      variant: "warning",
+      confirmLabel: "End",
+    });
+    if (!ok) return;
 
     try {
       // 1. Get Reference to the Active Conversation
@@ -150,8 +157,13 @@ const AdminConversations = () => {
 
   // --- NEW: Handle Delete History Conversation ---
   const handleDeleteHistory = async (convId) => {
-    const confirmDelete = window.confirm("Are you sure you want to delete this conversation history? This cannot be undone.");
-    if (!confirmDelete) return;
+    const ok = await confirm({
+      title: "Delete History?",
+      message: "This conversation history will be permanently deleted and cannot be recovered.",
+      variant: "danger",
+      confirmLabel: "Delete",
+    });
+    if (!ok) return;
 
     try {
       await deleteDoc(doc(db, "archived_conversations", convId));
@@ -202,6 +214,7 @@ const AdminConversations = () => {
 
   return (
     <div className="flex flex-col md:flex-row h-screen bg-gray-50 text-gray-900 overflow-hidden">
+      {ConfirmUI}
       <Sidebar />
 
       {/* Main Content Area */}
