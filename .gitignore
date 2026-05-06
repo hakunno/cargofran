@@ -26,3 +26,4 @@ dist-ssr
 .env
 
 backend/serviceAccountKey.json
+seeder/serviceAccountKey.json

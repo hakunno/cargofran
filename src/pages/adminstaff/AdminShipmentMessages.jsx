@@ -16,7 +16,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../../jsfile/firebase";
 import AdminShipmentChat from "../../component/adminstaff/AdminShipmentChat";
-import { FaArrowLeft, FaSearch, FaUserCircle, FaCommentSlash, FaTimesCircle, FaTruck, FaArchive, FaTrash } from "react-icons/fa";
+import { FaArrowLeft, FaSearch, FaUserCircle, FaCommentSlash, FaTimesCircle, FaTruck, FaArchive, FaTrash, FaSortAmountDown } from "react-icons/fa";
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useAdminNotifications } from "../../hooks/useAdminNotifications";
@@ -27,6 +27,8 @@ const AdminShipmentMessages = () => {
     const [currentUserId, setCurrentUserId] = useState(null);
     const [searchQuery, setSearchQuery] = useState("");
     const [viewMode, setViewMode] = useState("active"); // 'active' or 'archived'
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [filterType, setFilterType] = useState("all"); // 'all', 'package', 'general'
 
     const [showNewChatModal, setShowNewChatModal] = useState(false);
     const [isCreatingChat, setIsCreatingChat] = useState(false);
@@ -38,6 +40,7 @@ const AdminShipmentMessages = () => {
     const [chatReasonType, setChatReasonType] = useState("shipment"); // "shipment" or "other"
     const [selectedPackageForChat, setSelectedPackageForChat] = useState("");
     const [otherReasonText, setOtherReasonText] = useState("");
+    const [userSearchQuery, setUserSearchQuery] = useState(""); // Search for New Message modal
 
     // Get Current Admin ID
     useEffect(() => {
@@ -52,6 +55,7 @@ const AdminShipmentMessages = () => {
     const { markAsSeen } = useAdminNotifications();
     useEffect(() => {
         markAsSeen('shipmentChats');
+        return () => markAsSeen(null);
     }, [markAsSeen]);
 
     // Fetch Shipment Conversations
@@ -239,14 +243,25 @@ const AdminShipmentMessages = () => {
         }
     };
 
-    const filteredConversations = conversations.filter((conv) => {
-        const matchesStatus = (viewMode === "active" && conv.status !== "archived") || (viewMode === "archived" && conv.status === "archived");
-        const name = (conv.userFullName || "").toLowerCase();
-        const email = (conv.userEmail || "").toLowerCase();
-        const pkg = (conv.packageNumber || "").toLowerCase();
-        const q = searchQuery.toLowerCase();
-        return matchesStatus && (name.includes(q) || email.includes(q) || pkg.includes(q));
-    });
+    const filteredConversations = conversations
+        .filter((conv) => {
+            const matchesStatus = (viewMode === "active" && conv.status !== "archived") || (viewMode === "archived" && conv.status === "archived");
+            
+            // Filter by Chat Type
+            const isGeneral = conv.packageNumber === "General Inquiry";
+            const matchesType = filterType === "all" || (filterType === "general" && isGeneral) || (filterType === "package" && !isGeneral);
+
+            const name = (conv.userFullName || "").toLowerCase();
+            const email = (conv.userEmail || "").toLowerCase();
+            const pkg = (conv.packageNumber || "").toLowerCase();
+            const q = searchQuery.toLowerCase();
+            return matchesStatus && matchesType && (name.includes(q) || email.includes(q) || pkg.includes(q));
+        })
+        .sort((a, b) => {
+            const timeA = a.updatedAt?.toMillis ? a.updatedAt.toMillis() : (a.createdAt?.toMillis ? a.createdAt.toMillis() : 0);
+            const timeB = b.updatedAt?.toMillis ? b.updatedAt.toMillis() : (b.createdAt?.toMillis ? b.createdAt.toMillis() : 0);
+            return timeB - timeA;
+        });
 
     const getActiveUserName = () => {
         const conv = filteredConversations.find(c => c.id === selectedConversationId);
@@ -259,58 +274,65 @@ const AdminShipmentMessages = () => {
             <Sidebar />
 
             <div className="flex-1 flex flex-col md:flex-row md:ml-64 h-full relative">
-                <div className={`${selectedConversationId ? "hidden md:flex" : "flex"} flex-col w-full md:w-80 bg-white border-r border-gray-200 h-full shadow-sm z-10`}>
-                    <div className="p-5 border-b border-gray-100 bg-white sticky top-0 z-10 space-y-4">
-                        <div className="flex justify-between items-center">
-                            <h2 className="text-xl font-bold text-gray-800">Contact User</h2>
+                {/* --- LEFT PANEL: Conversation List --- */}
+                <div 
+                    className={`${selectedConversationId ? "hidden md:flex" : "flex"} flex-col transition-all duration-300 ease-in-out bg-white border-r border-gray-200 h-full shadow-md z-10 
+                    ${isSidebarOpen ? "w-full md:w-72" : "w-0 overflow-hidden md:w-0"}`}
+                >
+                    <div className="p-4 border-b border-gray-100 bg-white sticky top-0 z-10 space-y-3">
+                        <div className="flex justify-center items-center px-1 relative">
+                            <h2 className="text-[10px] font-black text-gray-400 uppercase lexend">CHAT</h2>
+                            <button 
+                                onClick={() => { setViewMode(viewMode === 'active' ? 'archived' : 'active'); setSelectedConversationId(null); }}
+                                className={`absolute right-1 p-1.5 rounded-md transition-all ${viewMode === 'archived' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-100'}`}
+                                title="View Archived"
+                            >
+                                <FaArchive size={12} />
+                            </button>
                         </div>
 
-                        {/* TOGGLE BUTTONS */}
+                        {/* NEW CLEAN TABS */}
                         <div className="flex bg-gray-100 p-1 rounded-lg">
-                            <button
-                                onClick={() => { setViewMode('active'); setSelectedConversationId(null); }}
-                                className={`flex-1 flex items-center justify-center gap-1 py-1 px-1 text-xs font-medium rounded-md transition-all ${viewMode === 'active'
-                                    ? 'bg-white text-blue-600 shadow-sm'
-                                    : 'text-gray-500 hover:text-gray-700'
-                                    }`}
+                            <button 
+                                onClick={() => setFilterType("package")}
+                                className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-[11px] font-bold rounded-md transition-all ${filterType === 'package' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                             >
-                                Active
+                                <FaTruck size={12} /> Packages
                             </button>
-                            <button
-                                onClick={() => { setViewMode('archived'); setSelectedConversationId(null); }}
-                                className={`flex-1 flex items-center justify-center gap-1 py-1 px-1 text-xs font-medium rounded-md transition-all ${viewMode === 'archived'
-                                    ? 'bg-white text-blue-600 shadow-sm'
-                                    : 'text-gray-500 hover:text-gray-700'
-                                    }`}
+                            <button 
+                                onClick={() => setFilterType("general")}
+                                className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-[11px] font-bold rounded-md transition-all ${filterType === 'general' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                             >
-                                <FaArchive /> Archived
+                                <FaCommentSlash size={12} /> Inquiries
                             </button>
                         </div>
 
-                        <button
-                            onClick={() => setShowNewChatModal(true)}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg text-sm transition shadow-sm"
-                        >
-                            + New Message
-                        </button>
-
-                        <div className="relative">
-                            <FaSearch className="absolute left-3 top-3 text-gray-400 text-sm" />
-                            <input
-                                type="text"
-                                placeholder="Search package or user..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                            />
+                        <div className="flex gap-2">
+                            <div className="relative flex-1">
+                                <FaSearch className="absolute left-3 top-2.5 text-gray-400 text-xs" />
+                                <input
+                                    type="text"
+                                    placeholder="Find chat..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full pl-8 pr-3 py-2 bg-gray-50 border border-transparent rounded-lg text-xs focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all"
+                                />
+                            </div>
+                            <button
+                                onClick={() => setShowNewChatModal(true)}
+                                className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg transition-all shadow-sm"
+                                title="New Message"
+                            >
+                                <span className="text-xl leading-none">+</span>
+                            </button>
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+                    <div className="flex-1 overflow-y-auto custom-scrollbar bg-white">
                         {filteredConversations.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center h-40 text-gray-400 mt-10">
-                                <FaCommentSlash size={32} className="mb-2 opacity-50" />
-                                <p className="text-sm">No {viewMode} conversations</p>
+                            <div className="flex flex-col items-center justify-center h-full text-gray-300 p-6 text-center">
+                                <FaCommentSlash size={24} className="mb-2 opacity-20 mx-auto" />
+                                <p className="text-[10px] font-bold uppercase tracking-wider">No Conversations</p>
                             </div>
                         ) : (
                             <ul className="divide-y divide-gray-50">
@@ -324,40 +346,34 @@ const AdminShipmentMessages = () => {
                                         <li
                                             key={conv.id}
                                             onClick={() => setSelectedConversationId(conv.id)}
-                                            className={`group cursor-pointer p-4 transition-all duration-200 hover:bg-gray-50 ${isActive ? "bg-blue-50 border-l-4 border-blue-600" : "border-l-4 border-transparent"
+                                            className={`group cursor-pointer px-4 py-2 transition-all duration-200 border-r-4 ${isActive ? "bg-blue-50 border-blue-600 shadow-inner" : "border-transparent hover:bg-gray-50"
                                                 }`}
                                         >
-                                            <div className="flex items-start justify-between">
-                                                {/* Left: Avatar + Details */}
-                                                <div className="flex items-start gap-3 flex-1">
-                                                    {/* Avatar */}
-                                                    <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shadow-sm ${isActive ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-600 group-hover:bg-gray-300"
-                                                        }`}>
-                                                        {initials}
+                                            <div className="flex items-center gap-2.5">
+                                                {/* Avatar */}
+                                                <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold shadow-sm ${isActive ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-500 group-hover:bg-gray-300"
+                                                    }`}>
+                                                    {initials}
+                                                </div>
+
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex justify-between items-center">
+                                                        <h5 className={`text-[9px] font-semibold truncate ${isActive ? 'text-blue-900' : 'text-gray-700'}`}>
+                                                            {conv.userFullName || "Unknown User"}
+                                                        </h5>
+                                                        {viewMode === 'archived' && conv.archivedAt && (
+                                                            <span className="text-[7px] text-gray-400 font-bold uppercase">
+                                                                {new Date(conv.archivedAt.seconds * 1000).toLocaleDateString()}
+                                                            </span>
+                                                        )}
                                                     </div>
-
-                                                    {/* Text Details */}
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex justify-between items-baseline mb-1">
-                                                            <h3 className={`text-sm font-semibold truncate ${isActive ? 'text-gray-900' : 'text-gray-700'}`}>
-                                                                {conv.userFullName || "Unknown User"}
-                                                            </h3>
-
-                                                            {/* Display Date for Archive */}
-                                                            {viewMode === 'archived' && conv.archivedAt && (
-                                                                <span className="text-[10px] text-gray-400">
-                                                                    {new Date(conv.archivedAt.seconds * 1000).toLocaleDateString()}
-                                                                </span>
-                                                            )}
-                                                        </div>
-
-                                                        <p className={`text-xs truncate ${isActive ? 'text-blue-700 font-medium' : 'text-gray-500'}`}>
+                                                    <div className="flex items-center gap-1 mt-0.5">
+                                                        <span className="text-[8px] font-bold text-gray-400 bg-gray-100 px-1 rounded">
+                                                            {conv.packageNumber === 'General Inquiry' ? 'INQ' : `#${conv.packageNumber}`}
+                                                        </span>
+                                                        <p className="text-[8px] truncate text-gray-400 flex-1">
                                                             {conv.userEmail}
                                                         </p>
-
-                                                        <div className="mt-1 text-xs text-gray-400 truncate">
-                                                            Package {conv.packageNumber}
-                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -370,18 +386,31 @@ const AdminShipmentMessages = () => {
                 </div>
 
                 <div className={`flex-1 flex flex-col bg-gray-50 h-full relative ${selectedConversationId ? "block" : "hidden md:flex"}`}>
+                    
+                    {/* TOGGLE SIDEBAR BUTTON (Floating) */}
+                    <button 
+                        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                        className="absolute -left-3 top-20 z-30 bg-white border border-gray-200 shadow-md p-1 rounded-full text-gray-400 hover:text-blue-600 transition-all hidden md:block"
+                    >
+                        {isSidebarOpen ? <FaArrowLeft size={12} /> : <span className="rotate-180 block"><FaArrowLeft size={12} /></span>}
+                    </button>
+
                     {selectedConversationId && (
-                        <div className="flex items-center justify-between bg-white border-b p-3 shadow-sm sticky top-0 z-20">
-                            <div className="flex items-center">
+                        <div className="flex items-center justify-between bg-white border-b border-gray-200 p-4 shadow-sm sticky top-0 z-20">
+                            <div className="flex items-center gap-3">
                                 <button
                                     onClick={() => setSelectedConversationId(null)}
-                                    className="md:hidden p-2 mr-2 text-gray-600 hover:bg-gray-100 rounded-full"
+                                    className="md:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-full"
                                 >
                                     <FaArrowLeft />
                                 </button>
                                 <div className="flex flex-col">
-                                    <span className="font-bold text-gray-800 text-lg">
+                                    <span className="font-extrabold text-gray-800 text-base tracking-tight">
                                         {getActiveUserName()}
+                                    </span>
+                                    <span className="text-[10px] font-bold text-green-500 flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
+                                        SECURE CHANNEL
                                     </span>
                                 </div>
                             </div>
@@ -433,20 +462,43 @@ const AdminShipmentMessages = () => {
                         <form onSubmit={handleCreateNewShipmentChat} className="space-y-4">
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Select User</label>
-                                <select
-                                    value={selectedUserForChat}
-                                    onChange={(e) => setSelectedUserForChat(e.target.value)}
-                                    required
-                                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                >
-                                    <option value="" disabled>Select a user...</option>
-                                    {usersList.map(u => (
-                                        <option key={u.id} value={u.id}>
-                                            {u.firstName || u.lastName ? `${u.firstName || ""} ${u.lastName || ""} (${u.email})` : u.email}
-                                        </option>
-                                    ))}
-                                </select>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">1. Find User</label>
+                                <div className="relative mb-3">
+                                    <FaSearch className="absolute left-3 top-2.5 text-gray-400 text-xs" />
+                                    <input
+                                        type="text"
+                                        placeholder="Type name or email..."
+                                        value={userSearchQuery}
+                                        onChange={(e) => setUserSearchQuery(e.target.value)}
+                                        className="w-full pl-8 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 transition-all outline-none"
+                                    />
+                                </div>
+                                <div className="max-h-48 overflow-y-auto border border-gray-100 rounded-lg bg-gray-50 custom-scrollbar">
+                                    {usersList
+                                        .filter(u => {
+                                            const search = userSearchQuery.toLowerCase();
+                                            return (u.firstName || "").toLowerCase().includes(search) || 
+                                                   (u.lastName || "").toLowerCase().includes(search) || 
+                                                   (u.email || "").toLowerCase().includes(search);
+                                        })
+                                        .map(u => {
+                                            const isSelected = selectedUserForChat === u.id;
+                                            return (
+                                                <div 
+                                                    key={u.id} 
+                                                    onClick={() => setSelectedUserForChat(u.id)}
+                                                    className={`px-3 py-2 cursor-pointer border-b border-gray-100 last:border-0 transition-all ${isSelected ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-gray-100 text-gray-700'}`}
+                                                >
+                                                    <p className="text-[11px] font-bold leading-tight">
+                                                        {u.firstName || u.lastName ? `${u.firstName || ""} ${u.lastName || ""}` : "No Name"}
+                                                    </p>
+                                                    <p className={`text-[9px] ${isSelected ? 'text-blue-100' : 'text-gray-400'}`}>
+                                                        {u.email}
+                                                    </p>
+                                                </div>
+                                            );
+                                        })}
+                                </div>
                             </div>
 
                             {selectedUserForChat && (

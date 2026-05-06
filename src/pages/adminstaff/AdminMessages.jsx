@@ -37,10 +37,12 @@ const AdminConversations = () => {
 
   const [currentUserId, setCurrentUserId] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const { markAsSeen } = useAdminNotifications();
   useEffect(() => {
     markAsSeen('liveChats');
+    return () => markAsSeen(null);
   }, [markAsSeen]);
 
   // Get Current Admin ID
@@ -208,56 +210,48 @@ const AdminConversations = () => {
         {/* --- LEFT PANEL: Conversation List --- */}
         <div
           className={`${selectedConversationId ? "hidden md:flex" : "flex"
-            } flex-col w-full md:w-80 bg-white border-r border-gray-200 h-full shadow-sm z-10`}
+            } flex-col transition-all duration-300 ease-in-out bg-white border-r border-gray-200 h-full shadow-md z-10 
+            ${isSidebarOpen ? "w-full md:w-72" : "w-0 overflow-hidden md:w-0"}`}
         >
           {/* Header & Toggle */}
-          <div className="p-5 border-b border-gray-100 bg-white sticky top-0 z-10 space-y-4">
-
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-bold text-gray-800">Support Chat</h2>
+          <div className="p-4 border-b border-gray-100 bg-white sticky top-0 z-10 space-y-3">
+            <div className="flex justify-center items-center px-1 relative">
+                <h2 className="text-[10px] font-black text-gray-400 uppercase lexend">Chat</h2>
+                <button 
+                    onClick={() => { setViewMode(viewMode === 'active' ? 'history' : 'active'); setSelectedConversationId(null); }}
+                    className={`absolute right-1 p-1.5 rounded-md transition-all ${viewMode === 'history' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-100'}`}
+                    title={viewMode === 'active' ? "View History" : "View Inbox"}
+                >
+                    {viewMode === 'active' ? <FaHistory size={12} /> : <FaInbox size={12} />}
+                </button>
             </div>
 
-            {/* TOGGLE BUTTONS */}
+            {/* QUICK STATS / TABS (Compact) */}
             <div className="flex bg-gray-100 p-1 rounded-lg">
-              <button
-                onClick={() => { setViewMode('active'); setSelectedConversationId(null); }}
-                className={`flex-1 flex items-center justify-center gap-1 py-1 px-1 text-xs font-medium rounded-md transition-all ${viewMode === 'active'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-                  }`}
-              >
-                <FaInbox /> Inbox ({conversations.length})
-              </button>
-              <button
-                onClick={() => { setViewMode('history'); setSelectedConversationId(null); }}
-                className={`flex-1 flex items-center justify-center gap-1 py-1 px-1 text-xs font-medium rounded-md transition-all ${viewMode === 'history'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-                  }`}
-              >
-                <FaHistory /> History
-              </button>
+                <div className={`flex-1 text-center py-1 text-[10px] font-bold rounded-md ${viewMode === 'active' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400'}`}>
+                    {viewMode === 'active' ? `Inbox (${conversations.length})` : 'History'}
+                </div>
             </div>
 
             {/* Search */}
             <div className="relative">
-              <FaSearch className="absolute left-3 top-3 text-gray-400 text-sm" />
+              <FaSearch className="absolute left-3 top-2.5 text-gray-400 text-[10px]" />
               <input
                 type="text"
-                placeholder={viewMode === 'active' ? "Search active..." : "Search history..."}
+                placeholder="Find chat..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                className="w-full pl-8 pr-3 py-2 bg-gray-50 border border-transparent rounded-lg text-xs focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all outline-none"
               />
             </div>
           </div>
 
           {/* List Items */}
-          <div className="flex-1 overflow-y-auto custom-scrollbar">
+          <div className="flex-1 overflow-y-auto custom-scrollbar bg-white">
             {filteredConversations.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-40 text-gray-400 mt-10">
-                <FaCommentSlash size={32} className="mb-2 opacity-50" />
-                <p className="text-sm">No {viewMode} conversations</p>
+              <div className="flex flex-col items-center justify-center h-full text-gray-300 p-6 text-center">
+                <FaCommentSlash size={24} className="mb-2 opacity-20 mx-auto" />
+                <p className="text-[10px] font-bold uppercase tracking-wider">No Conversations</p>
               </div>
             ) : (
               <ul className="divide-y divide-gray-50">
@@ -271,47 +265,37 @@ const AdminConversations = () => {
                     <li
                       key={conv.id}
                       onClick={() => handleConversationClick(conv)}
-                      className={`group cursor-pointer p-4 transition-all duration-200 hover:bg-gray-50 ${isActive ? "bg-blue-50 border-l-4 border-blue-600" : "border-l-4 border-transparent"
+                      className={`group cursor-pointer px-4 py-2 transition-all duration-200 border-r-4 ${isActive ? "bg-blue-50 border-blue-600 shadow-inner" : "hover:bg-gray-50 border-transparent"
                         }`}
                     >
-                      <div className="flex items-start justify-between">
-                        {/* Left: Avatar + Details */}
-                        <div className="flex items-start gap-3 flex-1">
-                          {/* Avatar */}
-                          <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shadow-sm ${isActive ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-600 group-hover:bg-gray-300"
-                            }`}>
-                            {initials}
+                      <div className="flex items-center gap-2.5">
+                        {/* Avatar */}
+                        <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold shadow-sm ${isActive ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-500 group-hover:bg-gray-300"
+                          }`}>
+                          {initials}
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-center">
+                            <span className={`text-[9px] font-semibold truncate ${isActive ? 'text-blue-900' : 'text-gray-700'}`}>
+                              {conv.userFullName || "Unknown User"}
+                            </span>
+
+                            {viewMode === 'history' && conv.endedAt && (
+                              <span className="text-[7px] text-gray-400 font-bold uppercase">
+                                {new Date(conv.endedAt.seconds * 1000).toLocaleDateString()}
+                              </span>
+                            )}
                           </div>
 
-                          {/* Text Details */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-baseline mb-1">
-                              <h3 className={`text-sm font-semibold truncate ${isActive ? 'text-gray-900' : 'text-gray-700'}`}>
-                                {conv.userFullName || "Unknown User"}
-                              </h3>
-
-                              {/* Display Date for History */}
-                              {viewMode === 'history' && conv.endedAt && (
-                                <span className="text-[10px] text-gray-400">
-                                  {new Date(conv.endedAt.seconds * 1000).toLocaleDateString()}
-                                </span>
-                              )}
-                            </div>
-
-                            <p className={`text-xs truncate ${isActive ? 'text-blue-700 font-medium' : 'text-gray-500'}`}>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <p className="text-[8px] truncate text-gray-400 flex-1">
                               {conv.userEmail}
                             </p>
-
-                            {/* Show Duration if in History Mode */}
-                            {viewMode === 'history' ? (
-                              <div className="flex items-center gap-1 mt-1 text-xs text-green-600 font-medium bg-green-50 w-fit px-2 py-0.5 rounded">
-                                <FaClock className="text-[10px]" />
-                                Duration: {conv.duration || "N/A"}
-                              </div>
-                            ) : (
-                              <p className="text-xs text-gray-400 mt-1 truncate">
-                                Active now
-                              </p>
+                            {viewMode === 'history' && (
+                              <span className="text-[7px] text-green-600 font-bold bg-green-50 px-1 rounded uppercase">
+                                {conv.duration || "N/A"}
+                              </span>
                             )}
                           </div>
                         </div>
@@ -320,13 +304,13 @@ const AdminConversations = () => {
                         {viewMode === 'history' && (
                           <button
                             onClick={(e) => {
-                              e.stopPropagation(); // Prevent selecting the chat
+                              e.stopPropagation();
                               handleDeleteHistory(conv.id);
                             }}
-                            className="p-1.5 text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                            className="p-1 text-red-400 hover:text-red-600 transition-colors"
                             title="Delete History"
                           >
-                            <FaTimesCircle size={16} />
+                            <FaTimesCircle size={12} />
                           </button>
                         )}
                       </div>
@@ -342,20 +326,28 @@ const AdminConversations = () => {
         <div className={`flex-1 flex flex-col bg-gray-50 h-full relative ${selectedConversationId ? "block" : "hidden md:flex"
           }`}>
 
+          {/* TOGGLE SIDEBAR BUTTON (Floating) */}
+          <button 
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="absolute -left-3 top-20 z-30 bg-white border border-gray-200 shadow-md p-1 rounded-full text-gray-400 hover:text-blue-600 transition-all hidden md:block"
+          >
+              {isSidebarOpen ? <FaArrowLeft size={10} /> : <span className="rotate-180 block"><FaArrowLeft size={10} /></span>}
+          </button>
+
           {/* Header Bar for Chat Window (Active/History) */}
           {selectedConversationId && (
-            <div className="flex items-center justify-between bg-white border-b p-3 shadow-sm sticky top-0 z-20">
-              <div className="flex items-center">
+            <div className="flex items-center justify-between bg-white border-b border-gray-100 p-4 shadow-sm sticky top-0 z-20">
+              <div className="flex items-center gap-3">
                 {/* Mobile Back Button */}
                 <button
                   onClick={() => setSelectedConversationId(null)}
-                  className="md:hidden p-2 mr-2 text-gray-600 hover:bg-gray-100 rounded-full"
+                  className="md:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-full"
                 >
                   <FaArrowLeft />
                 </button>
 
                 <div className="flex flex-col">
-                  <span className="font-bold text-gray-800 text-lg">
+                  <span className="font-extrabold text-gray-800 text-base tracking-tight leading-none">
                     {getActiveUserName()}
                   </span>
                   {viewMode === 'active' && (

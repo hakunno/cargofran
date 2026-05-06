@@ -23,6 +23,7 @@ import { getStorage, ref, getDownloadURL, uploadBytes } from 'firebase/storage';
 import { useReactToPrint } from 'react-to-print';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import Pagination from "../../component/Pagination";
 import {
   Chart as ChartJS,
   ArcElement,
@@ -45,6 +46,9 @@ const Shipments = () => {
   const [showAddCountryModal, setShowAddCountryModal] = useState(false);
   const [currentShipment, setCurrentShipment] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isPrinting, setIsPrinting] = useState(false);
+  const itemsPerPage = 10;
 
   // Form Data
   const [formData, setFormData] = useState({
@@ -136,7 +140,17 @@ const Shipments = () => {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     setView(params.get('view') || 'all');
-  }, [location]);
+    
+    // Handle direct ID link
+    const directId = params.get('id');
+    if (directId && shipments.length > 0) {
+      const found = shipments.find(s => s.id === directId || s.docId === directId || s.packageNumber === directId);
+      if (found) {
+        setCurrentShipment(found);
+        setInfoModal(true);
+      }
+    }
+  }, [location, shipments]);
   // Info modal data
   const [infoHistory, setInfoHistory] = useState([]);
   const [infoLoading, setInfoLoading] = useState(false);
@@ -1124,24 +1138,32 @@ const Shipments = () => {
   const handlePrint = useReactToPrint({
     contentRef: tableRef,
     documentTitle: `Shipment_Report_${view}_${new Date().toISOString().split('T')[0]}`,
+    onBeforeGetContent: () => {
+      setIsPrinting(true);
+      return new Promise((resolve) => setTimeout(resolve, 500));
+    },
+    onAfterPrint: () => setIsPrinting(false),
     pageStyle: `
-      @page { size: landscape; margin: 15mm; }
+      @page { size: landscape; margin: 12mm 14mm; }
       @media print {
         * { box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; font-size: 9pt; color: #1e293b; -webkit-print-color-adjust: exact; margin: 0; }
-        .print-header { margin-bottom: 14px; padding-bottom: 10px; border-bottom: 2px solid #1e293b; }
-        .print-header h2 { font-size: 16pt; font-weight: bold; margin: 0 0 2px 0; }
-        .print-header .subtitle { font-size: 8pt; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 6px 0; }
-        .print-header .narrative { font-size: 9pt; color: #334155; margin: 6px 0 4px 0; line-height: 1.5; }
-        .print-header .meta { display: flex; justify-content: space-between; font-size: 8pt; color: #64748b; margin-top: 4px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 8pt; table-layout: fixed; }
+        html, body { margin: 0; padding: 0; width: 100%; }
+        body { font-family: Arial, sans-serif; font-size: 9pt; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .print-section { width: 100% !important; box-shadow: none !important; border-radius: 0 !important; background: #fff !important; padding: 0 !important; border: none !important; }
+        .print-header { display: block !important; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 2px solid #000; text-align: center; }
+        .print-header h2 { font-size: 14pt; font-weight: bold; margin: 0 0 2px 0; text-align: center; }
+        .print-header .subtitle { font-size: 7pt; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 4px 0; color: #555; }
+        .print-header .narrative { font-size: 8pt; margin: 4px 0; line-height: 1.4; }
+        .print-header .meta { display: flex; justify-content: space-between; font-size: 7pt; color: #555; margin-top: 3px; }
+        table { width: 100% !important; border-collapse: collapse !important; font-size: 7.5pt; table-layout: auto; page-break-inside: auto; }
         thead { display: table-header-group; }
-        th { background-color: #f1f5f9 !important; font-weight: 700; color: #475569; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.05em; padding: 5px 8px; border: 1px solid #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
-        td { border: 1px solid #e2e8f0; padding: 5px 8px; vertical-align: top; color: #1e293b; background-color: white !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        tr:nth-child(even) td { background-color: #f8fafc !important; }
-        .overflow-x-auto, .overflow-y-auto { overflow: visible !important; max-height: none !important; }
+        tr { page-break-inside: avoid; page-break-after: auto; }
+        th { background-color: #e8e8e8 !important; font-weight: 700; color: #000 !important; text-transform: uppercase; font-size: 6.5pt; letter-spacing: 0.04em; padding: 5px 6px; border: 1px solid #000 !important; text-align: left; }
+        td { border: 1px solid #000 !important; padding: 4px 6px; vertical-align: middle; color: #000 !important; background-color: #fff !important; font-size: 7.5pt; }
+        tr:nth-child(even) td { background-color: #f5f5f5 !important; }
+        .overflow-x-auto, .overflow-y-auto { overflow: visible !important; max-height: none !important; width: 100% !important; }
         .no-print { display: none !important; }
-        .print-footer { margin-top: 28px; padding-top: 12px; border-top: 1px solid #94a3b8; display: flex; justify-content: space-between; font-size: 9pt; color: #475569; }
+        .print-footer { display: none !important; }
       }
     `,
   });
@@ -1151,150 +1173,134 @@ const Shipments = () => {
       <div className="flex-1 p-4 md:p-6 md:ml-64">
 
 
-        {/* --- HEADER --- */}
-        <div className="flex justify-between items-center mb-6">
-          <div className="w-24"></div>
-          <h2 className="text-xl font-semibold text-center flex-1">
-            Shipment Information
-          </h2>
-          {/* Archive Modal Button */}
-          <button
-            onClick={() => setArchiveModal(true)}
-            className="flex rounded items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold bg-purple-600 text-white hover:bg-purple-700 transition"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
-            </svg>
-            View Archives
-          </button>
-        </div>
-        {/* --- FILTERS (Tabs) --- */}
-        <div className="mb-4 flex flex-col md:flex-row justify-center gap-3 space-x-0 md:space-x-4">
-          <button onClick={() => setView("all")} className={`px-4 py-2 rounded ${view === "all" ? "bg-blue-600 text-white" : "bg-gray-300"} mb-2 md:mb-0`}>All</button>
-          <button onClick={() => setView("active")} className={`px-4 py-2 rounded ${view === "active" ? "bg-blue-600 text-white" : "bg-gray-300"} mb-2 md:mb-0`}>Active</button>
-          <button onClick={() => setView("canceled")} className={`px-4 py-2 rounded ${view === "canceled" ? "bg-blue-600 text-white" : "bg-gray-300"} mb-2 md:mb-0`}>Canceled</button>
-          <button onClick={() => setView("delivered")} className={`px-4 py-2 rounded ${view === "delivered" ? "bg-blue-600 text-white" : "bg-gray-300"} mb-2 md:mb-0`}>Delivered</button>
-        </div>
-        {/* --- SEARCH & DATE FILTER (Main) --- */}
-        <div className="mb-4 flex flex-col md:flex-row justify-center gap-4 items-center">
-          <input
-            type="text"
-            className="w-full md:w-1/3 p-2 border rounded border-gray-300"
-            placeholder="Search shipments..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-gray-700">From:</label>
-            <input
-              type="date"
-              className="p-2 border rounded border-gray-300"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-            />
+        {/* --- MAIN TABLE CARD --- */}
+        <div ref={tableRef} className="border-3 border-black bg-white shadow-lg rounded-xl overflow-hidden print-section">
+
+          {/* Card Header: Title + Archive button — hidden in print */}
+          <div className="no-print flex justify-between items-center px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <h2 className="text-xl font-semibold text-gray-800 lexend">Shipment Management</h2>
+            <button
+              onClick={() => setArchiveModal(true)}
+              className="rounded flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold bg-purple-600 text-white hover:bg-purple-700 transition"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+              </svg>
+              View Archives
+            </button>
           </div>
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-gray-700">To:</label>
-            <input
-              type="date"
-              className="p-2 border rounded border-gray-300"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-            />
-          </div>
-        </div>
-        {/* --- MAIN TABLE --- */}
-        <div ref={tableRef} className="bg-white shadow-lg rounded-xl p-6 print-section">
-          <div className="print-header hidden print:block">
-            <h2>Shipment Summary Report</h2>
-            <p className="subtitle">Logistics Management System</p>
-            <p className="narrative">{narrative}</p>
-            <div className="meta">
-              <span>View: <strong>{view.charAt(0).toUpperCase() + view.slice(1)}</strong>{searchQuery ? ` • Filter: "${searchQuery}"` : ''}</span>
-              <span>Printed: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+
+          {/* Filters + Search — hidden in print */}
+          <div className="no-print px-6 py-3 border-b border-gray-200 flex flex-col md:flex-row flex-wrap gap-3 items-center">
+            {/* View Tabs */}
+            <div className="flex gap-2 flex-wrap">
+              {["all", "active", "canceled", "delivered"].map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setView(t)}
+                  className={`px-4 py-1.5 rounded text-sm font-medium capitalize ${view === t ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+            {/* Search + Date */}
+            <div className="flex flex-col md:flex-row gap-2 ml-auto items-center">
+              <input
+                type="text"
+                className="p-2 border rounded border-gray-300 text-sm"
+                placeholder="Search shipments..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <div className="flex items-center gap-1">
+                <label className="text-xs font-medium text-gray-500 whitespace-nowrap">From:</label>
+                <input type="date" className="p-2 border rounded border-gray-300 text-sm" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              </div>
+              <div className="flex items-center gap-1">
+                <label className="text-xs font-medium text-gray-500 whitespace-nowrap">To:</label>
+                <input type="date" className="p-2 border rounded border-gray-300 text-sm" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              </div>
             </div>
           </div>
 
-          <div className="overflow-x-auto overflow-y-auto max-h-[70vh] border rounded-lg relative">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
+          {/* Print-only header */}
+          <div className="print-header hidden print:block px-6 pt-4">
+            <h2>Shipment Summary Report</h2>
+            <p className="narrative">{narrative}</p>
+          </div>
+
+          {/* Table Container */}
+          <div className="overflow-x-auto overflow-y-auto max-h-[65vh]">
+            
+            {/* 1. SCREEN TABLE (Paginated, Hidden in Print) */}
+            <table className="min-w-full border-collapse no-print">
+              <thead className="bg-gray-50 sticky top-0 z-10 border-3 border-black">
                 <tr>
-                  <th className="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer bg-gray-50" onClick={() => handleSort("createdTime")}>#</th>
-                  <th className="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Shipment Number</th>
-                  <th className="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Shipper</th>
-                  <th className="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Sender Country</th>
-                  <th className="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Destination Country</th>
-                  <th className="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Transport Mode</th>
-                  <th className="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Status</th>
-                  <th className="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Paid</th>
-                  <th className="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Date Started</th>
-                  <th className="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider no-print bg-gray-50 text-center">Actions</th>
+                  <th className="border border-black px-2 md:px-6 py-2 text-left text-xs font-medium text-black uppercase tracking-wider cursor-pointer bg-gray-200" onClick={() => handleSort("createdTime")}>ID</th>
+                  <th className="border border-black px-2 md:px-6 py-2 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">Shipment Number</th>
+                  <th className="border border-black px-2 md:px-6 py-2 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">Shipper</th>
+                  <th className="border border-black px-2 md:px-6 py-2 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">Sender Country</th>
+                  <th className="border border-black px-2 md:px-6 py-2 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">Destination Country</th>
+                  <th className="border border-black px-2 md:px-6 py-2 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">Transport Mode</th>
+                  <th className="border border-black px-2 md:px-6 py-2 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">Status</th>
+                  <th className="border border-black px-2 md:px-6 py-2 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">Paid</th>
+                  <th className="border border-black px-2 md:px-6 py-2 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">Date Started</th>
+                  <th className="border border-black px-2 md:px-6 py-2 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200 text-center">Actions</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-white">
                 {sortedShipments.length > 0 ? (
-                  sortedShipments.map((shipment, index) => {
+                  sortedShipments.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((shipment, index) => {
                     const isDelivered = shipment.packageStatus === "Delivered";
                     const isCanceled = shipment.canceled;
+                    const overallIndex = (currentPage - 1) * itemsPerPage + index;
                     return (
-                      <tr key={shipment.docId} className={`hover:bg-gray-50 ${isCanceled ? "bg-gray-100" : (index % 2 === 0 ? "bg-white" : "bg-gray-50")}`}>
-                        <td className="px-2 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {sortOrder === "desc" ? index + 1 : sortedShipments.length - index}
+                      <tr key={shipment.docId} className={`hover:bg-gray-50 ${isCanceled ? "bg-gray-100" : (overallIndex % 2 === 0 ? "bg-white" : "bg-gray-50")}`}>
+                        <td className="border border-black px-2 md:px-6 py-2 whitespace-nowrap text-sm text-gray-900">
+                          {sortOrder === "desc" ? overallIndex + 1 : sortedShipments.length - overallIndex}
                         </td>
-                        <td className="px-2 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shipment.packageNumber}</td>
-                        <td className="px-2 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shipment.shipperName}</td>
-                        <td className="px-2 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shipment.senderCountry || "N/A"}</td>
-                        <td className="px-2 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shipment.destinationCountry || "N/A"}</td>
-                        <td className="px-2 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shipment.transportMode || "N/A"}</td>
-                        <td className={`px-2 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 ${isDelivered ? "bg-green-200" : (shipment.packageStatus === 'Delayed' ? 'bg-orange-100' : '')}`}>
+                        <td className="border border-black px-2 md:px-6 py-2 whitespace-nowrap text-sm text-gray-900">{shipment.packageNumber}</td>
+                        <td className="border border-black px-2 md:px-6 py-2 whitespace-nowrap text-sm text-gray-900">{shipment.shipperName}</td>
+                        <td className="border border-black px-2 md:px-6 py-2 whitespace-nowrap text-sm text-gray-900">{shipment.senderCountry || "N/A"}</td>
+                        <td className="border border-black px-2 md:px-6 py-2 whitespace-nowrap text-sm text-gray-900">{shipment.destinationCountry || "N/A"}</td>
+                        <td className="border border-black px-2 md:px-6 py-2 whitespace-nowrap text-sm text-gray-900 capitalize">{shipment.transportMode || "N/A"}</td>
+                        <td className={`border border-black px-2 md:px-6 py-2 whitespace-nowrap text-sm text-gray-900 ${isDelivered ? "bg-green-200" : (shipment.packageStatus === 'Delayed' ? 'bg-orange-100' : '')}`}>
                           <div>{shipment.packageStatus}</div>
                           {shipment.packageStatus === 'Delayed' && shipment.delayReason && (
                             <div className="text-xs text-orange-700 mt-0.5 italic">Reason: {shipment.delayReason}</div>
                           )}
                         </td>
-                        <td className={`px-2 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 ${shipment.paid ? "bg-green-200" : "bg-red-200"}`}>{shipment.paid ? "Yes" : "No"}</td>
-                        <td className="px-2 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shipment.dateStarted ? new Date(shipment.dateStarted).toLocaleDateString() : "N/A"}</td>
-                        <td className="px-2 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 no-print">
+                        <td className={`border border-black px-2 md:px-6 py-2 whitespace-nowrap text-sm text-gray-900 ${shipment.paid ? "bg-green-200" : "bg-red-200"}`}>{shipment.paid ? "Yes" : "No"}</td>
+                        <td className="border border-black px-2 md:px-6 py-2 whitespace-nowrap text-sm text-gray-900">{shipment.dateStarted ? new Date(shipment.dateStarted).toLocaleDateString() : "N/A"}</td>
+                        <td className="border border-black px-2 md:px-6 py-2 whitespace-nowrap text-sm text-gray-900 text-center">
                           <div className="flex items-center justify-center space-x-2">
-                            <button onClick={() => handleAction(shipment, 'info')} className="text-blue-600 hover:text-blue-800 p-1 border border-blue-600 rounded bg-white" title="View Info">
-                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              </svg>
+                            <button onClick={() => handleAction(shipment, 'info')} className="text-blue-600 hover:text-blue-800 p-1 border border-blue-600 rounded bg-white">
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                             </button>
                             {!isCanceled && !isDelivered && (
-                              <button onClick={() => handleAction(shipment, 'update')} className="text-yellow-600 hover:text-yellow-800 p-1 border border-yellow-600 rounded bg-white" title="Edit Shipment">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
-                                </svg>
+                              <button onClick={() => handleAction(shipment, 'update')} className="text-yellow-600 hover:text-yellow-800 p-1 border border-yellow-600 rounded bg-white">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
                               </button>
                             )}
                             {!isCanceled && (
                               <>
-                                <button onClick={() => handleSetPaid(shipment, true)} className={`p-1 border rounded bg-white ${shipment.paid ? 'text-gray-400 border-gray-300' : 'text-green-600 border-green-600 hover:bg-green-50'}`} title="Set Paid: Yes">
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 0 11-18 0 9 9 0 0118 0z" />
-                                  </svg>
+                                <button onClick={() => handleSetPaid(shipment, true)} className={`p-1 border rounded bg-white ${shipment.paid ? 'text-gray-400 border-gray-300' : 'text-green-600 border-green-600 hover:bg-green-50'}`}>
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                 </button>
-                                <button onClick={() => handleSetPaid(shipment, false)} className={`p-1 border rounded bg-white ${!shipment.paid ? 'text-gray-400 border-gray-300' : 'text-red-600 border-red-600 hover:bg-red-50'}`} title="Set Paid: No">
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12H9m12 0a9 0 11-18 0 9 9 0 0118 0z" />
-                                  </svg>
+                                <button onClick={() => handleSetPaid(shipment, false)} className={`p-1 border rounded bg-white ${!shipment.paid ? 'text-gray-400 border-gray-300' : 'text-red-600 border-red-600 hover:bg-red-50'}`}>
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12H9m12 0a9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                 </button>
                               </>
                             )}
                             {!isCanceled && !isDelivered && (
-                              <button onClick={() => handleDoneShipment(shipment)} className="text-green-600 hover:text-green-800 p-1 border border-green-600 rounded bg-white" title="Mark as Delivered">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                                </svg>
+                              <button onClick={() => handleDoneShipment(shipment)} className="text-green-600 hover:text-green-800 p-1 border border-green-600 rounded bg-white">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
                               </button>
                             )}
                             {!isCanceled && (
-                              <button onClick={() => handleArchiveShipment(shipment)} className="text-purple-600 hover:text-purple-800 p-1 border border-purple-600 rounded bg-white" title="Archive Shipment">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
-                                </svg>
+                              <button onClick={() => handleArchiveShipment(shipment)} className="text-purple-600 hover:text-purple-800 p-1 border border-purple-600 rounded bg-white">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
                               </button>
                             )}
                           </div>
@@ -1303,45 +1309,86 @@ const Shipments = () => {
                     );
                   })
                 ) : (
-                  <tr>
-                    <td colSpan="10" className="px-6 py-4 text-center text-gray-500">No shipments found.</td>
-                  </tr>
+                  <tr><td colSpan="10" className="px-6 py-10 text-center text-gray-500">No shipments found.</td></tr>
                 )}
               </tbody>
             </table>
+
+            {/* 2. PRINT TABLE (Full Data, Hidden on Screen) */}
+            <table className="hidden print:table min-w-full border-collapse">
+              <thead>
+                <tr>
+                  <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">ID</th>
+                  <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">Shipment Number</th>
+                  <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">Shipper</th>
+                  <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">Origin</th>
+                  <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">Destination</th>
+                  <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">Mode</th>
+                  <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">Status</th>
+                  <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">Paid</th>
+                  <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedShipments.map((shipment, index) => (
+                  <tr key={`print-${shipment.docId}`}>
+                    <td className="border border-black px-2 py-1 text-[7.5pt]">{index + 1}</td>
+                    <td className="border border-black px-2 py-1 text-[7.5pt] font-bold">{shipment.packageNumber}</td>
+                    <td className="border border-black px-2 py-1 text-[7.5pt]">{shipment.shipperName}</td>
+                    <td className="border border-black px-2 py-1 text-[7.5pt]">{shipment.senderCountry || "N/A"}</td>
+                    <td className="border border-black px-2 py-1 text-[7.5pt]">{shipment.destinationCountry || "N/A"}</td>
+                    <td className="border border-black px-2 py-1 text-[7.5pt] capitalize">{shipment.transportMode || "N/A"}</td>
+                    <td className="border border-black px-2 py-1 text-[7.5pt]">{shipment.canceled ? "CANCELED" : shipment.packageStatus.toUpperCase()}</td>
+                    <td className="border border-black px-2 py-1 text-[7.5pt] font-medium">{shipment.paid ? "PAID" : "UNPAID"}</td>
+                    <td className="border border-black px-2 py-1 text-[7.5pt]">
+                      {shipment.dateStarted ? new Date(shipment.dateStarted).toLocaleDateString() : "N/A"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div> {/* end Table Container */} {/* end overflow-x-auto */}
+
+          <div className="px-6 py-3 border-t border-gray-200 no-print">
+            <Pagination
+              currentPage={currentPage}
+              totalItems={sortedShipments.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={setCurrentPage}
+            />
           </div>
           <div className="print-footer hidden print:flex">
             <span>Produced by: <strong>{adminName.toUpperCase()}</strong></span>
             <span>Date: {currentDate}</span>
           </div>
-        </div>
+        </div> {/* end tableRef card */}
         {/* Legend */}
         <div className="mt-6 bg-white pt-3 pb-2 rounded-lg shadow no-print">
           <ul className="space-y-2">
             <li className="flex items-center">
-              <div className="w-5 h-5 bg-gray-100 border border-gray-300 mr-3"></div>
+              <div className="w-5 h-5 bg-gray-100 border-1 mr-3"></div>
               <span className="text-sm text-gray-700">Canceled Shipment (Row Background)</span>
             </li>
             <li className="flex items-center">
-              <div className="w-5 h-5 bg-green-200 border border-gray-300 mr-3"></div>
+              <div className="w-5 h-5 bg-green-200 border-1 mr-3"></div>
               <span className="text-sm text-gray-700">Delivered (Status Cell) / Paid (Paid Cell)</span>
             </li>
             <li className="flex items-center">
-              <div className="w-5 h-5 bg-red-200 border border-gray-300 mr-3"></div>
+              <div className="w-5 h-5 bg-red-200 border-1 mr-3"></div>
               <span className="text-sm text-gray-700">Not Paid (Paid Cell)</span>
             </li>
           </ul>
         </div>
         {/* --- BOTTOM ACTIONS --- */}
-        <div className="mt-4 flex flex-col md:flex-row justify-between space-y-4 md:space-y-0 no-print">
-          <div className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
-            <button className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 transition" onClick={() => setShowAddCountryModal(true)}>Add Country</button>
-            <button className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 transition" onClick={() => setShowModal(true)}>Add Shipment</button>
+        <div className="mt-6 flex flex-col md:flex-row justify-between items-center gap-6 no-print">
+          <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+            <button className="w-full md:w-auto bg-blue-600 text-white font-semibold py-2 px-6 rounded-md hover:bg-blue-700 transition rounded" onClick={() => setShowAddCountryModal(true)}>Add Country</button>
+            <button className="w-full md:w-auto bg-blue-600 text-white font-semibold py-2 px-6 rounded-md hover:bg-blue-700 transition rounded" onClick={() => setShowModal(true)}>Add Shipment</button>
             {/* Removed History Button */}
           </div>
-          <div className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
-            <button onClick={handleExportCSV} className="bg-green-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-green-700 transition">Export CSV</button>
-            <button onClick={handlePrint} className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 transition">Print Table</button>
+          <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+            <button onClick={handleExportCSV} className="w-full md:w-auto bg-green-600 text-white font-semibold py-2 px-6 rounded-md rounded hover:bg-green-700 transition">Export CSV</button>
+            <button onClick={handlePrint} className="w-full md:w-auto bg-blue-600 text-white font-semibold py-2 px-6 rounded-md rounded hover:bg-blue-700 transition">Print Table</button>
           </div>
         </div>
         {/* --- ARCHIVE MODAL --- */}
@@ -1375,7 +1422,7 @@ const Shipments = () => {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-purple-100">
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Shipment #</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Shipment Number</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Shipper</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Sender Country</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Dest. Country</th>
@@ -1610,7 +1657,7 @@ const Shipments = () => {
                       <input type="text" className="p-2 border border-gray-300 rounded-md" value={formData.packageNumber} name="packageNumber" onChange={handleChange} required />
                     </div>
                     <div className="flex flex-col">
-                      <label className="mb-1 font-medium text-gray-700">Way Bill# <span className="text-gray-400 text-xs">(optional)</span></label>
+                      <label className="mb-1 font-medium text-gray-700">Way Bill Number <span className="text-gray-400 text-xs">(optional)</span></label>
                       <input type="text" className="p-2 border border-gray-300 rounded-md" value={formData.airwayBill} name="airwayBill" onChange={handleChange} />
                     </div>
                     <div className="md:col-span-2 flex flex-col">
@@ -1742,7 +1789,7 @@ const Shipments = () => {
               <form>
                 <div className="flex flex-col mb-3"><label className="mb-1 font-medium text-gray-700">Shipment Number</label><p className="p-2 border border-gray-300 rounded-md bg-gray-100">{formData.packageNumber}</p></div>
                 <div className="flex flex-col mb-3"><label className="mb-1 font-medium text-gray-700">Shipper Full Name</label><p className="p-2 border border-gray-300 rounded-md bg-gray-100">{formData.shipperName}</p></div>
-                <div className="flex flex-col mb-3"><label className="mb-1 font-medium text-gray-700">Way Bill#</label><input type="text" className="p-2 border border-gray-300 rounded-md" value={formData.airwayBill} onChange={(e) => setFormData({ ...formData, airwayBill: e.target.value })} /></div>
+                <div className="flex flex-col mb-3"><label className="mb-1 font-medium text-gray-700">Way Bill Number</label><input type="text" className="p-2 border border-gray-300 rounded-md" value={formData.airwayBill} onChange={(e) => setFormData({ ...formData, airwayBill: e.target.value })} /></div>
                 <div className="flex flex-col mb-3"><label className="mb-1 font-medium text-gray-700">Email</label><input type="email" className="p-2 border border-gray-300 rounded-md" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} /></div>
                 <div className="flex flex-col mb-3">
                   <label className="mb-1 font-medium text-gray-700">Shipment Status</label>
@@ -1856,22 +1903,10 @@ const Shipments = () => {
                   <p className="p-2 border border-gray-300 rounded-md bg-gray-100">{currentShipment.loadType || "N/A"}</p>
                 </div>
                 <div className="flex flex-col">
-                  <label className="mb-1 font-medium text-gray-700">Way Bill#</label>
+                  <label className="mb-1 font-medium text-gray-700">Way Bill Number</label>
                   <p className="p-2 border border-gray-300 rounded-md bg-gray-100">{currentShipment.airwayBill || "N/A"}</p>
                 </div>
-                <div className="flex flex-col">
-                  <label className="mb-1 font-medium text-gray-700">Pickup Option</label>
-                  <p className="p-2 border border-gray-300 rounded-md bg-gray-100">{currentShipment.pickupOption || "N/A"}</p>
-                </div>
-                {currentShipment.pickupOption === 'needPickup' && currentShipment.pickupAddress && (
-                  <div className="md:col-span-2">
-                    <h4 className="text-lg font-semibold mb-2">Pickup Address</h4>
-                    <p className="p-2 border border-gray-300 rounded-md bg-gray-100">
-                      {currentShipment.pickupAddress.region || ""}, {currentShipment.pickupAddress.province || ""}, {currentShipment.pickupAddress.city || ""}, {currentShipment.pickupAddress.barangay || ""}<br />
-                      {currentShipment.pickupAddress.detailedAddress || "N/A"}
-                    </p>
-                  </div>
-                )}
+
                 <div className="md:col-span-2">
                   <h4 className="text-lg font-semibold mb-2">Additional Services</h4>
                   <p className="p-2 border border-gray-300 rounded-md bg-gray-100">

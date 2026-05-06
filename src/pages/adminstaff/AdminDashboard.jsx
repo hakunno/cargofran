@@ -280,7 +280,7 @@ const AdminDashboard = () => {
     const items = [];
     pendingMessages.forEach(m => items.push({ id: m.id, type: 'msg_req', title: `Message Request: ${m.userFullName || 'Guest'}`, sub: 'Waiting for agent approval', link: '/MessageRequest', icon: <FaCommentDots className="text-indigo-600" />, color: 'bg-indigo-50 border-indigo-200' }));
     if (pendingShipmentRequests.length > 0) { const count = pendingShipmentRequests.length; items.push({ id: 'shipment_requests_summary', type: 'ship_req_summary', title: count === 1 ? 'Shipment Request' : 'Shipment Requests', sub: `${count} new booking${count === 1 ? '' : 's'} pending approval`, link: '/ShipmentRequest', icon: <FaClipboardList className="text-amber-600" />, color: 'bg-amber-50 border-amber-200' }); }
-    delayedShipments.forEach(s => items.push({ id: s.id, type: 'delayed', title: `Delayed: ${s.packageNumber}`, sub: s.packageStatus, link: `/Shipments/${s.id}`, icon: <FaExclamationTriangle className="text-red-600" />, color: 'bg-red-50 border-red-200' }));
+    delayedShipments.forEach(s => items.push({ id: s.id, type: 'delayed', title: `Delayed: ${s.packageNumber}`, sub: s.packageStatus, link: `/Shipments?id=${s.id}`, icon: <FaExclamationTriangle className="text-red-600" />, color: 'bg-red-50 border-red-200' }));
     activeMessages.forEach(m => items.push({ id: m.id, type: 'active_chat', title: `Active Chat: ${m.userFullName}`, sub: 'Live conversation', link: '/AdminMessages', icon: <FaComments className="text-emerald-600" />, color: 'bg-emerald-50 border-emerald-200' }));
     return items;
   };

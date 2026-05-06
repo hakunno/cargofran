@@ -28,6 +28,7 @@ const ConversationsAdmin = () => {
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [messages, setMessages] = useState([]);
   const [adminName, setAdminName] = useState('');
+  const [isHistoryPrinting, setIsHistoryPrinting] = useState(false);
 
   const historyTableRef = useRef();
 
@@ -42,6 +43,7 @@ const ConversationsAdmin = () => {
   const { markAsSeen } = useAdminNotifications();
   useEffect(() => {
     markAsSeen('messageRequests');
+    return () => markAsSeen(null);
   }, [markAsSeen]);
 
   // 1. Fetch PENDING conversations (From active 'conversations' collection)
@@ -286,25 +288,32 @@ const ConversationsAdmin = () => {
   const handleHistoryPrint = useReactToPrint({
     contentRef: historyTableRef,
     documentTitle: "Conversation Request History",
+    onBeforeGetContent: () => {
+      setIsHistoryPrinting(true);
+      return new Promise((resolve) => setTimeout(resolve, 500));
+    },
+    onAfterPrint: () => setIsHistoryPrinting(false),
     pageStyle: `
-      @page { size: landscape; margin: 15mm; }
+      @page { size: landscape; margin: 12mm 14mm; }
       @media print {
         * { box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; font-size: 9pt; color: #1e293b; -webkit-print-color-adjust: exact; margin: 0; }
-        .print-header { margin-bottom: 14px; padding-bottom: 10px; border-bottom: 2px solid #1e293b; }
-        .print-header h2 { font-size: 16pt; font-weight: bold; margin: 0 0 2px 0; }
-        .print-header .subtitle { font-size: 8pt; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 6px 0; }
-        .print-header .narrative { font-size: 9pt; color: #334155; margin: 6px 0 4px 0; line-height: 1.5; }
-        .print-header .meta { display: flex; justify-content: space-between; font-size: 8pt; color: #64748b; margin-top: 4px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 8pt; table-layout: fixed; }
+        html, body { margin: 0; padding: 0; width: 100%; }
+        body { font-family: Arial, sans-serif; font-size: 9pt; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .print-section { width: 100% !important; box-shadow: none !important; border-radius: 0 !important; background: #fff !important; padding: 0 !important; border: none !important; }
+        .print-header { display: block !important; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 2px solid #000; text-align: center; }
+        .print-header h2 { font-size: 14pt; font-weight: bold; margin: 0 0 2px 0; text-align: center; }
+        .print-header .subtitle { font-size: 7pt; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 4px 0; color: #555; }
+        .print-header .narrative { font-size: 8pt; margin: 4px 0; line-height: 1.4; }
+        .print-header .meta { display: flex; justify-content: space-between; font-size: 7pt; color: #555; margin-top: 3px; }
+        table { width: 100% !important; border-collapse: collapse !important; font-size: 7.5pt; table-layout: auto; page-break-inside: auto; }
         thead { display: table-header-group; }
-        th { background-color: #f1f5f9 !important; font-weight: 700; color: #475569; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.05em; padding: 5px 8px; border: 1px solid #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
-        td { border: 1px solid #e2e8f0; padding: 5px 8px; vertical-align: top; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        tr:nth-child(even) td { background-color: #f8fafc; }
-        .overflow-x-auto, .overflow-y-auto { overflow: visible !important; max-height: none !important; }
+        tr { page-break-inside: avoid; page-break-after: auto; }
+        th { background-color: #e8e8e8 !important; font-weight: 700; color: #000 !important; text-transform: uppercase; font-size: 6.5pt; letter-spacing: 0.04em; padding: 5px 6px; border: 1px solid #000 !important; text-align: left; }
+        td { border: 1px solid #000 !important; padding: 4px 6px; vertical-align: middle; color: #000 !important; background-color: #fff !important; font-size: 7.5pt; }
+        tr:nth-child(even) td { background-color: #f5f5f5 !important; }
+        .overflow-x-auto, .overflow-y-auto { overflow: visible !important; max-height: none !important; width: 100% !important; }
         .no-print { display: none !important; }
-        .print-footer { margin-top: 28px; padding-top: 12px; border-top: 1px solid #94a3b8; display: flex; justify-content: space-between; font-size: 9pt; color: #475569; }
-        .badge { font-size: 7pt; padding: 2px 6px; border: 1px solid #e2e8f0; border-radius: 3px; color: #334155; background: none !important; }
+        .print-footer { display: none !important; }
       }
     `,
   });
@@ -317,61 +326,69 @@ const ConversationsAdmin = () => {
       <div className="flex-1 p-4 md:p-6 md:ml-64">
 
 
-        <div className="d-flex justify-content-between align-items-center mb-4">
-          <h2 className="text-xl font-semibold text-center m-0">Pending Conversations</h2>
+        <div className="flex justify-between items-center mb-6 no-print">
+          <h2 className="text-xl font-semibold">Pending Conversations</h2>
           {/* Button to open History Modal */}
-          <Button variant="secondary" onClick={() => setShowHistoryModal(true)}>
+          <button 
+            onClick={() => setShowHistoryModal(true)}
+            className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 transition font-semibold"
+          >
             View Request History
-          </Button>
+          </button>
         </div>
 
-        <div className="overflow-x-auto overflow-y-auto max-h-[70vh] border rounded-lg">
-          <Table className="min-w-full divide-y divide-gray-200 mb-0">
-            <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">ID</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">User Full Name</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Email</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Time</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {conversations.length > 0 ? (
-                conversations.map((conv, index) => {
-                  const countdown = getCountdown(conv.requestExpiresAt);
-                  return (
-                    <tr key={conv.id} className={`text-center ${countdown.expired ? "bg-red-50 opacity-50" : ""}`}>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{index + 1}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{getFullName(conv)}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{conv.userEmail || "N/A"}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        {formatTimestamp(conv.createdAt)}
-                        {conv.requestExpiresAt && (
-                          <div className={`mt-1 font-bold ${countdown.expired ? "text-red-600" : "text-orange-500"}`}>
-                            {countdown.text}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        {countdown.expired ? (
-                          <Badge bg="danger">Expired</Badge>
-                        ) : (
-                          <Button variant="info" size="sm" onClick={() => handleShowDetails(conv)}>
-                            Detail
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
+        <div className="border-3 border-black bg-white shadow-lg rounded-xl overflow-hidden mb-6">
+          <div className="overflow-x-auto overflow-y-auto max-h-[70vh]">
+            <table className="min-w-full border-collapse">
+              <thead className="bg-gray-50 sticky top-0 z-10 border-b-2 border-black">
                 <tr>
-                  <td colSpan="5" className="text-center p-3">No pending requests found.</td>
+                  <th className="border border-black px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">ID</th>
+                  <th className="border border-black px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">User Name</th>
+                  <th className="border border-black px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">Email</th>
+                  <th className="border border-black px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">Request Date</th>
+                  <th className="border border-black px-4 py-3 text-center text-xs font-medium text-black uppercase tracking-wider bg-gray-200">Actions</th>
                 </tr>
-              )}
-            </tbody>
-          </Table>
+              </thead>
+              <tbody className="bg-white">
+                {conversations.length > 0 ? (
+                  conversations.map((conv, index) => {
+                    const countdown = getCountdown(conv.requestExpiresAt);
+                    return (
+                      <tr key={conv.id} className={`hover:bg-gray-50 ${countdown.expired ? "bg-red-50 opacity-50" : ""}`}>
+                        <td className="border border-black px-4 py-3 whitespace-nowrap text-sm text-gray-900">{index + 1}</td>
+                        <td className="border border-black px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-medium">{getFullName(conv)}</td>
+                        <td className="border border-black px-4 py-3 whitespace-nowrap text-sm text-gray-900">{conv.userEmail || "N/A"}</td>
+                        <td className="border border-black px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {formatTimestamp(conv.createdAt)}
+                          {conv.requestExpiresAt && (
+                            <div className={`mt-1 font-bold ${countdown.expired ? "text-red-600" : "text-orange-500"}`}>
+                              {countdown.text}
+                            </div>
+                          )}
+                        </td>
+                        <td className="border border-black px-4 py-3 whitespace-nowrap text-center text-sm">
+                          {countdown.expired ? (
+                            <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-bold">Expired</span>
+                          ) : (
+                            <button 
+                              onClick={() => handleShowDetails(conv)}
+                              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 rounded transition font-semibold"
+                            >
+                              Details
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan="5" className="text-center p-8 text-gray-500">No pending requests found.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* ------------------------------------------- */}
@@ -434,7 +451,7 @@ const ConversationsAdmin = () => {
           </Modal.Header>
           <Modal.Body>
 
-            <div ref={historyTableRef}>
+            <div ref={historyTableRef} className="border-3 border-black bg-white shadow-lg rounded-xl overflow-hidden print-section">
               {/* Print Header (Visible only in print) */}
               <div className="print-header hidden print:block">
                 <h2>Conversation Request History</h2>
@@ -446,40 +463,68 @@ const ConversationsAdmin = () => {
                 </div>
               </div>
 
-              <div className="overflow-x-auto overflow-y-auto max-h-[70vh] border rounded-lg">
-                <Table className="min-w-full divide-y divide-gray-200 mb-0">
-                  <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
+              <div className="overflow-x-auto overflow-y-auto max-h-[70vh]">
+                {/* 1. SCREEN TABLE (History) */}
+                <table className="min-w-full border-collapse no-print">
+                  <thead className="bg-gray-50 sticky top-0 z-10 border-b-2 border-black">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">User Name</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Email</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Status</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Processed By</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Date Processed</th>
+                      <th className="border border-black px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">ID</th>
+                      <th className="border border-black px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">User Name</th>
+                      <th className="border border-black px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">Email</th>
+                      <th className="border border-black px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">Status</th>
+                      <th className="border border-black px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">Processed By</th>
+                      <th className="border border-black px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">Date Processed</th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="bg-white">
                     {historyConversations.length > 0 ? (
-                      historyConversations.map((conv) => (
-                        <tr key={conv.id} className="text-center">
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{getFullName(conv)}</td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{conv.userEmail || "N/A"}</td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                            {conv.status === 'approved'
-                              ? <Badge bg="success">Approved</Badge>
-                              : <Badge bg="danger">Rejected</Badge>
-                            }
+                      historyConversations.map((conv, index) => (
+                        <tr key={conv.id} className="hover:bg-gray-50">
+                          <td className="border border-black px-4 py-3 whitespace-nowrap text-sm text-gray-900">{index + 1}</td>
+                          <td className="border border-black px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-medium">{getFullName(conv)}</td>
+                          <td className="border border-black px-4 py-3 whitespace-nowrap text-sm text-gray-900">{conv.userEmail || "N/A"}</td>
+                          <td className="border border-black px-4 py-3 whitespace-nowrap">
+                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${conv.status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                              {conv.status}
+                            </span>
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{conv.processedBy || "N/A"}</td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{formatTimestamp(conv.processedAt)}</td>
+                          <td className="border border-black px-4 py-3 whitespace-nowrap text-sm text-gray-900">{conv.processedBy || "N/A"}</td>
+                          <td className="border border-black px-4 py-3 whitespace-nowrap text-sm text-gray-900">{formatTimestamp(conv.processedAt)}</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan="5" className="text-center p-3">No history found.</td>
+                        <td colSpan="6" className="text-center p-8 text-gray-500">No history found.</td>
                       </tr>
                     )}
                   </tbody>
-                </Table>
+                </table>
+
+                {/* 2. PRINT TABLE (Full History) */}
+                <table className="hidden print:table min-w-full border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">ID</th>
+                      <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">User Name</th>
+                      <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">Email</th>
+                      <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">Status</th>
+                      <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">Processed By</th>
+                      <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">Date Processed</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyConversations.map((conv, index) => (
+                      <tr key={`print-hist-${conv.id}`}>
+                        <td className="border border-black px-2 py-1 text-[7.5pt]">{index + 1}</td>
+                        <td className="border border-black px-2 py-1 text-[7.5pt] font-bold">{getFullName(conv)}</td>
+                        <td className="border border-black px-2 py-1 text-[7.5pt]">{conv.userEmail || "N/A"}</td>
+                        <td className="border border-black px-2 py-1 text-[7.5pt] uppercase">{conv.status}</td>
+                        <td className="border border-black px-2 py-1 text-[7.5pt]">{conv.processedBy || "N/A"}</td>
+                        <td className="border border-black px-2 py-1 text-[7.5pt]">{formatTimestamp(conv.processedAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
 
               {/* Print Footer */}

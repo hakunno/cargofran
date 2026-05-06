@@ -39,6 +39,8 @@ const ShipmentInquiryRequests = () => {
   const [inquiryToAccept, setInquiryToAccept] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [zoomedImage, setZoomedImage] = useState(null);
+  const [isPrinting, setIsPrinting] = useState(false);
+  const [isHistoryPrinting, setIsHistoryPrinting] = useState(false);
 
   const [adminName, setAdminName] = useState('');
 
@@ -50,6 +52,7 @@ const ShipmentInquiryRequests = () => {
   const { markAsSeen } = useAdminNotifications();
   useEffect(() => {
     markAsSeen('shipmentRequests');
+    return () => markAsSeen(null);
   }, [markAsSeen]);
 
   useEffect(() => {
@@ -377,37 +380,71 @@ const ShipmentInquiryRequests = () => {
   };
 
   // --- PRINT CONFIGURATION ---
-  const printStyle = `
-    @page { size: landscape; margin: 15mm; }
-    @media print {
-      * { box-sizing: border-box; }
-      body { font-family: Arial, sans-serif; font-size: 9pt; color: #1e293b; -webkit-print-color-adjust: exact; margin: 0; }
-      .print-header { margin-bottom: 14px; padding-bottom: 10px; border-bottom: 2px solid #1e293b; }
-      .print-header h2 { font-size: 16pt; font-weight: bold; margin: 0 0 2px 0; }
-      .print-header .subtitle { font-size: 8pt; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 6px 0; }
-      .print-header .narrative { font-size: 9pt; color: #334155; margin: 6px 0 4px 0; line-height: 1.5; }
-      .print-header .meta { display: flex; justify-content: space-between; font-size: 8pt; color: #64748b; margin-top: 4px; }
-      table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 8pt; table-layout: fixed; }
-      thead { display: table-header-group; }
-      th { background-color: #f1f5f9 !important; font-weight: 700; color: #475569; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.05em; padding: 5px 8px; border: 1px solid #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
-      td { border: 1px solid #e2e8f0; padding: 5px 8px; vertical-align: top; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      tr:nth-child(even) td { background-color: #f8fafc; }
-      .overflow-x-auto, .overflow-y-auto { overflow: visible !important; max-height: none !important; }
-      .no-print { display: none !important; }
-      .print-footer { margin-top: 28px; padding-top: 12px; border-top: 1px solid #94a3b8; display: flex; justify-content: space-between; font-size: 9pt; color: #475569; }
-    }
-  `;
-
   const handlePrint = useReactToPrint({
     contentRef: tableRef,
     documentTitle: "Shipment Inquiry Reports - Pending",
-    pageStyle: printStyle,
+    onBeforeGetContent: () => {
+      setIsPrinting(true);
+      return new Promise((resolve) => setTimeout(resolve, 500));
+    },
+    onAfterPrint: () => setIsPrinting(false),
+    pageStyle: `
+      @page { size: landscape; margin: 12mm 14mm; }
+      @media print {
+        * { box-sizing: border-box; }
+        html, body { margin: 0; padding: 0; width: 100%; }
+        body { font-family: Arial, sans-serif; font-size: 9pt; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .print-section { width: 100% !important; box-shadow: none !important; border-radius: 0 !important; background: #fff !important; padding: 0 !important; border: none !important; }
+        .print-header { display: block !important; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 2px solid #000; text-align: center; }
+        .print-header h2 { font-size: 14pt; font-weight: bold; margin: 0 0 2px 0; text-align: center; }
+        .print-header .subtitle { font-size: 7pt; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 4px 0; color: #555; }
+        .print-header .narrative { font-size: 8pt; margin: 4px 0; line-height: 1.4; }
+        .print-header .meta { display: flex; justify-content: space-between; font-size: 7pt; color: #555; margin-top: 3px; }
+        table { width: 100% !important; border-collapse: collapse !important; font-size: 7.5pt; table-layout: auto; page-break-inside: auto; }
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; page-break-after: auto; }
+        th { background-color: #e8e8e8 !important; font-weight: 700; color: #000 !important; text-transform: uppercase; font-size: 6.5pt; letter-spacing: 0.04em; padding: 5px 6px; border: 1px solid #000 !important; text-align: left; }
+        td { border: 1px solid #000 !important; padding: 4px 6px; vertical-align: middle; color: #000 !important; background-color: #fff !important; font-size: 7.5pt; }
+        tr:nth-child(even) td { background-color: #f5f5f5 !important; }
+        .overflow-x-auto, .overflow-y-auto { overflow: visible !important; max-height: none !important; width: 100% !important; }
+        .no-print { display: none !important; }
+        .print-footer { position: fixed; bottom: 10mm; left: 12mm; right: 12mm; padding-top: 6px; border-top: 1px solid #ccc; display: flex !important; justify-content: space-between; font-size: 7pt; color: #666; }
+      }
+    `,
   });
 
   const handleHistoryPrint = useReactToPrint({
     contentRef: historyTableRef,
     documentTitle: "Shipment Inquiry Reports - History",
-    pageStyle: printStyle,
+    onBeforeGetContent: () => {
+      setIsHistoryPrinting(true);
+      return new Promise((resolve) => setTimeout(resolve, 500));
+    },
+    onAfterPrint: () => setIsHistoryPrinting(false),
+    pageStyle: `
+      @page { size: landscape; margin: 12mm 14mm; }
+      @page { size: landscape; margin: 12mm 14mm; }
+      @media print {
+        * { box-sizing: border-box; }
+        html, body { margin: 0; padding: 0; width: 100%; }
+        body { font-family: Arial, sans-serif; font-size: 9pt; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .print-section { width: 100% !important; box-shadow: none !important; border-radius: 0 !important; background: #fff !important; padding: 0 !important; border: none !important; }
+        .print-header { display: block !important; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 2px solid #000; text-align: center; }
+        .print-header h2 { font-size: 14pt; font-weight: bold; margin: 0 0 2px 0; text-align: center; }
+        .print-header .subtitle { font-size: 7pt; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 4px 0; color: #555; }
+        .print-header .narrative { font-size: 8pt; margin: 4px 0; line-height: 1.4; }
+        .print-header .meta { display: flex; justify-content: space-between; font-size: 7pt; color: #555; margin-top: 3px; }
+        table { width: 100% !important; border-collapse: collapse !important; font-size: 7.5pt; table-layout: auto; page-break-inside: auto; }
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; page-break-after: auto; }
+        th { background-color: #e8e8e8 !important; font-weight: 700; color: #000 !important; text-transform: uppercase; font-size: 6.5pt; letter-spacing: 0.04em; padding: 5px 6px; border: 1px solid #000 !important; text-align: left; }
+        td { border: 1px solid #000 !important; padding: 4px 6px; vertical-align: middle; color: #000 !important; background-color: #fff !important; font-size: 7.5pt; }
+        tr:nth-child(even) td { background-color: #f5f5f5 !important; }
+        .overflow-x-auto, .overflow-y-auto { overflow: visible !important; max-height: none !important; width: 100% !important; }
+        .no-print { display: none !important; }
+        .print-footer { display: none !important; }
+      }
+    `,
   });
 
   const currentDate = new Date().toLocaleDateString();
@@ -431,7 +468,7 @@ const ShipmentInquiryRequests = () => {
         {inquiries.length === 0 ? (
           <p className="text-center text-gray-700">No pending requests available.</p>
         ) : (
-          <div ref={tableRef} className="bg-white shadow rounded-lg p-4 print-section">
+          <div ref={tableRef} className="border-3 border-black bg-white shadow-lg rounded-xl overflow-hidden print-section">
 
             {/* PRINT HEADER */}
             <div className="print-header hidden print:block">
@@ -444,39 +481,70 @@ const ShipmentInquiryRequests = () => {
               </div>
             </div>
 
-            <div className="overflow-x-auto overflow-y-auto max-h-[70vh] border rounded-lg">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
+            <div className="overflow-x-auto overflow-y-auto max-h-[70vh]">
+              {/* 1. SCREEN TABLE (Paginated/Limited, Hidden in Print) */}
+              <table className="min-w-full border-collapse no-print">
+                <thead className="bg-gray-50 sticky top-0 z-10 border-b-2 border-black">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Name</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Sender Country</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Destination Country</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Transport Mode</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Shipment Direction</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Request Date</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 no-print">Actions</th>
+                    <th className="border border-black px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">ID</th>
+                    <th className="border border-black px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">Name</th>
+                    <th className="border border-black px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">Sender Country</th>
+                    <th className="border border-black px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">Destination Country</th>
+                    <th className="border border-black px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">Transport Mode</th>
+                    <th className="border border-black px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">Shipment Direction</th>
+                    <th className="border border-black px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">Request Date</th>
+                    <th className="border border-black px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200 no-print text-center">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {inquiries.map((inquiry) => (
-                    <tr key={inquiry.id} className="text-center hover:bg-gray-50">
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{inquiry.name}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{inquiry.senderCountry}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{inquiry.destinationCountry}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{inquiry.transportMode}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{inquiry.shipmentDirection}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                <tbody className="bg-white">
+                  {inquiries.map((inquiry, index) => (
+                    <tr key={inquiry.id} className="hover:bg-gray-50">
+                      <td className="border border-black px-4 py-3 whitespace-nowrap text-sm text-gray-900">{index + 1}</td>
+                      <td className="border border-black px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-medium">{inquiry.name}</td>
+                      <td className="border border-black px-4 py-3 whitespace-nowrap text-sm text-gray-900">{inquiry.senderCountry}</td>
+                      <td className="border border-black px-4 py-3 whitespace-nowrap text-sm text-gray-900">{inquiry.destinationCountry}</td>
+                      <td className="border border-black px-4 py-3 whitespace-nowrap text-sm text-gray-900 capitalize">{inquiry.transportMode}</td>
+                      <td className="border border-black px-4 py-3 whitespace-nowrap text-sm text-gray-900">{inquiry.shipmentDirection}</td>
+                      <td className="border border-black px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                         {inquiry.requestTime ? new Date(inquiry.requestTime).toLocaleString() : 'N/A'}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 no-print">
-                        <div className="flex flex-col md:flex-row gap-2 justify-center">
-                          <button
-                            onClick={() => openModal(inquiry)}
-                            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
-                          >
-                            View Details
-                          </button>
-                        </div>
+                      <td className="border border-black px-4 py-3 whitespace-nowrap text-sm text-gray-900 no-print text-center">
+                        <button
+                          onClick={() => openModal(inquiry)}
+                          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded transition font-semibold"
+                        >
+                          View Details
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* 2. PRINT TABLE (Full Data, Hidden on Screen) */}
+              <table className="hidden print:table min-w-full border-collapse">
+                <thead>
+                  <tr>
+                    <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">ID</th>
+                    <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">Name</th>
+                    <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">Origin</th>
+                    <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">Destination</th>
+                    <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">Mode</th>
+                    <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">Direction</th>
+                    <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">Request Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inquiries.map((inquiry, index) => (
+                    <tr key={`print-${inquiry.id}`}>
+                      <td className="border border-black px-2 py-1 text-[7.5pt]">{index + 1}</td>
+                      <td className="border border-black px-2 py-1 text-[7.5pt] font-bold">{inquiry.name}</td>
+                      <td className="border border-black px-2 py-1 text-[7.5pt]">{inquiry.senderCountry}</td>
+                      <td className="border border-black px-2 py-1 text-[7.5pt]">{inquiry.destinationCountry}</td>
+                      <td className="border border-black px-2 py-1 text-[7.5pt] capitalize">{inquiry.transportMode}</td>
+                      <td className="border border-black px-2 py-1 text-[7.5pt]">{inquiry.shipmentDirection}</td>
+                      <td className="border border-black px-2 py-1 text-[7.5pt]">
+                        {inquiry.requestTime ? new Date(inquiry.requestTime).toLocaleDateString() : 'N/A'}
                       </td>
                     </tr>
                   ))}
@@ -642,7 +710,7 @@ const ShipmentInquiryRequests = () => {
               </button>
             </div>
 
-            <div ref={historyTableRef} className="print-section">
+            <div ref={historyTableRef} className="border-3 border-black bg-white shadow-lg rounded-xl overflow-hidden print-section">
 
               {/* HISTORY PRINT HEADER */}
               <div className="print-header hidden print:block">
@@ -655,40 +723,41 @@ const ShipmentInquiryRequests = () => {
                 </div>
               </div>
 
-              <div className="overflow-x-auto overflow-y-auto max-h-[70vh] border rounded-lg">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
+              <div className="overflow-x-auto overflow-y-auto max-h-[70vh]">
+                {/* 1. SCREEN TABLE (History) */}
+                <table className="min-w-full border-collapse no-print">
+                  <thead className="bg-gray-50 sticky top-0 z-10 border-b-2 border-black">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Name</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Email</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Status</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Date Processed</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 no-print">Actions</th>
+                      <th className="border border-black px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">ID</th>
+                      <th className="border border-black px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">Name</th>
+                      <th className="border border-black px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">Email</th>
+                      <th className="border border-black px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">Status</th>
+                      <th className="border border-black px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200">Date Processed</th>
+                      <th className="border border-black px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider bg-gray-200 no-print text-center">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="bg-white">
                     {historyInquiries.length > 0 ? (
-                      historyInquiries.map((inquiry) => (
-                        <tr key={inquiry.id} className="text-center hover:bg-gray-50">
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{inquiry.name}</td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{inquiry.email}</td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                            {inquiry.status === 'Accepted' ? (
-                              <span className="bg-green-100 text-green-800 py-1 px-2 rounded-full text-xs font-semibold">Accepted</span>
-                            ) : (
-                              <span className="bg-red-100 text-red-800 py-1 px-2 rounded-full text-xs font-semibold">Rejected</span>
-                            )}
+                      historyInquiries.map((inquiry, index) => (
+                        <tr key={inquiry.id} className="hover:bg-gray-50">
+                          <td className="border border-black px-4 py-3 whitespace-nowrap text-sm text-gray-900">{index + 1}</td>
+                          <td className="border border-black px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-medium">{inquiry.name}</td>
+                          <td className="border border-black px-4 py-3 whitespace-nowrap text-sm text-gray-900">{inquiry.email}</td>
+                          <td className="border border-black px-4 py-3 whitespace-nowrap">
+                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${inquiry.status === 'Accepted' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                              {inquiry.status}
+                            </span>
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          <td className="border border-black px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                             {inquiry.acceptedAt
                               ? new Date(inquiry.acceptedAt.toDate()).toLocaleString()
                               : (inquiry.rejectedAt ? new Date(inquiry.rejectedAt.toDate()).toLocaleString() : 'N/A')
                             }
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 no-print">
+                          <td className="border border-black px-4 py-3 whitespace-nowrap text-sm text-gray-900 no-print text-center">
                             <button
                               onClick={() => openModal(inquiry)}
-                              className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm"
+                              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded transition font-semibold"
                             >
                               View Info
                             </button>
@@ -697,9 +766,38 @@ const ShipmentInquiryRequests = () => {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan="5" className="p-4 text-center">No history found.</td>
+                        <td colSpan="6" className="p-4 text-center">No history found.</td>
                       </tr>
                     )}
+                  </tbody>
+                </table>
+
+                {/* 2. PRINT TABLE (History Full) */}
+                <table className="hidden print:table min-w-full border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">ID</th>
+                      <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">Name</th>
+                      <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">Email</th>
+                      <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">Status</th>
+                      <th className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">Date Processed</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyInquiries.map((inquiry, index) => (
+                      <tr key={`print-hist-${inquiry.id}`}>
+                        <td className="border border-black px-2 py-1 text-[7.5pt]">{index + 1}</td>
+                        <td className="border border-black px-2 py-1 text-[7.5pt] font-bold">{inquiry.name}</td>
+                        <td className="border border-black px-2 py-1 text-[7.5pt]">{inquiry.email}</td>
+                        <td className="border border-black px-2 py-1 text-[7.5pt] uppercase">{inquiry.status}</td>
+                        <td className="border border-black px-2 py-1 text-[7.5pt]">
+                          {inquiry.acceptedAt
+                            ? new Date(inquiry.acceptedAt.toDate()).toLocaleDateString()
+                            : (inquiry.rejectedAt ? new Date(inquiry.rejectedAt.toDate()).toLocaleDateString() : 'N/A')
+                          }
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>

@@ -40,6 +40,7 @@ const Reports = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [currentPage, setCurrentPage] = useState(1);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   const componentRef = useRef();
 
@@ -250,36 +251,42 @@ const Reports = () => {
   const handlePrint = useReactToPrint({
     contentRef: componentRef,
     documentTitle: `Report_${activeTab}_${getPeriodString().replace(/ /g, '_')}`,
+    onBeforeGetContent: () => {
+      setIsPrinting(true);
+      return new Promise((resolve) => setTimeout(resolve, 500));
+    },
+    onAfterPrint: () => setIsPrinting(false),
     pageStyle: `
-      @page { size: landscape; margin: 15mm; }
+      @page { size: landscape; margin: 12mm 14mm; }
       @media print {
         * { box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; font-size: 9pt; color: #1e293b; -webkit-print-color-adjust: exact; margin: 0; }
-        .print-header-block { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 2px solid #1e293b; }
-        .print-header-block h1 { font-size: 15pt; font-weight: bold; margin: 0 0 1px 0; }
-        .print-header-block .subtitle { font-size: 7.5pt; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 4px 0; }
-        .print-header-block .narrative { font-size: 8.5pt; color: #334155; margin: 4px 0 2px 0; line-height: 1.4; }
-        .print-header-block .meta { display: flex; justify-content: space-between; font-size: 7.5pt; color: #64748b; margin-top: 2px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 7.5pt; table-layout: fixed; }
+        html, body { margin: 0; padding: 0; width: 100%; }
+        body { font-family: Arial, sans-serif; font-size: 9pt; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .print-section { width: 100% !important; box-shadow: none !important; border-radius: 0 !important; background: #fff !important; padding: 0 !important; border: none !important; }
+        .print-header-block { display: block !important; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 2px solid #000; text-align: center; }
+        .print-header-block h1 { font-size: 14pt; font-weight: bold; margin: 0 0 2px 0; text-align: center; }
+        .print-header-block .subtitle { font-size: 7pt; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 4px 0; color: #555; }
+        .print-header-block .narrative { font-size: 8pt; margin: 4px 0; line-height: 1.4; }
+        .print-header-block .meta { display: flex; justify-content: space-between; font-size: 7pt; color: #555; margin-top: 3px; }
+        table { width: 100% !important; border-collapse: collapse !important; font-size: 7.5pt; table-layout: auto; page-break-inside: auto; }
         thead { display: table-header-group; }
-        th { background-color: #f1f5f9 !important; font-weight: 700; color: #475569; text-transform: uppercase; font-size: 6.5pt; letter-spacing: 0.05em; padding: 4px 6px; border: 1px solid #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
-        td { border: 1px solid #e2e8f0; padding: 4px 6px; vertical-align: top; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        tr:nth-child(even) td { background-color: #f8fafc; }
+        tr { page-break-inside: avoid; page-break-after: auto; }
+        th { background-color: #e8e8e8 !important; font-weight: 700; color: #000 !important; text-transform: uppercase; font-size: 6.5pt; letter-spacing: 0.04em; padding: 4px 6px; border: 1px solid #000 !important; text-align: left; }
+        td { border: 1px solid #000 !important; padding: 3px 6px; vertical-align: middle; color: #000 !important; background-color: #fff !important; font-size: 7.5pt; }
+        tr:nth-child(even) td { background-color: #f5f5f5 !important; }
         canvas { max-height: 100% !important; max-width: 100% !important; width: auto !important; height: auto !important; margin: 0 auto; display: block; }
         .chart-grid { display: grid !important; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
-        .chart-box { border: 1px solid #e2e8f0 !important; padding: 5px !important; margin: 0 !important; height: 160px !important; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .chart-box h3 { font-size: 7.5pt !important; text-transform: uppercase; color: #64748b; margin-bottom: 3px !important; text-align: center; width: 100%; }
-        .chart-box > div { flex: 1; min-height: 0; width: 100%; display: flex; justify-content: center; }
+        .chart-box { border: 1px solid #000 !important; padding: 5px !important; margin: 0 !important; height: 160px !important; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #fff !important; }
+        .chart-box h3 { font-size: 7.5pt !important; text-transform: uppercase; color: #000; margin-bottom: 3px !important; text-align: center; width: 100%; }
         .trend-section { margin-bottom: 10px; }
-        .trend-section h3 { font-size: 8pt; text-transform: uppercase; color: #64748b; margin-bottom: 4px; }
-        .trend-box { border: 1px solid #e2e8f0; padding: 4px; margin-bottom: 6px; height: 140px !important; }
-        .overflow-x-auto, .overflow-y-auto { overflow: visible !important; max-height: none !important; }
+        .trend-box { border: 1px solid #000; padding: 4px; margin-bottom: 6px; height: 140px !important; background-color: #fff !important; }
+        .overflow-x-auto, .overflow-y-auto { overflow: visible !important; max-height: none !important; width: 100% !important; }
         .no-print { display: none !important; }
-        .print-footer-bar { margin-top: 14px; padding-top: 8px; border-top: 1px solid #94a3b8; display: flex; justify-content: space-between; font-size: 8.5pt; color: #475569; }
+        .print-footer-bar { display: none !important; }
         .summary-cards-print { display: grid !important; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-bottom: 8px; }
-        .summary-card-print { border: 1px solid #e2e8f0; padding: 5px 7px; }
-        .summary-card-print .sc-label { font-size: 6.5pt; text-transform: uppercase; color: #64748b; letter-spacing: 0.04em; margin: 0; }
-        .summary-card-print .sc-value { font-size: 17pt; font-weight: bold; color: #0f172a; margin: 0; line-height: 1.1; }
+        .summary-card-print { border: 1px solid #000 !important; padding: 5px 7px; background-color: #fff !important; }
+        .summary-card-print .sc-label { font-size: 6pt; color: #000; }
+        .summary-card-print .sc-value { font-size: 15pt; color: #000; }
       }
     `,
   });
@@ -300,7 +307,7 @@ const Reports = () => {
           {/* Top Bar */}
           <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center bg-white p-4 rounded-lg shadow-sm gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-800">System Reports</h1>
+              <h1 className="text-2xl font-bold text-gray-800 lexend">System Reports</h1>
               <p className="text-sm text-gray-500 mt-0.5">Period: <span className="font-semibold text-gray-700">{getPeriodString()}</span></p>
             </div>
             <div className="flex flex-col sm:flex-row gap-3 items-center w-full xl:w-auto">
@@ -365,8 +372,8 @@ const Reports = () => {
         </div>
 
         {/* Printable Content */}
-        <div ref={componentRef} className="bg-white p-6 md:p-8 rounded-xl shadow-lg print:shadow-none min-h-[500px]">
-          <div>
+        <div ref={componentRef} className="border-3 border-black bg-white rounded-xl shadow-lg print:shadow-none min-h-[500px] overflow-hidden print-section">
+          <div className="p-6 md:p-8">
             {/* Print Header (consistent design) */}
             <div className="hidden print:block print-header-block mb-6">
               <h1>
@@ -421,18 +428,22 @@ const Reports = () => {
                 <MiniStat label="Delayed" value={shipmentStats.delayed} color="red" />
               </div>
               <PaginationBar current={currentPage} total={totalPages(processedShipments)} count={processedShipments.length} onChange={setCurrentPage} />
-              <TableContainer headers={["Package #", "Date", "Shipper", "Origin", "Destination", "Mode", "Status", "Airway Bill", "Paid"]}>
+              <TableContainer 
+                headers={["Package #", "Date", "Shipper", "Origin", "Destination", "Mode", "Status", "Airway Bill", "Paid"]}
+                data={processedShipments}
+                paginate={paginate}
+              >
                 {processedShipments.length > 0 ? paginate(processedShipments).map(s => (
-                  <tr key={s.id} className="bg-white border-b hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 text-sm font-bold text-gray-900">{s.packageNumber}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{s.dateStarted ? new Date(s.dateStarted).toLocaleDateString() : 'N/A'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{s.shipperName}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{s.senderCountry || 'N/A'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{s.destinationCountry}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{s.transportMode}</td>
-                    <td className="px-4 py-3 text-sm"><StatusBadge status={s.packageStatus} /></td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{s.airwayBill || 'N/A'}</td>
-                    <td className="px-4 py-3 text-sm text-center">{s.paid ? <span className="text-emerald-600 font-semibold">Yes</span> : <span className="text-gray-400">No</span>}</td>
+                  <tr key={s.id} className="bg-white hover:bg-gray-50 transition-colors">
+                    <td className="border border-black px-4 py-3 text-sm font-bold text-gray-900">{s.packageNumber}</td>
+                    <td className="border border-black px-4 py-3 text-sm text-gray-600">{s.dateStarted ? new Date(s.dateStarted).toLocaleDateString() : 'N/A'}</td>
+                    <td className="border border-black px-4 py-3 text-sm text-gray-600">{s.shipperName}</td>
+                    <td className="border border-black px-4 py-3 text-sm text-gray-600">{s.senderCountry || 'N/A'}</td>
+                    <td className="border border-black px-4 py-3 text-sm text-gray-600">{s.destinationCountry}</td>
+                    <td className="border border-black px-4 py-3 text-sm text-gray-600 capitalize">{s.transportMode}</td>
+                    <td className="border border-black px-4 py-3 text-sm"><StatusBadge status={s.packageStatus} /></td>
+                    <td className="border border-black px-4 py-3 text-sm text-gray-600">{s.airwayBill || 'N/A'}</td>
+                    <td className="border border-black px-4 py-3 text-sm text-center">{s.paid ? <span className="text-emerald-600 font-semibold">Yes</span> : <span className="text-gray-400">No</span>}</td>
                   </tr>
                 )) : <NoDataRow colSpan={9} />}
               </TableContainer>
@@ -446,16 +457,20 @@ const Reports = () => {
                 <MiniStat label="Rejected" value={requestStats.rejected} color="red" />
               </div>
               <PaginationBar current={currentPage} total={totalPages(processedRequests)} count={processedRequests.length} onChange={setCurrentPage} />
-              <TableContainer headers={["Name", "Email", "Service Type", "Origin", "Destination", "Status", "Date"]}>
+              <TableContainer 
+                headers={["Name", "Email", "Service Type", "Origin", "Destination", "Status", "Date"]}
+                data={processedRequests}
+                paginate={paginate}
+              >
                 {processedRequests.length > 0 ? paginate(processedRequests).map(r => (
-                  <tr key={r.id} className="bg-white border-b hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 text-sm font-bold text-gray-900">{r.name}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{r.email}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{r.serviceType || 'N/A'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{r.senderCountry || 'N/A'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{r.destinationCountry || 'N/A'}</td>
-                    <td className="px-4 py-3 text-sm"><StatusBadge status={r.status} /></td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{(r.acceptedAt || r.rejectedAt || r.requestTime) ? getDate(r).toLocaleDateString() : 'N/A'}</td>
+                  <tr key={r.id} className="bg-white hover:bg-gray-50 transition-colors">
+                    <td className="border border-black px-4 py-3 text-sm font-bold text-gray-900">{r.name}</td>
+                    <td className="border border-black px-4 py-3 text-sm text-gray-600">{r.email}</td>
+                    <td className="border border-black px-4 py-3 text-sm text-gray-600">{r.serviceType || 'N/A'}</td>
+                    <td className="border border-black px-4 py-3 text-sm text-gray-600">{r.senderCountry || 'N/A'}</td>
+                    <td className="border border-black px-4 py-3 text-sm text-gray-600">{r.destinationCountry || 'N/A'}</td>
+                    <td className="border border-black px-4 py-3 text-sm"><StatusBadge status={r.status} /></td>
+                    <td className="border border-black px-4 py-3 text-sm text-gray-600">{(r.acceptedAt || r.rejectedAt || r.requestTime) ? getDate(r).toLocaleDateString() : 'N/A'}</td>
                   </tr>
                 )) : <NoDataRow colSpan={7} />}
               </TableContainer>
@@ -470,14 +485,18 @@ const Reports = () => {
                 <MiniStat label="Ended" value={messageStats.ended} color="gray" />
               </div>
               <PaginationBar current={currentPage} total={totalPages(processedConversations)} count={processedConversations.length} onChange={setCurrentPage} />
-              <TableContainer headers={["User Name", "Email", "Status", "Processed By", "Date"]}>
+              <TableContainer 
+                headers={["User Name", "Email", "Status", "Processed By", "Date"]}
+                data={processedConversations}
+                paginate={paginate}
+              >
                 {processedConversations.length > 0 ? paginate(processedConversations).map(c => (
-                  <tr key={c.id} className="bg-white border-b hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 text-sm font-bold text-gray-900">{c.userFullName || c.firstName}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{c.userEmail}</td>
-                    <td className="px-4 py-3 text-sm"><StatusBadge status={c.status} /></td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{c.processedBy || 'System'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{getDate(c).toLocaleDateString()}</td>
+                  <tr key={c.id} className="bg-white hover:bg-gray-50 transition-colors">
+                    <td className="border border-black px-4 py-3 text-sm font-bold text-gray-900">{c.userFullName || c.firstName}</td>
+                    <td className="border border-black px-4 py-3 text-sm text-gray-600">{c.userEmail}</td>
+                    <td className="border border-black px-4 py-3 text-sm"><StatusBadge status={c.status} /></td>
+                    <td className="border border-black px-4 py-3 text-sm text-gray-600">{c.processedBy || 'System'}</td>
+                    <td className="border border-black px-4 py-3 text-sm text-gray-600">{getDate(c).toLocaleDateString()}</td>
                   </tr>
                 )) : <NoDataRow colSpan={5} />}
               </TableContainer>
@@ -545,13 +564,56 @@ const ChartCard = ({ title, children }) => (
   </div>
 );
 
-const TableContainer = ({ headers, children }) => (
-  <div className="overflow-x-auto overflow-y-auto max-h-[65vh] border rounded-lg">
-    <table className="min-w-full divide-y divide-gray-200">
-      <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
-        <tr>{headers.map(h => <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50">{h}</th>)}</tr>
+const TableContainer = ({ headers, data, children }) => (
+  <div className="overflow-x-auto overflow-y-auto max-h-[65vh]">
+    {/* 1. SCREEN TABLE (Paginated, Hidden in Print) */}
+    <table className="min-w-full border-collapse no-print">
+      <thead className="bg-gray-50 sticky top-0 z-10 border-b-2 border-black">
+        <tr>{headers.map(h => <th key={h} className="border border-black px-4 py-3 text-left text-xs font-semibold text-black uppercase tracking-wider bg-gray-200">{h}</th>)}</tr>
       </thead>
-      <tbody className="bg-white divide-y divide-gray-200">{children}</tbody>
+      <tbody className="bg-white">{children}</tbody>
+    </table>
+
+    {/* 2. PRINT TABLE (Full Data, Hidden on Screen) */}
+    <table className="hidden print:table min-w-full border-collapse">
+      <thead>
+        <tr>{headers.map(h => <th key={`print-${h}`} className="border border-black px-2 py-2 text-left text-[7pt] uppercase bg-gray-100">{h}</th>)}</tr>
+      </thead>
+      <tbody>
+        {data.map((item, index) => (
+          <tr key={`full-${item.id || index}`}>
+            {headers.map((h, hIdx) => {
+              // Custom rendering logic for print table cells based on header
+              let val = "N/A";
+              if (h === "Package #") val = item.packageNumber;
+              else if (h === "Date") {
+                const d = item.dateStarted ? new Date(item.dateStarted) : 
+                          (item.acceptedAt?.toDate ? item.acceptedAt.toDate() : 
+                          (item.rejectedAt?.toDate ? item.rejectedAt.toDate() : 
+                          (item.requestTime ? new Date(item.requestTime) : 
+                          (item.processedAt?.toDate ? item.processedAt.toDate() : null))));
+                val = d ? d.toLocaleDateString() : "N/A";
+              }
+              else if (h === "Shipper" || h === "Name" || h === "User Name") val = item.shipperName || item.name || item.userFullName || item.firstName;
+              else if (h === "Origin") val = item.senderCountry || "N/A";
+              else if (h === "Destination") val = item.destinationCountry || "N/A";
+              else if (h === "Mode") val = item.transportMode || "N/A";
+              else if (h === "Status") val = item.packageStatus || item.status || "N/A";
+              else if (h === "Airway Bill") val = item.airwayBill || "N/A";
+              else if (h === "Paid") val = item.paid ? "Yes" : "No";
+              else if (h === "Email") val = item.email || item.userEmail || "N/A";
+              else if (h === "Service Type") val = item.serviceType || "N/A";
+              else if (h === "Processed By") val = item.processedBy || "System";
+
+              return (
+                <td key={hIdx} className={`border border-black px-2 py-1 text-[7.5pt] ${h === "Package #" || h === "Name" ? "font-bold" : ""}`}>
+                  {val}
+                </td>
+              );
+            })}
+          </tr>
+        ))}
+      </tbody>
     </table>
   </div>
 );

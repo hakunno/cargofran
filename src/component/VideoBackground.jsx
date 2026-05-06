@@ -11,10 +11,17 @@ import img1 from "../assets/Requestshipping.jpg";
 import img2 from "../assets/Tracking.jpg";
 import img3 from "../assets/Forklift.jpg";
 
-const Home = () => {
+const Home = ({ onLoginRefReady }) => {
   const { user, loading: authLoading } = useAuth();
-  const { settings } = useSiteSettings(); // 2. Get Data
+  const { settings } = useSiteSettings();
   const loginRef = useRef(null);
+
+  // Expose loginRef to parent the first time it is set
+  React.useEffect(() => {
+    if (onLoginRefReady && loginRef.current) {
+      onLoginRefReady(loginRef);
+    }
+  }, [onLoginRefReady]);
 
   const slides = [
     { 

@@ -41,6 +41,9 @@ export const useAdminNotifications = () => {
 
   // "Seen" counts — how many were visible when the user last visited that page
   const [seenCounts, setSeenCounts] = useState(loadSeen);
+  
+  // Track which section the admin is currently viewing to auto-clear new arrivals
+  const [activeSection, setActiveSection] = useState(null);
 
   // Track previous live counts so we can detect NEW arrivals and toast
   const prevCountsRef = useRef({ shipmentRequests: 0, messageRequests: 0, liveChats: 0, shipmentChats: 0 });
@@ -164,16 +167,29 @@ export const useAdminNotifications = () => {
   /**
    * Call this when the user visits (clicks) a section.
    * It saves the current live count as "seen" so the badge disappears.
-   * @param {"shipmentRequests"|"messageRequests"|"liveChats"|"shipmentChats"} section
+   * @param {"shipmentRequests"|"messageRequests"|"liveChats"|"shipmentChats"|null} section
    */
   const markAsSeen = useCallback((section) => {
+    setActiveSection(section);
+    if (!section) return;
+
     setLiveCounts((currentLive) => {
-      const updated = { ...loadSeen(), [section]: currentLive[section] };
+      const liveVal = currentLive[section] || 0;
+      const updated = { ...loadSeen(), [section]: liveVal };
       saveSeen(updated);
       setSeenCounts(updated);
-      return currentLive; // live counts unchanged
+      return currentLive;
     });
   }, []);
+
+  // AUTO-CLEAR: If a new notification arrives while we are ON the page, clear it immediately
+  useEffect(() => {
+    if (activeSection && liveCounts[activeSection] !== seenCounts[activeSection]) {
+      const updated = { ...loadSeen(), [activeSection]: liveCounts[activeSection] };
+      saveSeen(updated);
+      setSeenCounts(updated);
+    }
+  }, [activeSection, liveCounts, seenCounts]);
 
   // Compute visible badge counts: only show if live > seen
   const shipmentRequests = Math.max(0, liveCounts.shipmentRequests - (seenCounts.shipmentRequests ?? 0));
