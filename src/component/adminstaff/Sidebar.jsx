@@ -53,15 +53,28 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
   const handleLogout = async () => {
     try {
       // Fetch the user's name to log the activity before signing out
-      if (user?.uid) {
-        const userDoc = await getDoc(doc(db, "Users", user.uid));
-        if (userDoc.exists()) {
-          const { firstName, lastName } = userDoc.data();
-          const fullName = `${firstName || ""} ${lastName || ""}`.trim() || user.email;
-          await logActivity(fullName, "Logged out");
+      // SKIP this if we are in demo mode to avoid permission errors
+      const isDemoMode = localStorage.getItem("offlineDemoMode");
+      if (user?.uid && !isDemoMode) {
+        try {
+          const userDoc = await getDoc(doc(db, "Users", user.uid));
+          if (userDoc.exists()) {
+            const { firstName, lastName } = userDoc.data();
+            const fullName = `${firstName || ""} ${lastName || ""}`.trim() || user.email;
+            await logActivity(fullName, "Logged out");
+          }
+        } catch (e) {
+          console.warn("Could not log activity (might be offline):", e);
         }
       }
+      // Clear all local session and demo mode flags
+      localStorage.removeItem("sessionId");
+      localStorage.removeItem("lastActivity");
+      localStorage.removeItem("sessionRole");
+      localStorage.removeItem("offlineDemoMode");
+
       await signOut(auth);
+      window.location.href = "/"; // Force full reload to landing page and clear context bypass
     } catch (error) {
       console.error("Error signing out:", error);
     }
