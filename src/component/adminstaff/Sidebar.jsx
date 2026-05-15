@@ -4,6 +4,7 @@ import Logo from "../../assets/logo2.png";
 import { useAuth } from "../../utils/AuthContext";
 import ManageUsers from "../../modals/ManageUsers";
 import StaffActivityModal from "../../modals/StaffActivity";
+import PricingSettings from "../../modals/PricingSettings";
 import { auth } from "../../jsfile/firebase";
 import { db } from "../../jsfile/firebase";
 import { signOut } from "firebase/auth";
@@ -24,7 +25,8 @@ import {
   FaHistory,
   FaCommentDots,
   FaBell,
-  FaTruck
+  FaTruck,
+  FaTag
 } from "react-icons/fa";
 
 const Sidebar = ({ mobileOpen, setMobileOpen }) => {
@@ -33,6 +35,7 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
 
   const [manageUsersShow, setManageUsersShow] = useState(false);
   const [showStaffActivityModal, setShowStaffActivityModal] = useState(false);
+  const [showPricingSettings, setShowPricingSettings] = useState(false);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
 
   // Live notification counts from Firestore
@@ -257,6 +260,14 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
                   <FaHistory className="w-4 h-4 mr-3 text-slate-400 group-hover:text-teal-600 transition-colors" />
                   Staff Activity
                 </button>
+
+                <button
+                  onClick={() => setShowPricingSettings(true)}
+                  className="w-full flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 text-slate-600 hover:bg-teal-50 hover:text-teal-700 group"
+                >
+                  <FaTag className="w-4 h-4 mr-3 text-slate-400 group-hover:text-teal-600 transition-colors" />
+                  Pricing Rates
+                </button>
               </div>
             </div>
           )}
@@ -287,6 +298,7 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
       {/* Modals */}
       <ManageUsers show={manageUsersShow} onHide={() => setManageUsersShow(false)} />
       <StaffActivityModal show={showStaffActivityModal} onHide={() => setShowStaffActivityModal(false)} />
+      <PricingSettings show={showPricingSettings} onHide={() => setShowPricingSettings(false)} />
     </>
   );
 };

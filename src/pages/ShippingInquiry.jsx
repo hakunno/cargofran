@@ -9,6 +9,8 @@ import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import FreightEstimateWidget from '../component/FreightEstimateWidget';
+import { FaBoxOpen, FaInfoCircle } from 'react-icons/fa';
 
 const storage = getStorage(); // Added
 
@@ -52,17 +54,18 @@ export default function ShippingServiceRequestForm() {
   const [isNameLocked, setIsNameLocked] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [showModal, setShowModal] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
   const [zoomedImage, setZoomedImage] = useState(null);
 
   // map transport modes to available load types
   const LOAD_OPTIONS = {
     Sea: [
-      { value: 'FCL', label: 'Full Container Load (FCL)' },
-      { value: 'LCL', label: 'Less than Container Load (LCL)' },
+      { value: 'FCL', label: 'Full Container Load (FCL)', description: 'FCL – You book an entire shipping container exclusively for your cargo. Best for large shipments.' },
+      { value: 'LCL', label: 'Less than Container Load (LCL)', description: 'LCL – Your cargo shares container space with other shippers. Ideal for smaller shipments.' },
     ],
     Road: [
-      { value: 'FTL', label: 'Full Truckload (FTL)' },
-      { value: 'LTL', label: 'Less than Truckload (LTL)' },
+      { value: 'FTL', label: 'Full Truckload (FTL)', description: 'FTL – You book an entire truck for your cargo. Best for large or time-sensitive domestic deliveries.' },
+      { value: 'LTL', label: 'Less than Truckload (LTL)', description: 'LTL – Your cargo shares truck space with others. Cost-effective for smaller domestic shipments.' },
     ],
   };
 
@@ -450,24 +453,15 @@ export default function ShippingServiceRequestForm() {
       return;
     }
 
-    const isWeightOnly = !(formData.transportMode === 'Road' && formData.loadType === 'LTL');
-
-    // Validate packages
-    if (isWeightOnly) {
-      if (formData.packages.length === 0 || !formData.packages[0].weight) {
-        alert('Please enter the total weight.');
-        return;
-      }
-    } else {
-      if (
-        formData.packages.length === 0 ||
-        formData.packages.some(
-          (pkg) => !pkg.length || !pkg.width || !pkg.height || !pkg.weight
-        )
-      ) {
-        alert('Please add at least one package and fill in dimensions and weight.');
-        return;
-      }
+    // Validate packages — always require L/W/H and weight
+    if (
+      formData.packages.length === 0 ||
+      formData.packages.some(
+        (pkg) => !pkg.length || !pkg.width || !pkg.height || !pkg.weight
+      )
+    ) {
+      alert('Please add at least one package and fill in dimensions (L/W/H) and weight.');
+      return;
     }
 
     // Show modal if validation passes
@@ -487,8 +481,26 @@ export default function ShippingServiceRequestForm() {
       : ['Air', 'Sea', 'Road'];
 
   return (
-    <div className="max-w-4xl mx-auto p-8 bg-white drop-shadow-[0px_2px_5px_rgba(0,0,0,1)] shadow-xl rounded-xl mt-10 mb-20 border border-gray-200">
-      <h2 className="text-3xl font-bold mb-6 text-center text-blue-700 pb-2">Shipping Service Request</h2>
+    <div className="min-h-screen bg-slate-50 pb-20">
+      {/* Hero */}
+      <div className="bg-gradient-to-r from-blue-800 via-blue-700 to-teal-700 text-white py-16 px-6 text-center relative overflow-hidden mb-10">
+        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 25% 50%, white 1.5px, transparent 1.5px)', backgroundSize: '48px 48px' }} />
+        <div className="relative max-w-3xl mx-auto">
+          <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 rounded-full px-4 py-1.5 text-sm font-medium mb-4">
+            Francess Logistic Services
+          </div>
+          <h1 className="text-4xl md:text-5xl font-bold mb-3">Shipping Service Request</h1>
+          <p className="text-blue-100 text-lg max-w-xl mx-auto">
+            Ready to ship? Fill out the form below to request a service and get your cargo moving worldwide.
+          </p>
+          <p className="text-blue-200 text-sm mt-2 flex items-center justify-center gap-1">
+            <FaInfoCircle /> Provide accurate dimensions and weight for the best possible rate.
+          </p>
+        </div>
+      </div>
+
+      <div className="max-w-4xl mx-auto p-8 bg-white drop-shadow-[0px_2px_5px_rgba(0,0,0,1)] shadow-xl rounded-xl border border-gray-200">
+        <h2 className="text-3xl font-bold mb-6 text-center text-blue-700 pb-2">Shipping Service Request</h2>
 
       {/* Tab Indicators */}
       <div className="flex justify-around mb-6 border-b pb-4">
@@ -705,6 +717,11 @@ export default function ShippingServiceRequestForm() {
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
                 </select>
+                {formData.loadType && LOAD_OPTIONS[formData.transportMode]?.find(o => o.value === formData.loadType) && (
+                  <p className="mt-1 text-xs text-gray-500 italic">
+                    {LOAD_OPTIONS[formData.transportMode].find(o => o.value === formData.loadType).description}
+                  </p>
+                )}
               </div>
             )}
 
@@ -792,66 +809,52 @@ export default function ShippingServiceRequestForm() {
               <h3 className="text-xl font-semibold mb-4">Shipment</h3>
               {formData.packages.map((pkg, index) => (
                 <div key={index} className="border border-gray-300 p-4 mb-4 rounded-md relative">
-                  {!isWeightOnly ? (
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                      <div className="flex flex-col">
-                        <label className="mb-1 font-medium text-gray-700">Length (cm)</label>
-                        <input
-                          type="number"
-                          placeholder="Length"
-                          value={pkg.length}
-                          onChange={(e) => updatePackage(index, 'length', e.target.value)}
-                          required
-                          className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div className="flex flex-col">
-                        <label className="mb-1 font-medium text-gray-700">Width (cm)</label>
-                        <input
-                          type="number"
-                          placeholder="Width"
-                          value={pkg.width}
-                          onChange={(e) => updatePackage(index, 'width', e.target.value)}
-                          required
-                          className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div className="flex flex-col">
-                        <label className="mb-1 font-medium text-gray-700">Height (cm)</label>
-                        <input
-                          type="number"
-                          placeholder="Height"
-                          value={pkg.height}
-                          onChange={(e) => updatePackage(index, 'height', e.target.value)}
-                          required
-                          className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div className="flex flex-col">
-                        <label className="mb-1 font-medium text-gray-700">Weight (kg)</label>
-                        <input
-                          type="number"
-                          placeholder="Weight"
-                          value={pkg.weight}
-                          onChange={(e) => updatePackage(index, 'weight', e.target.value)}
-                          required
-                          className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col mb-4">
-                      <label className="mb-1 font-medium text-gray-700">Total Weight (kg)</label>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                    <div className="flex flex-col">
+                      <label className="mb-1 font-medium text-gray-700">Length (cm)</label>
                       <input
                         type="number"
-                        placeholder="Total Weight"
+                        placeholder="Length"
+                        value={pkg.length}
+                        onChange={(e) => updatePackage(index, 'length', e.target.value)}
+                        required
+                        className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="flex flex-col">
+                      <label className="mb-1 font-medium text-gray-700">Width (cm)</label>
+                      <input
+                        type="number"
+                        placeholder="Width"
+                        value={pkg.width}
+                        onChange={(e) => updatePackage(index, 'width', e.target.value)}
+                        required
+                        className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="flex flex-col">
+                      <label className="mb-1 font-medium text-gray-700">Height (cm)</label>
+                      <input
+                        type="number"
+                        placeholder="Height"
+                        value={pkg.height}
+                        onChange={(e) => updatePackage(index, 'height', e.target.value)}
+                        required
+                        className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="flex flex-col">
+                      <label className="mb-1 font-medium text-gray-700">Weight (kg)</label>
+                      <input
+                        type="number"
+                        placeholder="Weight"
                         value={pkg.weight}
                         onChange={(e) => updatePackage(index, 'weight', e.target.value)}
                         required
                         className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
-                  )}
+                  </div>
                   <div className="flex flex-col mb-4">
                     <label className="mb-1 font-medium text-gray-700">Contents (optional)</label>
                     <textarea
@@ -870,7 +873,7 @@ export default function ShippingServiceRequestForm() {
                       className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
-                  {!isWeightOnly && formData.packages.length > 1 && (
+                  {formData.packages.length > 1 && (
                     <button
                       type="button"
                       onClick={() => removePackage(index)}
@@ -881,21 +884,29 @@ export default function ShippingServiceRequestForm() {
                   )}
                 </div>
               ))}
-              {!isWeightOnly && (
-                <button
-                  type="button"
-                  onClick={addPackage}
-                  className="bg-green-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-green-700 transition"
-                >
-                  Add Another Package
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={addPackage}
+                className="bg-green-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-green-700 transition"
+              >
+                Add Another Package
+              </button>
+
+              {/* Live freight estimate based on entered dimensions */}
+              <FreightEstimateWidget
+                transportMode={formData.transportMode}
+                loadType={formData.loadType}
+                packages={formData.packages}
+                shipmentDirection={formData.shipmentDirection}
+                senderCountry={formData.senderCountry}
+                destinationCountry={formData.destinationCountry}
+              />
             </div>
 
             {/* Business Permit Upload */}
             <div className="mt-4">
               <div className="flex flex-col">
-                <label className="mb-1 font-medium text-gray-700">Upload Business Permit Image (Optional, max 5MB)</label>
+                <label className="mb-1 font-medium text-gray-700">Upload Business Permit Image</label>
                 <input
                   type="file"
                   accept="image/*"
@@ -910,7 +921,7 @@ export default function ShippingServiceRequestForm() {
               <div className="flex items-center mb-4">
                 <input type="checkbox" name="agreedToTerms" checked={formData.agreedToTerms} onChange={handleChange} required className="mr-2" />
                 <label className="text-sm text-gray-700">&nbsp;I agree to the{' '}
-                  <Link to="/TermsAndConditions" className="text-blue-600 underline">Terms and Conditions</Link>
+                  <button type="button" onClick={() => setShowTermsModal(true)} className="text-blue-600 underline">Terms and Conditions</button>
                 </label>
               </div>
             </div>
@@ -1015,6 +1026,33 @@ export default function ShippingServiceRequestForm() {
         </div>
       )}
 
+      {showTermsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg max-w-2xl w-full max-h-[80vh] flex flex-col">
+            <h3 className="text-xl font-bold mb-4 border-b pb-2">Terms and Conditions</h3>
+            <div className="flex-1 overflow-y-auto space-y-4 text-gray-700 text-sm pr-2">
+              <p className="font-semibold text-base">Standard Logistics Terms and Conditions</p>
+              <p><strong>1. Freight and Carriage:</strong> The Company shall perform the carriage of the Goods from the point of receipt to the specified destination with due care and diligence.</p>
+              <p><strong>2. Limitation of Liability:</strong> The liability of the Company for any loss, damage, or delay to the Goods is strictly limited to the limits provided under applicable international conventions or local laws, unless a higher value is declared and additional insurance is purchased.</p>
+              <p><strong>3. Prohibited Items:</strong> The Customer warrants that the Goods do not contain any illegal, hazardous, dangerous, or prohibited items as defined by national and international regulations. The Customer assumes full liability for any fines or damages arising from non-compliance.</p>
+              <p><strong>4. Claims:</strong> Any claims for damage or loss must be submitted in writing within 7 days of delivery. Failure to notify within this period shall constitute a waiver of any claims against the Company.</p>
+              <p><strong>5. Payment Terms:</strong> Payment for all freight and associated charges must be made in full prior to the release or delivery of the Goods, unless specific credit terms have been formally agreed upon in advance.</p>
+              <p><strong>6. Force Majeure:</strong> The Company shall not be liable for any delay or failure to perform its obligations due to circumstances beyond its reasonable control, including but not limited to acts of God, war, strikes, or severe weather conditions.</p>
+              <p className="mt-4 italic">By proceeding and confirming your shipment, you acknowledge that you have read, understood, and agreed to abide by these Terms and Conditions.</p>
+            </div>
+            <div className="mt-6 pt-4 border-t flex justify-end">
+              <button
+                onClick={() => setShowTermsModal(false)}
+                className="bg-blue-600 text-white font-semibold py-2 px-6 rounded-md hover:bg-blue-700 transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
     </div>
   );
 }

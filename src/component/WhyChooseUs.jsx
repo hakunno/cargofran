@@ -109,10 +109,11 @@ const WhyChooseUs = ({ loginRef }) => {
             onClick={() => handleCardClick(card)}
             className="relative overflow-hidden cursor-pointer group"
             style={{
-              flexBasis: hovered === idx ? "26%" : "20%",
+              flexGrow: hovered === idx ? 1.5 : 1,
+              flexShrink: 1,
+              flexBasis: "0%",
               minHeight: "420px",
-              transition: "flex-basis 0.5s cubic-bezier(0.4,0,0.2,1)",
-              flex: "1 1 0",
+              transition: "flex-grow 0.5s cubic-bezier(0.4,0,0.2,1)",
             }}
           >
             {/* Background Image */}
@@ -140,7 +141,7 @@ const WhyChooseUs = ({ loginRef }) => {
             />
 
             {/* Content */}
-            <div className="relative z-10 flex flex-col justify-end h-full px-5 pb-8 pt-6">
+            <div className="relative z-10 flex flex-col justify-end h-full px-5 pb-8 pt-6 min-w-[220px]">
               {/* Icon Circle */}
               <div className="mb-4">
                 <div

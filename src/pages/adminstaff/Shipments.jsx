@@ -50,6 +50,7 @@ const Shipments = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [printOrientation, setPrintOrientation] = useState('landscape');
   const itemsPerPage = 10;
 
   // Form Data
@@ -118,12 +119,12 @@ const Shipments = () => {
   const [countries, setCountries] = useState([]);
   const LOAD_OPTIONS = {
     Sea: [
-      { value: 'FCL', label: 'Full Container Load (FCL)' },
-      { value: 'LCL', label: 'Less than Container Load (LCL)' },
+      { value: 'FCL', label: 'Full Container Load (FCL)', description: 'FCL – You book an entire shipping container exclusively for your cargo. Best for large shipments.' },
+      { value: 'LCL', label: 'Less than Container Load (LCL)', description: 'LCL – Your cargo shares container space with other shippers. Ideal for smaller shipments.' },
     ],
     Road: [
-      { value: 'FTL', label: 'Full Truckload (FTL)' },
-      { value: 'LTL', label: 'Less than Truckload (LTL)' },
+      { value: 'FTL', label: 'Full Truckload (FTL)', description: 'FTL – You book an entire truck for your cargo. Best for large or time-sensitive domestic deliveries.' },
+      { value: 'LTL', label: 'Less than Truckload (LTL)', description: 'LTL – Your cargo shares truck space with others. Cost-effective for smaller domestic shipments. Allows multiple packages with individual dimensions.' },
     ],
   };
   const tableRef = useRef();
@@ -564,21 +565,15 @@ const Shipments = () => {
       return;
     }
 
-    if (isWeightOnly) {
-      if (formData.packages.length === 0 || !formData.packages[0].weight) {
-        toast.warning('Please enter the total weight.');
-        return;
-      }
-    } else {
-      if (
-        formData.packages.length === 0 ||
-        formData.packages.some(
-          (pkg) => !pkg.length || !pkg.width || !pkg.height || !pkg.weight
-        )
-      ) {
-        toast.warning('Please add at least one package and fill in dimensions and weight.');
-        return;
-      }
+    // All packages must have L/W/H and weight
+    if (
+      formData.packages.length === 0 ||
+      formData.packages.some(
+        (pkg) => !pkg.length || !pkg.width || !pkg.height || !pkg.weight
+      )
+    ) {
+      toast.warning('Please add at least one package and fill in dimensions (L/W/H) and weight.');
+      return;
     }
 
     try {
@@ -1172,7 +1167,7 @@ const Shipments = () => {
     },
     onAfterPrint: () => setIsPrinting(false),
     pageStyle: `
-      @page { size: landscape; margin: 12mm 14mm; }
+      @page { size: legal ${printOrientation}; margin: 15mm 12mm; }
       @media print {
         * { box-sizing: border-box; }
         html, body { margin: 0; padding: 0; width: 100%; }
@@ -1183,15 +1178,15 @@ const Shipments = () => {
         .print-header .subtitle { font-size: 7pt; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 4px 0; color: #555; }
         .print-header .narrative { font-size: 8pt; margin: 4px 0; line-height: 1.4; }
         .print-header .meta { display: flex; justify-content: space-between; font-size: 7pt; color: #555; margin-top: 3px; }
-        table { width: 100% !important; border-collapse: collapse !important; font-size: 7.5pt; table-layout: auto; page-break-inside: auto; }
+        table { width: 100% !important; border-collapse: collapse !important; font-size: 7.5pt; table-layout: fixed; page-break-inside: auto; }
         thead { display: table-header-group; }
         tr { page-break-inside: avoid; page-break-after: auto; }
-        th { background-color: #e8e8e8 !important; font-weight: 700; color: #000 !important; text-transform: uppercase; font-size: 6.5pt; letter-spacing: 0.04em; padding: 5px 6px; border: 1px solid #000 !important; text-align: left; }
-        td { border: 1px solid #000 !important; padding: 4px 6px; vertical-align: middle; color: #000 !important; background-color: #fff !important; font-size: 7.5pt; }
+        th { background-color: #e8e8e8 !important; font-weight: 700; color: #000 !important; text-transform: uppercase; font-size: 6.5pt; letter-spacing: 0.04em; padding: 5px 6px; border: 1px solid #000 !important; text-align: left; word-break: break-word; }
+        td { border: 1px solid #000 !important; padding: 4px 6px; vertical-align: middle; color: #000 !important; background-color: #fff !important; font-size: 7.5pt; word-break: break-word; }
         tr:nth-child(even) td { background-color: #f5f5f5 !important; }
         .overflow-x-auto, .overflow-y-auto { overflow: visible !important; max-height: none !important; width: 100% !important; }
         .no-print { display: none !important; }
-        .print-footer { display: none !important; }
+        .print-footer { display: block !important; display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid #ccc; font-size: 7.5pt; margin-top: 10px; }
       }
     `,
   });
@@ -1416,8 +1411,14 @@ const Shipments = () => {
             {/* Removed History Button */}
           </div>
           <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
-            <button onClick={handleExportCSV} className="w-full md:w-auto bg-green-600 text-white font-semibold py-2 px-6 rounded-md rounded hover:bg-green-700 transition">Export CSV</button>
-            <button onClick={handlePrint} className="w-full md:w-auto bg-blue-600 text-white font-semibold py-2 px-6 rounded-md rounded hover:bg-blue-700 transition">Print Table</button>
+            <button onClick={handleExportCSV} className="w-full md:w-auto bg-green-600 text-white font-semibold py-2 px-6 rounded-md hover:bg-green-700 transition">Export CSV</button>
+            <div className="flex items-center gap-2 border border-gray-300 rounded px-2 bg-white h-10 w-full md:w-auto">
+              <select value={printOrientation} onChange={(e) => setPrintOrientation(e.target.value)} className="bg-transparent focus:outline-none text-sm font-semibold h-full w-full">
+                <option value="landscape">Landscape Print</option>
+                <option value="portrait">Portrait Print</option>
+              </select>
+            </div>
+            <button onClick={handlePrint} className="w-full md:w-auto bg-blue-600 text-white font-semibold py-2 px-6 rounded-md hover:bg-blue-700 transition">Print Table</button>
           </div>
         </div>
         {/* --- ARCHIVE MODAL --- */}
@@ -1587,12 +1588,17 @@ const Shipments = () => {
                       )}
                     </div>
                     {isLoadTypeVisible && (
-                      <div className="flex flex-col">
+                      <div className="flex flex-col md:col-span-2">
                         <label className="mb-1 font-medium text-gray-700">Load Type</label>
                         <select name="loadType" value={formData.loadType} onChange={handleChange} required className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                           <option value="">Select load type</option>
                           {LOAD_OPTIONS[formData.transportMode].map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
                         </select>
+                        {formData.loadType && LOAD_OPTIONS[formData.transportMode]?.find(o => o.value === formData.loadType) && (
+                          <p className="mt-1 text-xs text-gray-500 italic">
+                            {LOAD_OPTIONS[formData.transportMode].find(o => o.value === formData.loadType).description}
+                          </p>
+                        )}
                       </div>
                     )}
                   </>
@@ -1730,22 +1736,18 @@ const Shipments = () => {
                       <h3 className="text-lg font-semibold mb-4 text-blue-700 border-b pb-1">Shipments</h3>
                       {formData.packages.map((pkg, index) => (
                         <div key={index} className="border border-gray-200 p-4 mb-4 rounded-md relative bg-gray-50">
-                          {!isWeightOnly ? (
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                              <div className="flex flex-col"><label className="mb-1 text-xs font-medium text-gray-600">Length (cm)</label><input type="number" placeholder="L" value={pkg.length} onChange={(e) => updatePackage(index, 'length', e.target.value)} required className="p-2 border border-gray-300 rounded-md text-sm" /></div>
-                              <div className="flex flex-col"><label className="mb-1 text-xs font-medium text-gray-600">Width (cm)</label><input type="number" placeholder="W" value={pkg.width} onChange={(e) => updatePackage(index, 'width', e.target.value)} required className="p-2 border border-gray-300 rounded-md text-sm" /></div>
-                              <div className="flex flex-col"><label className="mb-1 text-xs font-medium text-gray-600">Height (cm)</label><input type="number" placeholder="H" value={pkg.height} onChange={(e) => updatePackage(index, 'height', e.target.value)} required className="p-2 border border-gray-300 rounded-md text-sm" /></div>
-                              <div className="flex flex-col"><label className="mb-1 text-xs font-medium text-gray-600">Weight (kg)</label><input type="number" placeholder="Kg" value={pkg.weight} onChange={(e) => updatePackage(index, 'weight', e.target.value)} required className="p-2 border border-gray-300 rounded-md text-sm" /></div>
-                            </div>
-                          ) : (
-                            <div className="flex flex-col mb-4"><label className="mb-1 font-medium text-gray-700">Total Weight (kg)</label><input type="number" placeholder="Total Weight" value={pkg.weight} onChange={(e) => updatePackage(index, 'weight', e.target.value)} required className="p-2 border border-gray-300 rounded-md" /></div>
-                          )}
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                            <div className="flex flex-col"><label className="mb-1 text-xs font-medium text-gray-600">Length (cm)</label><input type="number" placeholder="L" value={pkg.length} onChange={(e) => updatePackage(index, 'length', e.target.value)} required className="p-2 border border-gray-300 rounded-md text-sm" /></div>
+                            <div className="flex flex-col"><label className="mb-1 text-xs font-medium text-gray-600">Width (cm)</label><input type="number" placeholder="W" value={pkg.width} onChange={(e) => updatePackage(index, 'width', e.target.value)} required className="p-2 border border-gray-300 rounded-md text-sm" /></div>
+                            <div className="flex flex-col"><label className="mb-1 text-xs font-medium text-gray-600">Height (cm)</label><input type="number" placeholder="H" value={pkg.height} onChange={(e) => updatePackage(index, 'height', e.target.value)} required className="p-2 border border-gray-300 rounded-md text-sm" /></div>
+                            <div className="flex flex-col"><label className="mb-1 text-xs font-medium text-gray-600">Weight (kg)</label><input type="number" placeholder="Kg" value={pkg.weight} onChange={(e) => updatePackage(index, 'weight', e.target.value)} required className="p-2 border border-gray-300 rounded-md text-sm" /></div>
+                          </div>
                           <div className="flex flex-col mb-4"><label className="mb-1 font-medium text-gray-700">Contents (optional)</label><textarea placeholder="Describe contents..." value={pkg.contents} onChange={(e) => updatePackage(index, 'contents', e.target.value)} className="p-2 border border-gray-300 rounded-md text-sm" rows="2" /></div>
                           <div className="flex flex-col"><label className="mb-1 font-medium text-gray-700">Item Image (optional)</label><input type="file" accept="image/*" onChange={(e) => handlePackageFileChange(index, e.target.files[0])} className="p-2 border border-gray-300 rounded-md text-xs" /></div>
-                          {!isWeightOnly && formData.packages.length > 1 && (<button type="button" onClick={() => removePackage(index)} className="absolute top-2 right-2 text-red-500 hover:text-red-700 font-bold p-1">✕</button>)}
+                          {formData.packages.length > 1 && (<button type="button" onClick={() => removePackage(index)} className="absolute top-2 right-2 text-red-500 hover:text-red-700 font-bold p-1">✕</button>)}
                         </div>
                       ))}
-                      {!isWeightOnly && (<button type="button" onClick={addPackage} className="text-blue-600 text-sm font-bold hover:underline mb-4">+ Add Another Shipment</button>)}
+                      <button type="button" onClick={addPackage} className="text-blue-600 text-sm font-bold hover:underline mb-4">+ Add Another Shipment</button>
                     </div>
                   </>
                 )}
@@ -1822,9 +1824,28 @@ const Shipments = () => {
                 <div className="flex flex-col mb-3"><label className="mb-1 font-medium text-gray-700">Email</label><input type="email" className="p-2 border border-gray-300 rounded-md" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} /></div>
                 <div className="flex flex-col mb-3">
                   <label className="mb-1 font-medium text-gray-700">Shipment Status</label>
-                  <select className="p-2 border border-gray-300 rounded-md" value={formData.packageStatus} onChange={(e) => setFormData({ ...formData, packageStatus: e.target.value, delayReason: e.target.value !== 'Delayed' ? '' : formData.delayReason })}>
-                    <option>Processing</option><option>To Pickup</option><option>To Warehouse</option><option>In warehouse</option><option>On transit</option><option>Landed</option><option>Delivering</option><option>Delivered</option><option value="Delayed">Delayed</option>
-                  </select>
+                  {(() => {
+                    // Status progression order — cannot go backwards
+                    const STATUS_ORDER = ['Processing', 'To Pickup', 'To Warehouse', 'In warehouse', 'On transit', 'Landed', 'Delivering', 'Delivered', 'Delayed'];
+                    const currentIndex = STATUS_ORDER.indexOf(currentShipment?.packageStatus);
+                    return (
+                      <select
+                        className="p-2 border border-gray-300 rounded-md"
+                        value={formData.packageStatus}
+                        onChange={(e) => setFormData({ ...formData, packageStatus: e.target.value, delayReason: e.target.value !== 'Delayed' ? '' : formData.delayReason })}
+                      >
+                        {STATUS_ORDER.map((status, i) => {
+                          // Allow current status and Delayed anytime; only allow forward statuses
+                          const isAllowed = i >= currentIndex || status === 'Delayed';
+                          return (
+                            <option key={status} value={status} disabled={!isAllowed} style={!isAllowed ? { color: '#aaa' } : {}}>
+                              {status}{!isAllowed ? ' (cannot go back)' : ''}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    );
+                  })()}
                   {formData.packageStatus === 'Delayed' && (
                     <div className="mt-2">
                       <label className="mb-1 font-medium text-gray-700 text-sm">Reason for Delay <span className="text-red-500">*</span></label>

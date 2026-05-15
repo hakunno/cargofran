@@ -41,6 +41,7 @@ const Reports = () => {
   const [statusFilter, setStatusFilter] = useState("All");
   const [currentPage, setCurrentPage] = useState(1);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [printOrientation, setPrintOrientation] = useState('landscape');
 
   const componentRef = useRef();
 
@@ -257,7 +258,7 @@ const Reports = () => {
     },
     onAfterPrint: () => setIsPrinting(false),
     pageStyle: `
-      @page { size: landscape; margin: 12mm 14mm; }
+      @page { size: legal ${printOrientation}; margin: 12mm 14mm; }
       @media print {
         * { box-sizing: border-box; }
         html, body { margin: 0; padding: 0; width: 100%; }
@@ -334,6 +335,12 @@ const Reports = () => {
                     </div>
                   )}
                 </div>
+              </div>
+              <div className="flex items-center gap-2 border border-gray-300 rounded px-2 py-1.5 bg-white w-full sm:w-auto h-full">
+                <select value={printOrientation} onChange={(e) => setPrintOrientation(e.target.value)} className="bg-transparent focus:outline-none text-sm font-semibold h-full w-full">
+                  <option value="landscape">Landscape</option>
+                  <option value="portrait">Portrait</option>
+                </select>
               </div>
               <button onClick={handlePrint} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition w-full sm:w-auto justify-center">
                 <FaPrint /> Print

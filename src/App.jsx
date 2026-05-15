@@ -23,6 +23,7 @@ import TermsAndConditions from "./pages/TermsAndConditions";
 import MyShipments from "./pages/ShipmentHistory";
 import ShipmentMessages from "./pages/ShipmentMessages";
 import MaintenancePage from "./pages/MaintenancePage";
+import PriceEstimator from "./pages/PriceEstimator";
 
 // Admin / Staff
 import AdminDashboard from "./pages/adminstaff/AdminDashboard";
@@ -112,6 +113,7 @@ const App = () => {
     "/MyShipments",
     "/ShipmentMessages",
     "/ManageSystem",
+    "/PriceEstimator",
   ];
 
   // Show nothing while checking maintenance status (avoids flash)
@@ -155,6 +157,7 @@ const App = () => {
           <Route path="/TrackPackage" element={<TrackPackage />} />
           <Route path="/Messages" element={<Messages />} />
           <Route path="/TermsAndConditions" element={<TermsAndConditions />} />
+          <Route path="/PriceEstimator" element={<PriceEstimator />} />
 
           {/* Protected User Routes */}
           <Route

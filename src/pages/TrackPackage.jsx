@@ -58,24 +58,38 @@ const TrackPackage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="max-w-4xl mx-auto mt-5 p-10 bg-gray-50 rounded-lg mb-10 drop-shadow-[0px_2px_5px_rgba(0,0,0,1)] shadow-xl">
-        <h2 className="text-2xl font-semibold text-gray-800 mb-4">Shipment Status</h2>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      {/* Hero Section */}
+      <div className="bg-gradient-to-r from-teal-700 via-teal-600 to-blue-700 text-white py-16 px-6 text-center relative overflow-hidden">
+        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 25% 50%, white 1.5px, transparent 1.5px)', backgroundSize: '48px 48px' }} />
+        <div className="relative max-w-3xl mx-auto">
+          <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 rounded-full px-4 py-1.5 text-sm font-medium mb-4">
+            Francess Logistic Services
+          </div>
+          <h1 className="text-4xl md:text-5xl font-bold mb-3">Track Your Shipment</h1>
+          <p className="text-teal-100 text-lg max-w-xl mx-auto">
+            Enter your shipment number to get the latest status and history of your cargo.
+          </p>
+        </div>
+      </div>
 
-        <div className="flex flex-col sm:flex-row items-center mb-10 gap-4 mb-6">
+      <div className="max-w-4xl mx-auto mt-[-2rem] relative z-10 p-6 md:p-10 bg-white rounded-2xl mb-10 drop-shadow-xl shadow-xl border border-slate-100">
+        <h2 className="text-2xl font-semibold text-gray-800 mb-6 text-center">Shipment Status</h2>
+
+        <div className="flex flex-col sm:flex-row items-center gap-4 mb-8">
           <input
             type="text"
             placeholder="Enter Shipment Number"
             value={packageNumber}
             onChange={(e) => setPackageNumber(e.target.value)}
-            className="w-full sm:flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full sm:flex-1 px-6 py-3 border border-slate-300 rounded-full focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-sm text-lg"
           />
           <button
             onClick={handleSearch}
             disabled={loading}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            className="w-full sm:w-auto px-8 py-3 bg-teal-600 text-white rounded-full shadow hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-50 transition-all font-semibold text-lg"
           >
-            {loading ? 'Searching...' : 'Track'}
+            {loading ? 'Searching...' : '🔍 Track'}
           </button>
         </div>
 

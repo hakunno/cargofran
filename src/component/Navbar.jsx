@@ -672,6 +672,18 @@ const Navbar = () => {
                   </li>
                   <li className="w-full">
                     <NavLink
+                      to="/PriceEstimator"
+                      onClick={() => setIsOpen(false)}
+                      className={({ isActive }) =>
+                        `kanit-regular border-b border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
+                    ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
+                      }
+                    >
+                      Price Estimator
+                    </NavLink>
+                  </li>
+                  <li className="w-full">
+                    <NavLink
                       to="/Messages"
                       onClick={() => setIsOpen(false)}
                       className={({ isActive }) =>
@@ -781,6 +793,18 @@ const Navbar = () => {
                       }
                     >
                       Track Package
+                    </NavLink>
+                  </li>
+                  <li className="w-full">
+                    <NavLink
+                      to="/PriceEstimator"
+                      onClick={() => setIsOpen(false)}
+                      className={({ isActive }) =>
+                        `kanit-regular border-b border-t block w-full py-3 px-3 text-black no-underline transition-all duration-200 
+                    ${isOpen && isActive ? "bg-blue-200 scale-105" : "hover:bg-blue-200 hover:scale-105 active:bg-blue-300"}`
+                      }
+                    >
+                      Price Estimator
                     </NavLink>
                   </li>
                   <li className="w-full">

@@ -27,7 +27,7 @@ function ManageUsers({ show, onHide }) {
   // Get current user's role and loading state from your auth context
   const { role, loading } = useAuth();
 
-  // If authorized, render the ManageUsers modal
+  // All state must be declared before any early returns (Rules of Hooks)
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState("");
   const [showAddUserModal, setShowAddUserModal] = useState(false);
@@ -40,25 +40,14 @@ function ManageUsers({ show, onHide }) {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Only allow admin or staff to access this modal.
-  if (loading) {
-    return (
-      <Modal show={show} onHide={onHide} centered>
-        <Modal.Body className="text-center">
-          Loading...
-        </Modal.Body>
-      </Modal>
-    );
-  }
-
-  if (!(role === "admin" || role === "staff")) {
-    return null;
-  }
-
   const usersCollection = collection(db, "Users");
   const auth = getAuth();
 
+  // All useEffect hooks must be declared before any early returns (Rules of Hooks)
   useEffect(() => {
+    // Only fetch if authorized
+    if (loading || !(role === "admin" || role === "staff")) return;
+
     const fetchUsers = async () => {
       const snapshot = await getDocs(usersCollection);
       const userList = snapshot.docs.map((docSnap) => ({
@@ -73,7 +62,7 @@ function ManageUsers({ show, onHide }) {
     };
 
     fetchUsers();
-  }, []);
+  }, [loading, role]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -94,6 +83,21 @@ function ManageUsers({ show, onHide }) {
 
     return () => clearInterval(interval);
   }, []);
+
+  // Early returns AFTER all hooks
+  if (loading) {
+    return (
+      <Modal show={show} onHide={onHide} centered>
+        <Modal.Body className="text-center">
+          Loading...
+        </Modal.Body>
+      </Modal>
+    );
+  }
+
+  if (!(role === "admin" || role === "staff")) {
+    return null;
+  }
 
   const handleRoleChange = async (userId, currentRole) => {
     const newRole = currentRole === "staff" ? "user" : "staff";

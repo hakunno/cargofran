@@ -106,32 +106,12 @@ export const useSessionSocket = () => {
     setTimeout(() => { window.location.href = "/"; }, 1500);
   };
 
-  // ─── Firestore session guard (PRIMARY) ───────────────────────────────────
-  // Watches the user's Firestore doc. When another device logs in,
-  // Login.jsx updates `currentSessionId` in Firestore. The old device detects
-  // the mismatch and calls forceLogout. Works without the local WS server.
+  // ─── Firestore session guard (DISABLED) ─────────────────────────────────
+  // The "already logged in on another device" feature has been temporarily
+  // disabled as it was causing incorrect force-logouts.
 
-  const startFirestoreListener = (uid) => {
-    stopFirestoreListener();
-    const userDocRef = doc(db, "Users", uid);
-
-    firestoreUnsubRef.current = onSnapshot(userDocRef, (snapshot) => {
-      if (logoutInProgressRef.current) return;
-      if (!snapshot.exists()) return;
-
-      const fsSessionId = snapshot.data()?.currentSessionId;
-
-      // Read fresh from localStorage every time — never capture at startup.
-      // The new device stores its sessionId AFTER Firebase auth fires, so
-      // capturing it early would cause the new device to falsely kick itself.
-      const mySessionId = localStorage.getItem("sessionId");
-
-      if (!mySessionId || !fsSessionId) return; // not ready yet, skip
-
-      if (fsSessionId !== mySessionId) {
-        forceLogout("another_device");
-      }
-    });
+  const startFirestoreListener = (_uid) => {
+    // Disabled: cross-device session enforcement removed.
   };
 
   // ─── Inactivity warning ──────────────────────────────────────────────────
